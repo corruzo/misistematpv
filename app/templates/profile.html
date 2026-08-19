@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Mi perfil - MarcajeTPV{% endblock %}
+{% block page_title %}Mi perfil{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <div>
+  </div>
+</div>
+<section class="profile-layout">
+  <div class="card profile-summary-card">
+    <div class="profile-summary-avatar">{{ user.nombre[0]|upper }}</div>
+    <h3>{{ user.nombre }}</h3>
+    <p>@{{ user.username }}</p>
+    <span class="profile-role-badge">{{ user.rol }}</span>
+    <a class="btn-ios secondary btn-sm" href="/">Volver al panel</a>
+  </div>
+  <div class="card profile-card">
+    <div class="card-panel__header">
+      <h3>Datos del perfil</h3>
+      <p class="profile-section-copy">Mantén actualizados tus datos de acceso.</p>
+    </div>
+  <form id="profileForm" class="profile-form">
+    <div>
+      <label class="form-label" for="profileUsername">Nombre de usuario</label>
+      <input class="form-control" id="profileUsername" name="username" value="{{ user.username }}" minlength="3" maxlength="50" pattern="[a-zA-Z0-9._-]+" required>
+    </div>
+    <div>
+      <label class="form-label" for="profileName">Nombre visible</label>
+      <input class="form-control" id="profileName" name="nombre" value="{{ user.nombre }}" minlength="2" maxlength="150" required>
+    </div>
+    <div class="profile-password-section">
+      <p class="profile-subheading">Seguridad</p>
+      <label class="form-label" for="profilePassword">Nueva contraseña</label>
+      <input class="form-control" id="profilePassword" name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password">
+      <small class="form-hint">Déjala vacía para conservar la actual.</small>
+    </div>
+    <button class="btn-ios primary" type="submit" id="profileSave">Guardar cambios</button>
+    <p id="profileMessage" class="form-feedback" role="status" aria-live="polite"></p>
+  </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('profileForm');
+    const button = document.getElementById('profileSave');
+    const message = document.getElementById('profileMessage');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      button.disabled = true;
+      message.textContent = 'Guardando...';
+      try {
+        const payload = Object.fromEntries(new FormData(form).entries());
+        if (!payload.password) delete payload.password;
+        const response = await fetch('/api/me', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || 'No se pudieron guardar los cambios.');
+        message.textContent = 'Cambios guardados correctamente.';
+        message.className = 'form-feedback form-feedback--success';
+      } catch (error) {
+        message.textContent = error.message || 'No se pudieron guardar los cambios.';
+        message.className = 'form-feedback form-feedback--error';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+</script>
+{% endblock %}

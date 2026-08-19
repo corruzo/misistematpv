@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+
+{% block title %}Usuarios - MarcajeTPV{% endblock %}
+{% block page_title %}Usuarios del Sistema{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <div>
+  </div>
+  <button type="button" class="btn-ios primary" id="newUserButton">Nuevo usuario</button>
+</div>
+
+<div class="user-management-grid">
+  <section class="card user-form-card" aria-labelledby="user-form-title">
+    <div class="card-panel__header">
+      <h3 id="user-form-title">Crear usuario</h3>
+    </div>
+    <form id="userForm" class="user-form">
+      <div>
+        <label class="form-label" for="username">Nombre de usuario</label>
+        <input class="form-control" id="username" name="username" autocomplete="username" pattern="[a-zA-Z0-9._-]+" minlength="3" maxlength="50" required>
+        <small class="form-hint">Usa letras, números, punto, guion o guion bajo.</small>
+      </div>
+      <div>
+        <label class="form-label" for="userName">Nombre visible</label>
+        <input class="form-control" id="userName" name="nombre" autocomplete="name" minlength="2" maxlength="150" required>
+      </div>
+      <div>
+        <label class="form-label" for="userPassword">Contraseña</label>
+        <input class="form-control" id="userPassword" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required>
+        <small class="form-hint" id="passwordHint">Mínimo 10 caracteres. Se almacena con hashing seguro.</small>
+      </div>
+      <div class="user-role-note"><strong>Rol</strong><span>Administrador</span></div>
+      <div class="user-form-actions">
+        <button class="btn-ios ghost d-none" type="button" id="cancelEditButton">Cancelar</button>
+        <button class="btn-ios primary" type="submit" id="saveUserButton">Crear usuario</button>
+      </div>
+      <p id="userFormMessage" class="form-feedback" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <section class="card user-list-card" aria-labelledby="user-list-title">
+    <div class="card-panel__header">
+      <h3 id="user-list-title">Usuarios registrados</h3>
+    </div>
+    <div class="user-search-wrap">
+      <label class="sr-only" for="userSearch">Buscar usuario</label>
+      <input class="form-control" id="userSearch" type="search" placeholder="Buscar por usuario o nombre" autocomplete="off">
+    </div>
+    <div class="user-list" id="userList" aria-live="polite">
+      <p class="text-muted">Cargando usuarios...</p>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('userForm');
+    const list = document.getElementById('userList');
+    const message = document.getElementById('userFormMessage');
+    const saveButton = document.getElementById('saveUserButton');
+    const searchInput = document.getElementById('userSearch');
+    const formTitle = document.getElementById('user-form-title');
+    const passwordInput = document.getElementById('userPassword');
+    const passwordHint = document.getElementById('passwordHint');
+    const cancelEditButton = document.getElementById('cancelEditButton');
+    let editingUser = null;
+
+    const showMessage = (text, error = false) => {
+      message.textContent = text;
+      message.className = `form-feedback ${error ? 'form-feedback--error' : 'form-feedback--success'}`;
+    };
+
+    const resetForm = () => {
+      editingUser = null;
+      form.reset();
+      formTitle.textContent = 'Crear usuario';
+      saveButton.textContent = 'Crear usuario';
+      cancelEditButton.classList.add('d-none');
+      passwordInput.required = true;
+      passwordInput.value = '';
+      passwordHint.textContent = 'Mínimo 10 caracteres. Se almacena con hashing seguro.';
+    };
+
+    const startEdit = (user) => {
+      editingUser = user;
+      formTitle.textContent = 'Editar usuario';
+      saveButton.textContent = 'Guardar cambios';
+      cancelEditButton.classList.remove('d-none');
+      passwordInput.required = false;
+      passwordInput.value = '';
+      passwordHint.textContent = 'Déjala vacía para conservar la contraseña actual.';
+      document.getElementById('username').value = user.username;
+      document.getElementById('userName').value = user.nombre;
+      document.getElementById('username').focus();
+    };
+
+    const renderUsers = (users) => {
+      list.replaceChildren();
+      if (!users.length) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted';
+        empty.textContent = 'Todavía no hay usuarios registrados.';
+        list.append(empty);
+        return;
+      }
+      users.forEach((user) => {
+        const row = document.createElement('div');
+        row.className = 'user-list-row';
+        const identity = document.createElement('div');
+        identity.className = 'user-list-identity';
+        const name = document.createElement('strong');
+        name.textContent = user.nombre;
+        const username = document.createElement('span');
+        username.textContent = `@${user.username} · ${user.rol}`;
+        identity.append(name, username);
+        const action = document.createElement('button');
+        action.type = 'button';
+        action.className = 'btn-ios secondary btn-sm';
+        action.textContent = user.activo ? 'Inhabilitar' : 'Activar';
+        action.addEventListener('click', () => updateStatus(user, action));
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'btn-ios ghost btn-sm';
+        edit.textContent = 'Editar';
+        edit.addEventListener('click', () => startEdit(user));
+        const actions = document.createElement('div');
+        actions.className = 'user-list-actions';
+        actions.append(edit, action);
+        row.append(identity, actions);
+        list.append(row);
+      });
+    };
+
+    const loadUsers = async () => {
+      try {
+        const query = searchInput.value.trim();
+        const response = await fetch(`/api/users${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+        const payload = response.ok ? await response.json() : [];
+        if (!response.ok) throw new Error('No se pudieron cargar los usuarios.');
+        renderUsers(payload);
+      } catch (error) {
+        list.textContent = error.message || 'No se pudieron cargar los usuarios.';
+      }
+    };
+
+    const updateStatus = async (user, button) => {
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/users/${user.id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activo: !user.activo }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || 'No se pudo cambiar el estado.');
+        await loadUsers();
+      } catch (error) {
+        showMessage(error.message || 'No se pudo cambiar el estado.', true);
+        button.disabled = false;
+      }
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      saveButton.disabled = true;
+      showMessage('Creando usuario...');
+      try {
+        const payload = Object.fromEntries(new FormData(form).entries());
+        const response = await fetch(editingUser ? `/api/users/${editingUser.id}` : '/api/users', {
+          method: editingUser ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || 'No se pudo crear el usuario.');
+        const wasEditing = Boolean(editingUser);
+        resetForm();
+        showMessage(wasEditing ? 'Usuario actualizado correctamente.' : 'Usuario creado correctamente.');
+        await loadUsers();
+      } catch (error) {
+        showMessage(error.message || 'No se pudo crear el usuario.', true);
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
+
+    cancelEditButton.addEventListener('click', resetForm);
+    searchInput.addEventListener('input', (() => {
+      let timeout;
+      return () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(loadUsers, 250);
+      };
+    })());
+    document.getElementById('newUserButton')?.addEventListener('click', () => {
+      resetForm();
+      document.getElementById('username')?.focus();
+    });
+    loadUsers();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - MarcajeTPV{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block actions %}
+<a class="btn-ios secondary" href="/employees">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+    <path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z"/>
+    <path d="M3 21a7 7 0 0 1 14 0M19 8v6M22 11h-6" stroke-linecap="round"/>
+  </svg>
+  <span>Ver empleados</span>
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="panel-shell">
+  <div class="section-header">
+    <div>
+      <p class="eyebrow">Overview</p>
+      <h2>Resumen general del negocio</h2>
+    </div>
+  </div>
+
+  <div class="dashboard-cards">
+    <div class="metric-card metric-card--primary">
+      <div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 20v-1.5a4.5 4.5 0 0 0-9 0V20M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 20v-1.5a4.5 4.5 0 0 0-3-4.24M16.5 4.6a3.5 3.5 0 0 1 0 6.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="metric-title">Total Empleados</div>
+      <div class="metric-value-row">
+        <div class="metric-value" id="metric-total">0</div>
+        <div class="metric-count-subtle" id="metric-total-active">0 activos</div>
+      </div>
+      <div class="metric-meta">Personal registrado</div>
+    </div>
+    <div class="metric-card metric-card--success">
+      <div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9"/></svg></div>
+      <div class="metric-title">Activos</div>
+      <div class="metric-value-row">
+        <div class="metric-value" id="metric-active">0</div>
+        <div class="metric-count-subtle" id="metric-active-share">0% del total</div>
+      </div>
+      <div class="metric-meta">En operación</div>
+    </div>
+    <div class="metric-card metric-card--warning">
+      <div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4v4M17 4v4M4 10h16M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" stroke-linecap="round"/><path d="M12 14v3M10.5 15.5h3" stroke-linecap="round"/></svg></div>
+      <div class="metric-title">Nuevos en 30 días</div>
+      <div class="metric-value-row">
+        <div class="metric-value" id="metric-new-30">0</div>
+        <div class="metric-count-subtle" id="metric-new-7">0 en 7 días</div>
+      </div>
+      <div class="metric-meta">Contrataciones recientes</div>
+    </div>
+    <div class="metric-card metric-card--warning">
+      <div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M6 20V8h4v12M14 20V4h4v16M8 11h.01M8 15h.01M16 8h.01M16 12h.01" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="metric-title">Departamentos</div>
+      <div class="metric-value-row">
+        <div class="metric-value" id="metric-depts">0</div>
+        <div class="metric-count-subtle" id="metric-depts-active">0 activos</div>
+      </div>
+      <div class="metric-meta">Áreas activas</div>
+    </div>
+    <div class="metric-card metric-card--accent">
+      <div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10" stroke-linecap="round"/><circle cx="18" cy="17" r="2"/></svg></div>
+      <div class="metric-title">Tipos de Nómina</div>
+      <div class="metric-value-row">
+        <div class="metric-value" id="metric-types">0</div>
+        <div class="metric-count-subtle" id="metric-types-total">0 registros</div>
+      </div>
+      <div class="metric-meta">Configuraciones</div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="card card-panel">
+      <div class="card-panel__header">
+        <div>
+          <p class="eyebrow">Actividad</p>
+          <h3>Estado del talento</h3>
+        </div>
+      </div>
+      <div class="card-panel__body">
+        <div class="mini-stat">
+          <span class="mini-stat__label">Gerencias</span>
+          <strong class="mini-stat__value" id="metric-gerencias">0</strong>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-stat__label">Cargos</span>
+          <strong class="mini-stat__value" id="metric-cargos">0</strong>
+        </div>
+        <div class="activity-panel">
+          <div class="activity-panel__heading">Último registro</div>
+          <div class="activity-timeline" id="latest-activity" aria-live="polite">
+            <div class="activity-empty">No hay actividad reciente</div>
+          </div>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-stat__label">Vacaciones</span>
+          <strong class="mini-stat__value" id="metric-vacaciones">0</strong>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-stat__label">Suspendidos</span>
+          <strong class="mini-stat__value" id="metric-suspendidos">0</strong>
+        </div>
+        <div class="mini-stat">
+          <span class="mini-stat__label">Retirados</span>
+          <strong class="mini-stat__value" id="metric-retirados">0</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-panel">
+      <div class="card-panel__header">
+        <div>
+          <p class="eyebrow">Desglose</p>
+          <h3>Distribución por estado</h3>
+        </div>
+      </div>
+      <div class="card-panel__body card-panel__body--stacked dashboard-list">
+        <div class="status-distribution" aria-label="Distribución de empleados por estado" role="img">
+          <div class="status-distribution__bar" id="status-distribution-bar"></div>
+          <div class="status-distribution__legend">
+            <div class="status-legend-item"><span class="status-dot status-dot--activo"></span><span>Activo</span><strong id="distribution-activo">0</strong></div>
+            <div class="status-legend-item"><span class="status-dot status-dot--vacaciones"></span><span>Vacaciones</span><strong id="distribution-vacaciones">0</strong></div>
+            <div class="status-legend-item"><span class="status-dot status-dot--suspendido"></span><span>Suspendido</span><strong id="distribution-suspendido">0</strong></div>
+            <div class="status-legend-item"><span class="status-dot status-dot--retirado"></span><span>Retirado</span><strong id="distribution-retirado">0</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-panel">
+      <div class="card-panel__header">
+        <div>
+          <p class="eyebrow">Organización</p>
+          <h3>Departamentos clave</h3>
+        </div>
+      </div>
+      <div class="card-panel__body card-panel__body--stacked dashboard-list" id="top-departments-list"></div>
+    </div>
+
+    <div class="card card-panel">
+      <div class="card-panel__header">
+        <div>
+          <p class="eyebrow">Nómina</p>
+          <h3>Tipos de nómina</h3>
+        </div>
+      </div>
+      <div class="card-panel__body card-panel__body--stacked dashboard-list" id="payroll-list"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[character]));
+
+    const updateMetric = (selector, value) => {
+      const el = document.querySelector(selector);
+      if (el) el.textContent = value ?? 0;
+    };
+    const renderList = (selector, items) => {
+      const block = document.querySelector(selector);
+      if (!block) return;
+
+      if (!items || items.length === 0) {
+        block.innerHTML = '<div class="mini-stat"><span class="mini-stat__label">Sin información</span><strong class="mini-stat__value">0</strong></div>';
+        return;
+      }
+
+      block.innerHTML = items.map((item) => `
+        <div class="status-row">
+          <span>${escapeHtml(item.nombre || 'Sin nombre')}</span>
+          <strong>${escapeHtml(item.total ?? 0)}</strong>
+        </div>
+      `).join('');
+    };
+
+    try {
+      const response = await fetch('/api/dashboard/metrics');
+      if (!response.ok) throw new Error('No se pudo cargar métricas');
+      const data = await response.json();
+
+      const total = Number(data.total ?? 0);
+      const active = Number(data.active ?? 0);
+      const depts = Number(data.depts ?? 0);
+      const types = Number(data.types ?? 0);
+      const latest = data.latest_employee || '--';
+
+      updateMetric('#metric-total', total);
+      updateMetric('#metric-total-active', `${active} activos`);
+      updateMetric('#metric-active', active);
+      updateMetric('#metric-active-share', `${data.active_ratio ?? 0}% del total`);
+      updateMetric('#metric-new-30', data.last_30_days ?? 0);
+      updateMetric('#metric-new-7', `${data.last_7_days ?? 0} en 7 días`);
+      updateMetric('#metric-depts', depts);
+      updateMetric('#metric-depts-active', `${data.departamentos_activas ?? 0} activos`);
+      updateMetric('#metric-types', types);
+      updateMetric('#metric-types-total', `${types} registros`);
+      updateMetric('#metric-gerencias', data.gerencias ?? 0);
+      updateMetric('#metric-cargos', data.cargos ?? 0);
+      updateMetric('#metric-vacaciones', data.by_estado?.Vacaciones ?? 0);
+      updateMetric('#metric-suspendidos', data.by_estado?.Suspendido ?? 0);
+      updateMetric('#metric-retirados', data.by_estado?.Retirado ?? 0);
+      updateMetric('#distribution-activo', data.by_estado?.Activo ?? 0);
+      updateMetric('#distribution-vacaciones', data.by_estado?.Vacaciones ?? 0);
+      updateMetric('#distribution-suspendido', data.by_estado?.Suspendido ?? 0);
+      updateMetric('#distribution-retirado', data.by_estado?.Retirado ?? 0);
+
+      const activity = document.querySelector('#latest-activity');
+      if (activity && data.latest_activity) {
+        activity.innerHTML = `
+          <div class="activity-item">
+            <span class="activity-item__marker" aria-hidden="true"></span>
+            <div><strong>${escapeHtml(data.latest_activity.nombre)}</strong><span>Registro incorporado el ${escapeHtml(data.latest_activity.fecha)}</span></div>
+          </div>`;
+      }
+
+      const states = [
+        ['activo', Number(data.by_estado?.Activo ?? 0)],
+        ['vacaciones', Number(data.by_estado?.Vacaciones ?? 0)],
+        ['suspendido', Number(data.by_estado?.Suspendido ?? 0)],
+        ['retirado', Number(data.by_estado?.Retirado ?? 0)],
+      ];
+      const distributionBar = document.querySelector('#status-distribution-bar');
+      if (distributionBar) {
+        const totalStates = states.reduce((sum, [, value]) => sum + value, 0);
+        distributionBar.innerHTML = states.map(([state, value]) => `<span class="status-segment status-segment--${state}" style="width: ${totalStates ? (value / totalStates) * 100 : 0}%" title="${state}: ${value}"></span>`).join('');
+      }
+
+      renderList('#top-departments-list', data.top_departamentos || []);
+      renderList('#payroll-list', data.payroll_breakdown || []);
+    } catch (error) {
+      console.error(error);
+    }
+  });
+</script>
+{% endblock %}

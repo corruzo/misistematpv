@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestión de Empleados - MarcajeTPV{% endblock %}
+{% block page_title %}Directorio de Empleados{% endblock %}
+
+{% block top_search %}{% endblock %}
+
+{% block actions %}{% endblock %}
+
+{% block content %}
+<div class="section-header">
+  <div>
+  </div>
+  <div class="stack-actions">
+    <button id="viewStructureBtn" type="button" class="btn-ios secondary">Ver estructura</button>
+    <button id="newBtn" type="button" class="btn-ios primary">Nuevo registro</button>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card employee-metric-card p-3 border-0 shadow-sm rounded-4">
+      <div class="employee-metric-heading"><span class="employee-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 20v-1.5a4.5 4.5 0 0 0-9 0V20M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 20v-1.5a4.5 4.5 0 0 0-3-4.24M16.5 4.6a3.5 3.5 0 0 1 0 6.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Total Empleados</span></div>
+      <h3 class="fw-bold mb-0 mt-1" id="metric-total">0</h3>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card employee-metric-card p-3 border-0 shadow-sm rounded-4">
+      <div class="employee-metric-heading"><span class="employee-metric-icon employee-metric-icon--success" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9"/></svg></span><span>Activos</span></div>
+      <h3 class="fw-bold text-success mb-0 mt-1" id="metric-active">0</h3>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card employee-metric-card p-3 border-0 shadow-sm rounded-4">
+      <div class="employee-metric-heading"><span class="employee-metric-icon employee-metric-icon--warning" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M6 20V8h4v12M14 20V4h4v16M8 11h.01M8 15h.01M16 8h.01M16 12h.01" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Gerencias / Deptos</span></div>
+      <h3 class="fw-bold mb-0 mt-1" id="metric-depts">0</h3>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card employee-metric-card p-3 border-0 shadow-sm rounded-4">
+      <div class="employee-metric-heading"><span class="employee-metric-icon employee-metric-icon--accent" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10" stroke-linecap="round"/><circle cx="18" cy="17" r="2"/></svg></span><span>Tipos de Nómina</span></div>
+      <h3 class="fw-bold mb-0 mt-1" id="metric-types">0</h3>
+    </div>
+  </div>
+</div>
+
+<div class="card card-table border-0 shadow-sm rounded-4 overflow-hidden">
+  <div class="card-header-toolbar p-3 border-bottom bg-white employee-toolbar-wrap">
+    <div class="employee-filter-layout">
+      <div class="employee-search-control">
+        <label for="searchInput">Buscar</label>
+        <div class="search-input-wrap search-field">
+        <svg class="icon-search" viewBox="0 0 24 24" width="16" height="16">
+          <path fill="#8E8E93" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z"/>
+        </svg>
+        <input id="searchInput" type="text" placeholder="Buscar nombre o cédula" />
+        </div>
+      </div>
+
+      <div class="employee-filter-control">
+        <span class="employee-filter-control__label">Filtrar por</span>
+        <div class="employee-filter-controls">
+          <div class="filter-select-wrap">
+            <select id="gerenciaFilter" class="form-select form-select-sm"><option value="">Gerencia</option></select>
+          </div>
+          <div class="filter-select-wrap">
+            <select id="departamentoFilter" class="form-select form-select-sm"><option value="">Departamento</option></select>
+          </div>
+          <div class="filter-select-wrap">
+            <select id="estadoFilter" class="form-select form-select-sm">
+              <option value="">Estado</option><option value="Activo">Activo</option><option value="Vacaciones">Vacaciones</option><option value="Retirado">Retirado</option><option value="Suspendido">Suspendido</option>
+            </select>
+          </div>
+          <button type="button" class="btn-ios ghost btn-sm employee-clear-button" id="clearFiltersBtn" aria-label="Limpiar filtros">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Limpiar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-body p-0 position-relative">
+    <div id="employeesLoader" class="py-5 text-center d-none">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table ios-table align-middle mb-0">
+        <thead class="bg-light">
+          <tr>
+            <th class="ps-4">Empleado</th>
+            <th>Cédula</th>
+            <th>Gerencia / Dpto</th>
+            <th>Cargo</th>
+            <th>Estado</th>
+            <th class="text-end pe-4">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="employeesList"></tbody>
+      </table>
+    </div>
+
+    <div id="emptyStateRow" class="text-center d-none">
+      <div class="employee-empty-state">
+        <div class="employee-empty-state__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 20v-1.5a4.5 4.5 0 0 0-9 0V20M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 20v-1.5a4.5 4.5 0 0 0-3-4.24M16.5 4.6a3.5 3.5 0 0 1 0 6.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h5 class="mb-1">No se encontraron empleados</h5>
+        <p class="text-muted small mb-3">Intenta ajustar los filtros o agrega un nuevo empleado al sistema.</p>
+        <button type="button" class="btn-ios primary btn-sm" data-open-employee-modal>
+          + Registrar primer empleado
+        </button>
+      </div>
+    </div>
+
+    <div class="card-footer bg-white border-top px-4 py-3 d-flex align-items-center justify-content-between">
+      <span class="text-muted small" id="paginationInfo">Cargando...</span>
+      <div id="pagination" class="d-flex align-items-center gap-2"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="employeeModal" tabindex="-1" aria-labelledby="employeeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content ios-modal">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <p class="text-muted small mb-1">Empleado</p>
+          <h5 class="modal-title" id="employeeModalLabel">Registrar empleado</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="employeeForm" enctype="multipart/form-data">
+        <input type="hidden" name="id" value="">
+        <div class="modal-body pt-3">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="cedula">Cédula</label>
+              <input id="cedula" name="cedula" type="text" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="nombre_apellido">Nombre y apellido</label>
+              <input id="nombre_apellido" name="nombre_apellido" type="text" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="gerencia">Gerencia</label>
+              <select id="gerencia" name="gerencia" class="form-select" required></select>
+              <input type="hidden" name="gerencia_id" value="">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="departamento">Departamento</label>
+              <select id="departamento" name="departamento" class="form-select" required></select>
+              <input type="hidden" name="departamento_id" value="">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="cargo">Cargo</label>
+              <select id="cargo" name="cargo" class="form-select" required></select>
+              <input type="hidden" name="cargo_id" value="">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="estado">Estado</label>
+              <select id="estado" name="estado" class="form-select">
+                <option value="Activo">Activo</option>
+                <option value="Vacaciones">Vacaciones</option>
+                <option value="Retirado">Retirado</option>
+                <option value="Suspendido">Suspendido</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="tipo_nomina">Tipo de nómina</label>
+              <select id="tipo_nomina" name="tipo_nomina" class="form-select">
+                <option value="">Seleccione</option>
+                <option value="MENSUAL">Mensual</option>
+                <option value="DIARIA">Diaria</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="foto">Foto</label>
+              <input id="foto" name="foto" type="file" class="form-control" accept="image/*">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn-ios secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button id="saveBtn" type="submit" class="btn-ios primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

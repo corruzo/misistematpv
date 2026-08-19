@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pyodbc
+python-dotenv
+Jinja2
+python-multipart
+aiofiles

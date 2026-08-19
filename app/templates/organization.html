@@ -1,0 +1,383 @@
+{% extends 'base.html' %}
+
+{% block title %}Organización - MarcajeTPV{% endblock %}
+{% block page_title %}Organización de la Empresa{% endblock %}
+
+{% block content %}
+<div class="organization-shell">
+  <div class="section-header">
+    <div>
+    </div>
+    <div class="stack-actions">
+      <button type="button" class="btn-ios primary" id="btnViewTree">Ver estructura</button>
+      <button type="button" class="btn-ios secondary" id="btnViewForm">Nuevo registro</button>
+    </div>
+  </div>
+
+  <div class="org-summary-grid">
+    <div class="org-stat-card">
+      <span>Gerencias</span>
+      <strong id="org-gerencias">0</strong>
+    </div>
+    <div class="org-stat-card">
+      <span>Departamentos</span>
+      <strong id="org-departamentos">0</strong>
+    </div>
+    <div class="org-stat-card">
+      <span>Cargos</span>
+      <strong id="org-cargos">0</strong>
+    </div>
+  </div>
+
+  <div id="sectionTree" class="org-tree-card">
+    <div class="org-card-header">
+      <div>
+        <span class="eyebrow">Vista general</span>
+        <h3>Estructura actual</h3>
+      </div>
+    </div>
+    <div class="org-card-body">
+      <div id="organizationTree" class="organization-tree"></div>
+    </div>
+  </div>
+
+  <div id="sectionForm" class="org-form-card d-none">
+    <div class="org-card-header">
+      <div>
+        <span class="eyebrow">Configuración</span>
+        <h3>Registrar elemento</h3>
+      </div>
+    </div>
+    <div class="org-card-body">
+      <div class="org-tabs">
+        <button type="button" class="btn-ios primary" id="tabGerenciaBtn">Gerencia</button>
+        <button type="button" class="btn-ios secondary" id="tabDepartamentoBtn">Departamento</button>
+        <button type="button" class="btn-ios secondary" id="tabCargoBtn">Cargo</button>
+      </div>
+
+      <form id="gerenciaForm" class="org-form">
+        <label class="form-label">Nombre</label>
+        <input type="text" name="nombre" class="form-control" placeholder="Ej. Gerencia de Recursos Humanos" required>
+        <label class="form-label">Descripción</label>
+        <textarea name="descripcion" class="form-control" rows="3" placeholder="Opcional"></textarea>
+        <label class="form-label">Estado</label>
+        <select name="estado" class="form-select">
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+        <button type="submit" class="btn-ios primary">Guardar gerencia</button>
+      </form>
+
+      <form id="departamentoForm" class="org-form d-none">
+        <label class="form-label">Gerencia</label>
+        <select name="gerencia_id" id="departamentoGerenciaSelect" class="form-select" required></select>
+        <label class="form-label">Nombre</label>
+        <input type="text" name="nombre" class="form-control" placeholder="Ej. Departamento de Sistemas" required>
+        <label class="form-label">Descripción</label>
+        <textarea name="descripcion" class="form-control" rows="3" placeholder="Opcional"></textarea>
+        <label class="form-label">Estado</label>
+        <select name="estado" class="form-select">
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+        <button type="submit" class="btn-ios primary">Guardar departamento</button>
+      </form>
+
+      <form id="cargoForm" class="org-form d-none">
+        <label class="form-label">Gerencia</label>
+        <select id="cargoGerenciaSelect" class="form-select" required></select>
+        <label class="form-label">Departamento</label>
+        <select name="departamento_id" id="cargoDepartamentoSelect" class="form-select" required></select>
+        <label class="form-label">Nombre</label>
+        <input type="text" name="nombre" class="form-control" placeholder="Ej. Analista de RR. HH." required>
+        <label class="form-label">Descripción</label>
+        <textarea name="descripcion" class="form-control" rows="3" placeholder="Opcional"></textarea>
+        <label class="form-label">Estado</label>
+        <select name="estado" class="form-select">
+          <option value="Activo">Activo</option>
+          <option value="Inactivo">Inactivo</option>
+        </select>
+        <button type="submit" class="btn-ios primary">Guardar cargo</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const tree = document.getElementById('organizationTree');
+    const gerenciaSelects = [
+      document.getElementById('departamentoGerenciaSelect'),
+      document.getElementById('cargoGerenciaSelect')
+    ];
+
+    const sectionTree = document.getElementById('sectionTree');
+    const sectionForm = document.getElementById('sectionForm');
+    const btnViewTree = document.getElementById('btnViewTree');
+    const btnViewForm = document.getElementById('btnViewForm');
+
+    const gerenciaForm = document.getElementById('gerenciaForm');
+    const departamentoForm = document.getElementById('departamentoForm');
+    const cargoForm = document.getElementById('cargoForm');
+    const tabGerenciaBtn = document.getElementById('tabGerenciaBtn');
+    const tabDepartamentoBtn = document.getElementById('tabDepartamentoBtn');
+    const tabCargoBtn = document.getElementById('tabCargoBtn');
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[character]));
+
+    function setActiveTab(activeForm, activeBtn) {
+      [gerenciaForm, departamentoForm, cargoForm].forEach((form) => form && form.classList.add('d-none'));
+      [tabGerenciaBtn, tabDepartamentoBtn, tabCargoBtn].forEach((button) => {
+        if (!button) return;
+        button.classList.remove('primary');
+        button.classList.add('secondary');
+      });
+
+      activeForm.classList.remove('d-none');
+      activeBtn.classList.remove('secondary');
+      activeBtn.classList.add('primary');
+    }
+
+    btnViewTree.onclick = () => {
+      sectionTree.classList.remove('d-none');
+      sectionForm.classList.add('d-none');
+      btnViewTree.classList.add('primary');
+      btnViewTree.classList.remove('secondary');
+      btnViewForm.classList.add('secondary');
+      btnViewForm.classList.remove('primary');
+    };
+
+    btnViewForm.onclick = () => {
+      sectionTree.classList.add('d-none');
+      sectionForm.classList.remove('d-none');
+      btnViewForm.classList.add('primary');
+      btnViewForm.classList.remove('secondary');
+      btnViewTree.classList.add('secondary');
+      btnViewTree.classList.remove('primary');
+    };
+
+    tabGerenciaBtn.onclick = () => setActiveTab(gerenciaForm, tabGerenciaBtn);
+    tabDepartamentoBtn.onclick = () => setActiveTab(departamentoForm, tabDepartamentoBtn);
+    tabCargoBtn.onclick = () => setActiveTab(cargoForm, tabCargoBtn);
+
+    function renderSummary(data) {
+      const gerencias = data.length ?? 0;
+      const departamentos = data.reduce((sum, gerencia) => sum + (gerencia.departamentos?.length || 0), 0);
+      const cargos = data.reduce((sum, gerencia) => {
+        return sum + gerencia.departamentos.reduce((deptSum, departamento) => deptSum + (departamento.cargos?.length || 0), 0);
+      }, 0);
+
+      document.getElementById('org-gerencias').textContent = gerencias;
+      document.getElementById('org-departamentos').textContent = departamentos;
+      document.getElementById('org-cargos').textContent = cargos;
+    }
+
+    async function loadOrganization() {
+      const res = await fetch('/api/organization');
+      if (!res.ok) throw new Error('No se pudo cargar la organización');
+      const data = await res.json();
+      renderSelects(data);
+      renderSummary(data);
+      renderTree(data);
+    }
+
+    function renderSelects(data) {
+      const activeGerencias = (data || []).filter((item) => (item.estado || 'Activo') === 'Activo');
+      const buildOptions = (items, placeholder) => {
+        const options = [`<option value="">${placeholder}</option>`];
+        items.forEach((item) => options.push(`<option value="${item.id}">${escapeHtml(item.nombre)}</option>`));
+        return options.join('');
+      };
+
+      gerenciaSelects.forEach((select) => {
+        if (!select) return;
+        select.innerHTML = buildOptions(activeGerencias, 'Seleccione una gerencia');
+      });
+
+      const cargoGerenciaSelect = document.getElementById('cargoGerenciaSelect');
+      const cargoDepartamentoSelect = document.getElementById('cargoDepartamentoSelect');
+      if (cargoGerenciaSelect && cargoDepartamentoSelect) {
+        cargoGerenciaSelect.onchange = () => {
+          const gerenciaId = Number(cargoGerenciaSelect.value || 0);
+          const departamentos = (data.find((g) => Number(g.id) === gerenciaId)?.departamentos || []).filter((d) => (d.estado || 'Activo') === 'Activo');
+          cargoDepartamentoSelect.innerHTML = ['<option value="">Seleccione un departamento</option>']
+            .concat(departamentos.map((d) => `<option value="${d.id}">${escapeHtml(d.nombre)}</option>`))
+            .join('');
+        };
+      }
+    }
+
+    function renderTree(data) {
+      if (!tree) return;
+      if (!data.length) {
+        tree.innerHTML = '<p class="text-muted mb-0">Todavía no hay elementos registrados.</p>';
+        return;
+      }
+
+      const getOrgBadgeClass = (status) => {
+        const normalized = (status || 'Activo').trim();
+        if (normalized === 'Activo') return 'badge-status--activo';
+        if (normalized === 'Inactivo') return 'badge-status--inactivo';
+        return 'badge-status--activo';
+      };
+
+      const cascadeLabel = 'Supeditado a padre inactivo';
+
+      tree.innerHTML = data.map((gerencia) => {
+        const gerenciaInactive = (gerencia.estado || 'Activo') === 'Inactivo';
+        return `
+        <div class="org-group ${gerenciaInactive ? 'is-inactive' : ''}">
+          <div class="org-group-header">
+            <div class="org-group-title">${escapeHtml(gerencia.nombre)}</div>
+            <div class="org-actions-row">
+              <span class="badge-pill ${getOrgBadgeClass(gerencia.estado)}">${gerencia.estado || 'Activo'}</span>
+              <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="gerencia" data-id="${gerencia.id}" data-status="${gerencia.estado || 'Activo'}">
+                ${gerencia.estado === 'Activo' ? 'Inhabilitar' : 'Activar'}
+              </button>
+            </div>
+          </div>
+
+          <div class="org-departments">
+            ${gerencia.departamentos.map((departamento) => {
+              const departamentoInactive = (departamento.estado || 'Activo') === 'Inactivo';
+              const departamentoCascaded = gerenciaInactive;
+              const departamentoLocked = departamentoCascaded;
+              return `
+              <div class="org-department ${departamentoInactive ? 'is-inactive' : ''} ${departamentoCascaded ? 'is-cascade-locked' : ''}">
+                <div class="org-department-header">
+                  <div class="org-department-main">
+                    <span class="org-department-name">${escapeHtml(departamento.nombre)}</span>
+                  </div>
+                  <span class="org-mini-badge ${departamentoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(departamento.estado)}">${departamentoCascaded ? cascadeLabel : (departamento.estado || 'Activo')}</span>
+                  <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="departamento" data-id="${departamento.id}" data-status="${departamento.estado || 'Activo'}" ${departamentoLocked ? 'disabled' : ''}>
+                    ${departamentoCascaded ? 'Padre inactivo' : (departamento.estado === 'Activo' ? 'Inhabilitar' : 'Activar')}
+                  </button>
+                </div>
+
+                <div class="org-cargos">
+                  ${departamento.cargos.length
+                    ? departamento.cargos.map((cargo) => {
+                        const cargoInactive = (cargo.estado || 'Activo') === 'Inactivo';
+                          const cargoCascaded = gerenciaInactive || departamentoInactive;
+                          const cargoLocked = cargoCascaded;
+                        return `
+                          <div class="org-cargo-item ${cargoCascaded ? 'is-cascade-locked' : ''}">
+                          <span class="org-cargo-name">${escapeHtml(cargo.nombre)}</span>
+                            <span class="org-mini-badge ${cargoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(cargo.estado)}">${cargoCascaded ? cascadeLabel : (cargo.estado || 'Activo')}</span>
+                          <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="cargo" data-id="${cargo.id}" data-status="${cargo.estado || 'Activo'}" ${cargoLocked ? 'disabled' : ''}>
+                              ${cargoCascaded ? 'Padre inactivo' : (cargo.estado === 'Activo' ? 'Inhabilitar' : 'Activar')}
+                          </button>
+                        </div>
+                      `;
+                      }).join('')
+                    : '<span class="empty-org">Sin cargos</span>'}
+                </div>
+              </div>
+            `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      }).join('');
+
+      document.querySelectorAll('[data-toggle-status]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const type = button.dataset.toggleStatus;
+          const id = button.dataset.id;
+          const currentStatus = button.dataset.status === 'Activo' ? 'Activo' : 'Inactivo';
+          const nextStatus = currentStatus === 'Activo' ? 'Inactivo' : 'Activo';
+
+          if (nextStatus === 'Inactivo') {
+            const labelMap = {
+              gerencia: 'gerencia',
+              departamento: 'departamento',
+              cargo: 'cargo',
+            };
+            const confirmed = window.confirm(`¿Deseas inhabilitar esta ${labelMap[type] || 'estructura'}?\nUna vez inhabilitada, no podrás hacer cambios dentro de ella.`);
+            if (!confirmed) return;
+          }
+
+          try {
+            const res = await fetch(`/api/organization/${type === 'gerencia' ? 'gerencias' : type === 'departamento' ? 'departamentos' : 'cargos'}/${id}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ estado: nextStatus }),
+            });
+            const result = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              alert(result.detail || 'No se pudo actualizar el estado');
+              return;
+            }
+            await loadOrganization();
+          } catch (error) {
+            console.error(error);
+            alert('No se pudo actualizar el estado');
+          }
+        });
+      });
+    }
+
+    async function submitForm(formId, endpoint, successMessage) {
+      const form = document.getElementById(formId);
+      if (!form) return;
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton?.disabled) return;
+        if (!form.reportValidity()) return;
+        if (submitButton) submitButton.disabled = true;
+        const formData = new FormData(form);
+        const payload = Object.fromEntries(formData.entries());
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const result = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(result.detail || 'No se pudo guardar la información.');
+            return;
+          }
+          alert(successMessage);
+          form.reset();
+          await loadOrganization();
+          btnViewTree.click();
+        } catch (error) {
+          console.error(error);
+          alert('No se pudo completar el registro. Verifica la conexión e inténtalo de nuevo.');
+        } finally {
+          if (submitButton) submitButton.disabled = false;
+        }
+      });
+    }
+
+    fetch('/api/organization/metrics')
+      .then((res) => res.ok ? res.json() : null)
+      .then((metrics) => {
+        if (!metrics) return;
+        document.getElementById('org-gerencias').textContent = metrics.gerencias ?? 0;
+        document.getElementById('org-departamentos').textContent = metrics.departamentos ?? 0;
+        document.getElementById('org-cargos').textContent = metrics.cargos ?? 0;
+      })
+      .catch((error) => console.error(error));
+
+    submitForm('gerenciaForm', '/api/organization/gerencias', 'Gerencia creada correctamente.');
+    submitForm('departamentoForm', '/api/organization/departamentos', 'Departamento creado correctamente.');
+    submitForm('cargoForm', '/api/organization/cargos', 'Cargo creado correctamente.');
+
+    loadOrganization().catch((err) => {
+      console.error(err);
+      tree.innerHTML = '<p class="text-danger mb-0">No se pudo cargar la organización.</p>';
+    });
+  });
+</script>
+{% endblock %}

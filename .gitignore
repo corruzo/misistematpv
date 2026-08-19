@@ -1,0 +1,21 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.template
+
+# Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime logs and generated files
+uvicorn_log.txt
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
