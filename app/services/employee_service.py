@@ -61,7 +61,7 @@ def resolve_employee_org_ids(db: Session, departamento_id: Optional[int] = None,
 
 
 def save_image(file: UploadFile) -> Optional[str]:
-    if not file:
+    if not file or not file.filename:
         return None
     suffix = Path(file.filename or '').suffix.lower()
     if suffix not in ALLOWED_IMAGE_EXT or (file.content_type or '').lower() not in {'image/png', 'image/jpeg', 'image/gif'}:
@@ -111,10 +111,18 @@ def create_employee(db: Session, data, foto: Optional[UploadFile] = None) -> Emp
     return emp
 
 
-def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFile] = None) -> Empleado:
-    if foto:
+def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFile] = None, eliminar_foto: bool = False) -> Empleado:
+    if foto and foto.filename:
         foto_url = save_image(foto)
+        old_photo = STATIC_DIR / emp.foto_url if emp.foto_url else None
         emp.foto_url = foto_url
+        if old_photo and old_photo.is_file() and UPLOADS_DIR in old_photo.parents:
+            old_photo.unlink()
+    elif eliminar_foto and emp.foto_url:
+        old_photo = STATIC_DIR / emp.foto_url
+        if old_photo.is_file() and UPLOADS_DIR in old_photo.parents:
+            old_photo.unlink()
+        emp.foto_url = None
 
     payload = updates.dict(exclude_unset=True)
     departamento_id = payload.get('departamento_id')
@@ -141,7 +149,7 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     for field, value in payload.items():
         if field in {'departamento', 'cargo', 'gerencia', 'gerencia_id'}:
             continue
-        if value is not None:
+        if value is not None or field == 'codigo_tarjeta':
             normalized_value = value.strip() if isinstance(value, str) else value
             if field == 'nombre_apellido' and not normalized_value:
                 raise ValueError('El nombre del empleado no puede estar vacío.')
@@ -210,8 +218,6 @@ def get_employee_metrics(db: Session):
     activos = estado_counts['Activo']
     inactivos = sum(value for key, value in estado_counts.items() if key != 'Activo')
     today = datetime.utcnow()
-    last_7_days = db.query(Empleado).filter(Empleado.fecha_creacion >= today - timedelta(days=7)).count()
-    last_30_days = db.query(Empleado).filter(Empleado.fecha_creacion >= today - timedelta(days=30)).count()
 
     latest_employee = db.query(Empleado).order_by(Empleado.fecha_creacion.desc()).first()
     latest_employee_label = latest_employee.fecha_creacion.strftime('%d/%m/%Y') if latest_employee and latest_employee.fecha_creacion else 'Sin registros'
@@ -251,7 +257,6 @@ def get_employee_metrics(db: Session):
         'inactive': inactivos,
         'by_estado': estado_counts,
         'depts': unique_departments,
-        'types': tipos_nomina,
         'gerencias': total_gerencias,
         'cargos': total_cargos,
         'gerencias_activas': gerencias_activas,
@@ -260,8 +265,6 @@ def get_employee_metrics(db: Session):
         'departamentos_inactivas': departamentos_inactivas,
         'cargos_activas': cargos_activas,
         'cargos_inactivas': cargos_inactivas,
-        'last_7_days': last_7_days,
-        'last_30_days': last_30_days,
         'latest_employee': latest_employee_label,
         'latest_activity': latest_activity,
         'top_departamentos': [

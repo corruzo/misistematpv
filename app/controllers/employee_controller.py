@@ -229,6 +229,7 @@ async def api_update_employee(
     estado: Optional[str] = Form(None),
     tipo_nomina: Optional[str] = Form(None),
     foto: Optional[UploadFile] = File(None),
+    eliminar_foto: bool = Form(False),
     db: Session = Depends(get_db)
 ):
     emp = get_employee_by_id(db, emp_id)
@@ -248,11 +249,11 @@ async def api_update_employee(
         tipo_nomina=tipo_nomina,
     )
     try:
-        emp = update_employee(db, emp, updates, foto)
+        emp = update_employee(db, emp, updates, foto, eliminar_foto=eliminar_foto)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         if isinstance(exc, IntegrityError):
-            raise HTTPException(status_code=409, detail='No se pudo actualizar: la cédula ya está registrada.')
+            raise HTTPException(status_code=409, detail='No se pudo actualizar: la cédula o el código RFID ya están registrados.')
         raise organization_error(exc)
     return EmpleadoOut.model_validate(emp)
 

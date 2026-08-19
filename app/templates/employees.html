@@ -36,12 +36,6 @@
       <h3 class="fw-bold mb-0 mt-1" id="metric-depts">0</h3>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card employee-metric-card p-3 border-0 shadow-sm rounded-4">
-      <div class="employee-metric-heading"><span class="employee-metric-icon employee-metric-icon--accent" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10" stroke-linecap="round"/><circle cx="18" cy="17" r="2"/></svg></span><span>Tipos de Nómina</span></div>
-      <h3 class="fw-bold mb-0 mt-1" id="metric-types">0</h3>
-    </div>
-  </div>
 </div>
 
 <div class="card card-table border-0 shadow-sm rounded-4 overflow-hidden">
@@ -68,7 +62,7 @@
           </div>
           <div class="filter-select-wrap">
             <select id="estadoFilter" class="form-select form-select-sm">
-              <option value="">Estado</option><option value="Activo">Activo</option><option value="Vacaciones">Vacaciones</option><option value="Retirado">Retirado</option><option value="Suspendido">Suspendido</option>
+              <option value="">Estatus</option><option value="Activo">Activo</option><option value="Vacaciones">Vacaciones</option><option value="Retirado">Retirado</option><option value="Suspendido">Suspendido</option>
             </select>
           </div>
           <button type="button" class="btn-ios ghost btn-sm employee-clear-button" id="clearFiltersBtn" aria-label="Limpiar filtros">
@@ -95,7 +89,7 @@
             <th>Cédula</th>
             <th>Gerencia / Dpto</th>
             <th>Cargo</th>
-            <th>Estado</th>
+            <th>Estatus</th>
             <th class="text-end pe-4">Acciones</th>
           </tr>
         </thead>
@@ -188,11 +182,11 @@
           <section class="employee-form-section employee-form-section--last">
             <div class="employee-form-section__heading">
               <span class="employee-form-section__number">03</span>
-              <div><h6>Información laboral</h6><p>Estado, nómina y fotografía</p></div>
+              <div><h6>Información laboral</h6><p>Estatus, nómina y fotografía</p></div>
             </div>
             <div class="row g-3">
             <div class="col-md-6">
-              <label class="form-label" for="estado">Estado</label>
+              <label class="form-label" for="estado">Estatus</label>
               <select id="estado" name="estado" class="form-select">
                 <option value="Activo">Activo</option>
                 <option value="Vacaciones">Vacaciones</option>
@@ -211,6 +205,10 @@
             <div class="col-12">
               <label class="form-label" for="foto">Foto</label>
               <input id="foto" name="foto" type="file" class="form-control" accept="image/*">
+              <div class="form-check mt-2">
+                <input id="eliminar_foto" name="eliminar_foto" value="true" type="checkbox" class="form-check-input">
+                <label class="form-check-label" for="eliminar_foto">Eliminar foto actual</label>
+              </div>
             </div>
             </div>
           </section>

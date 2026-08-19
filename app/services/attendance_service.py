@@ -95,14 +95,12 @@ def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=N
 def attendance_summary(db: Session):
     today = datetime.now(timezone.utc).date()
     start = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
-    total_active = db.query(Empleado).filter(Empleado.estado == EstadoEnum.Activo).count()
     records_today = db.query(AttendanceRecord).filter(AttendanceRecord.fecha_hora >= start).all()
     last_by_employee = {}
     for record in records_today:
         last_by_employee[record.empleado_id] = record
     entradas = sum(1 for record in records_today if record.tipo == AttendanceType.ENTRADA.value)
     salidas = sum(1 for record in records_today if record.tipo == AttendanceType.SALIDA.value)
-    active_ids_with_entry = {record.empleado_id for record in records_today if record.tipo == AttendanceType.ENTRADA.value}
     present_records = [record for record in last_by_employee.values() if record.tipo == AttendanceType.ENTRADA.value]
     area_counts = {}
     for record in present_records:
@@ -111,10 +109,13 @@ def attendance_summary(db: Session):
         ).filter(Empleado.id == record.empleado_id).first()
         area = employee.departamento_rel.nombre if employee and employee.departamento_rel else 'Sin departamento'
         gerencia = employee.departamento_rel.gerencia.nombre if employee and employee.departamento_rel and employee.departamento_rel.gerencia else 'Sin gerencia'
-        key = f'{gerencia} / {area}'
+        key = (gerencia, area)
         area_counts[key] = area_counts.get(key, 0) + 1
     return AttendanceSummary(
         presentes=len(present_records), entradas_hoy=entradas, salidas_hoy=salidas,
-        marcajes_hoy=len(records_today), empleados_sin_registro=max(total_active - len(active_ids_with_entry), 0),
-        presentes_por_area=[{'area': area, 'total': total} for area, total in sorted(area_counts.items())],
+        marcajes_hoy=len(records_today),
+        presentes_por_area=[
+            {'gerencia': gerencia, 'departamento': departamento, 'total': total}
+            for (gerencia, departamento), total in sorted(area_counts.items())
+        ],
     )

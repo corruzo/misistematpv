@@ -267,7 +267,6 @@
         total: '#metric-total',
         active: '#metric-active',
         depts: '#metric-depts',
-        types: '#metric-types',
       };
 
       Object.entries(map).forEach(([key, selector]) => {

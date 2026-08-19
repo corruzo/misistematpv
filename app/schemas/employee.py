@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional
 from datetime import date, datetime
 from app.core.enums import EstadoEmpleado
@@ -19,6 +19,14 @@ class EmpleadoCreate(BaseModel):
     estado: EstadoEnum = EstadoEnum.Activo
     tipo_nomina: Optional[str] = Field(None, max_length=50)
 
+    @field_validator('codigo_tarjeta', mode='before')
+    @classmethod
+    def normalize_card_code(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
 class EmpleadoUpdate(BaseModel):
     codigo_tarjeta: Optional[str] = Field(None, min_length=1, max_length=100)
     nombre_apellido: Optional[str] = Field(None, min_length=2, max_length=200)
@@ -31,6 +39,14 @@ class EmpleadoUpdate(BaseModel):
     cargo_id: Optional[int] = None
     estado: Optional[EstadoEnum] = None
     tipo_nomina: Optional[str] = Field(None, max_length=50)
+
+    @field_validator('codigo_tarjeta', mode='before')
+    @classmethod
+    def normalize_card_code(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
 
 class EmpleadoOut(BaseModel):
     id: int

@@ -50,5 +50,4 @@ class AttendanceSummary(BaseModel):
     entradas_hoy: int
     salidas_hoy: int
     marcajes_hoy: int
-    empleados_sin_registro: int
     presentes_por_area: list[dict]
