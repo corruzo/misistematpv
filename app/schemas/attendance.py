@@ -33,6 +33,7 @@ class AttendanceRecordOut(BaseModel):
     origen: AttendanceOrigin
     cedula: str
     departamento: str | None = None
+    gerencia: str | None = None
     cargo: str | None = None
     foto_url: str | None = None
 
@@ -46,5 +47,8 @@ class AttendanceHistoryPage(BaseModel):
 
 class AttendanceSummary(BaseModel):
     presentes: int
+    entradas_hoy: int
+    salidas_hoy: int
     marcajes_hoy: int
     empleados_sin_registro: int
+    presentes_por_area: list[dict]

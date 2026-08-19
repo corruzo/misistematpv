@@ -9,6 +9,7 @@ from app.core.config import APP_ENV, STATIC_DIR
 from app.database.session import get_db
 from app.schemas.attendance import AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest
 from app.services.attendance_service import AttendanceError, attendance_summary, list_attendance, register_manual, register_scan
+from app.services.organization_service import get_organization_tree
 from app.services.card_reader import SimulatedCardReader
 
 
@@ -60,12 +61,24 @@ def manual_mark(payload: AttendanceManualRequest, db: Session = Depends(get_db),
 def attendance_history(
     page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
     date_from: date | None = None, date_to: date | None = None,
-    empleado_id: int | None = Query(None, gt=0), departamento_id: int | None = Query(None, gt=0),
+    empleado_q: str | None = Query(None, max_length=150),
+    departamento_ids: list[int] | None = Query(None), gerencia_ids: list[int] | None = Query(None),
     db: Session = Depends(get_db), _user=Depends(require_user),
 ):
-    return list_attendance(db, page, page_size, date_from, date_to, empleado_id, departamento_id)
+    return list_attendance(db, page, page_size, date_from, date_to, empleado_q, departamento_ids, gerencia_ids)
 
 
 @router.get('/api/attendance/summary')
 def attendance_summary_route(db: Session = Depends(get_db), _user=Depends(require_user)):
     return attendance_summary(db)
+
+
+@router.get('/api/attendance/filter-options')
+def attendance_filter_options(db: Session = Depends(get_db), _user=Depends(require_user)):
+    tree = get_organization_tree(db)
+    gerencias = [{'id': item['id'], 'nombre': item['nombre']} for item in tree]
+    departamentos = [
+        {'id': department['id'], 'nombre': department['nombre'], 'gerencia_id': item['id']}
+        for item in tree for department in item.get('departamentos', [])
+    ]
+    return {'gerencias': gerencias, 'departamentos': departamentos}

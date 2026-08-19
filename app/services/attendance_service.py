@@ -2,10 +2,11 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado, EstadoEnum
+from app.models.organization import Departamento
 from app.schemas.attendance import AttendanceHistoryPage, AttendanceOrigin, AttendanceRecordOut, AttendanceSummary, AttendanceType
 
 
@@ -51,7 +52,7 @@ def _to_output(record: AttendanceRecord, employee: Empleado) -> AttendanceRecord
         id=record.id, empleado_id=employee.id, empleado_nombre=employee.nombre_apellido,
         codigo_tarjeta=employee.codigo_tarjeta or '', tipo=record.tipo, fecha_hora=record.fecha_hora,
         origen=record.origen, cedula=employee.cedula, departamento=employee.departamento,
-        cargo=employee.cargo, foto_url=employee.foto_url,
+        cargo=employee.cargo, gerencia=employee.gerencia, foto_url=employee.foto_url,
     )
 
 
@@ -70,7 +71,7 @@ def register_manual(db: Session, empleado_id: int) -> AttendanceRecordOut:
     return _register_employee(db, employee, AttendanceOrigin.MANUAL_ADMIN)
 
 
-def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=None, date_to=None, empleado_id=None, departamento_id=None):
+def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=None, date_to=None, empleado_q=None, departamento_ids=None, gerencia_ids=None):
     query = db.query(AttendanceRecord).options(
         joinedload(AttendanceRecord.empleado).joinedload(Empleado.departamento_rel),
         joinedload(AttendanceRecord.empleado).joinedload(Empleado.cargo_rel),
@@ -79,10 +80,13 @@ def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=N
         query = query.filter(AttendanceRecord.fecha_hora >= date_from)
     if date_to:
         query = query.filter(AttendanceRecord.fecha_hora < date_to + timedelta(days=1))
-    if empleado_id:
-        query = query.filter(AttendanceRecord.empleado_id == empleado_id)
-    if departamento_id:
-        query = query.join(AttendanceRecord.empleado).filter(Empleado.departamento_id == departamento_id)
+    if empleado_q:
+        term = f'%{empleado_q.strip()}%'
+        query = query.join(AttendanceRecord.empleado).filter(or_(Empleado.nombre_apellido.ilike(term), Empleado.cedula.ilike(term)))
+    if departamento_ids:
+        query = query.join(AttendanceRecord.empleado).filter(Empleado.departamento_id.in_(departamento_ids))
+    if gerencia_ids:
+        query = query.join(AttendanceRecord.empleado).join(Empleado.departamento_rel).filter(Departamento.gerencia_id.in_(gerencia_ids))
     total = query.count()
     records = query.order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return AttendanceHistoryPage(items=[_to_output(record, record.empleado) for record in records], total=total, page=page, page_size=page_size)
@@ -96,8 +100,21 @@ def attendance_summary(db: Session):
     last_by_employee = {}
     for record in records_today:
         last_by_employee[record.empleado_id] = record
+    entradas = sum(1 for record in records_today if record.tipo == AttendanceType.ENTRADA.value)
+    salidas = sum(1 for record in records_today if record.tipo == AttendanceType.SALIDA.value)
+    active_ids_with_entry = {record.empleado_id for record in records_today if record.tipo == AttendanceType.ENTRADA.value}
+    present_records = [record for record in last_by_employee.values() if record.tipo == AttendanceType.ENTRADA.value]
+    area_counts = {}
+    for record in present_records:
+        employee = db.query(Empleado).options(
+            joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia)
+        ).filter(Empleado.id == record.empleado_id).first()
+        area = employee.departamento_rel.nombre if employee and employee.departamento_rel else 'Sin departamento'
+        gerencia = employee.departamento_rel.gerencia.nombre if employee and employee.departamento_rel and employee.departamento_rel.gerencia else 'Sin gerencia'
+        key = f'{gerencia} / {area}'
+        area_counts[key] = area_counts.get(key, 0) + 1
     return AttendanceSummary(
-        presentes=sum(1 for record in last_by_employee.values() if record.tipo == AttendanceType.ENTRADA.value),
-        marcajes_hoy=len(records_today),
-        empleados_sin_registro=max(total_active - len(last_by_employee), 0),
+        presentes=len(present_records), entradas_hoy=entradas, salidas_hoy=salidas,
+        marcajes_hoy=len(records_today), empleados_sin_registro=max(total_active - len(active_ids_with_entry), 0),
+        presentes_por_area=[{'area': area, 'total': total} for area, total in sorted(area_counts.items())],
     )

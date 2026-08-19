@@ -1652,7 +1652,8 @@ body.ios-bg {
 .attendance-result__photo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; }
 .attendance-result--success .attendance-result__icon { display: none; }
 .attendance-history-card { padding: 24px; }
-.attendance-filter-bar { display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 10px; margin-bottom: 20px; }
+.attendance-filter-bar { display: grid; grid-template-columns: 1fr 1fr 2fr 1.25fr 1.25fr auto; gap: 10px; margin-bottom: 12px; }
+.attendance-filter-bar select[multiple] { min-height: 82px; }
 .attendance-history-card td small { display: block; color: var(--text-secondary); }
 .attendance-type { display: inline-flex; padding: 5px 9px; border-radius: 999px; font-size: .72rem; font-weight: 800; }
 .attendance-type--entrada { background: #d9f5e7; color: #147052; }
@@ -1663,6 +1664,13 @@ body.ios-bg {
 .attendance-summary-card span, .attendance-summary-card strong { display: block; }
 .attendance-summary-card span { color: var(--text-secondary); }
 .attendance-summary-card strong { margin-top: 8px; color: var(--accent-primary); font-size: 2.5rem; }
+.attendance-summary-card small { display: block; margin-top: 5px; color: var(--text-secondary); font-size: .76rem; }
+.attendance-summary-card--entrada strong { color: #147052; }
+.attendance-summary-card--salida strong { color: #285886; }
+.attendance-area-card { padding: 24px; }
+.attendance-area-list { display: grid; gap: 8px; }
+.attendance-area-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--bg-subtle); }
+.attendance-area-row strong { color: var(--accent-primary); }
 .sidebar-section--standalone { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
 .sidebar-section__label { padding: 0 14px 8px; color: var(--text-secondary); font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 @media (max-width: 640px) { .attendance-hero { align-items: flex-start; flex-direction: column; padding: 22px; } .attendance-capture-card { padding: 20px; } .attendance-input-row { flex-direction: column; } .attendance-input-row .btn-ios { width: 100%; } }
