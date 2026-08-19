@@ -24,7 +24,7 @@
   <form id="profileForm" class="profile-form">
     <div>
       <label class="form-label" for="profileUsername">Nombre de usuario</label>
-      <input class="form-control" id="profileUsername" name="username" value="{{ user.username }}" minlength="3" maxlength="50" pattern="[a-zA-Z0-9._-]+" required>
+      <input class="form-control" id="profileUsername" name="username" value="{{ user.username }}" minlength="3" maxlength="50" pattern="[-a-zA-Z0-9._]+" required>
     </div>
     <div>
       <label class="form-label" for="profileName">Nombre visible</label>

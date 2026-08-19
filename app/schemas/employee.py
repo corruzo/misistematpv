@@ -1,13 +1,15 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 from app.core.enums import EstadoEmpleado
 
 EstadoEnum = EstadoEmpleado
 
 class EmpleadoCreate(BaseModel):
     cedula: str = Field(..., min_length=1, max_length=50)
+    codigo_tarjeta: Optional[str] = Field(None, min_length=1, max_length=100)
     nombre_apellido: str = Field(..., min_length=2, max_length=200)
+    fecha_nacimiento: Optional[date] = None
     gerencia: Optional[str] = Field(None, max_length=150)
     departamento: Optional[str] = Field(None, max_length=150)
     cargo: Optional[str] = Field(None, max_length=150)
@@ -18,7 +20,9 @@ class EmpleadoCreate(BaseModel):
     tipo_nomina: Optional[str] = Field(None, max_length=50)
 
 class EmpleadoUpdate(BaseModel):
+    codigo_tarjeta: Optional[str] = Field(None, min_length=1, max_length=100)
     nombre_apellido: Optional[str] = Field(None, min_length=2, max_length=200)
+    fecha_nacimiento: Optional[date] = None
     gerencia: Optional[str] = Field(None, max_length=150)
     departamento: Optional[str] = Field(None, max_length=150)
     cargo: Optional[str] = Field(None, max_length=150)
@@ -31,7 +35,9 @@ class EmpleadoUpdate(BaseModel):
 class EmpleadoOut(BaseModel):
     id: int
     cedula: str
+    codigo_tarjeta: Optional[str] = None
     nombre_apellido: str
+    fecha_nacimiento: Optional[date] = None
     gerencia: Optional[str] = None
     departamento: Optional[str] = None
     cargo: Optional[str] = None

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.core.config import STATIC_DIR
-from app.core.auth import require_page_user, require_user
+from app.core.auth import require_admin, require_page_user, require_user
 from app.database.session import get_db
 from app.schemas.user import UsuarioCreate, UsuarioOut, UsuarioStatusUpdate, UsuarioUpdate
 from app.services.user_service import create_user, list_users, set_user_status, update_user, UserNotFoundError
@@ -22,11 +22,11 @@ def user_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=409, detail='Ya existe un usuario con ese nombre.')
     if isinstance(exc, SQLAlchemyError):
         return HTTPException(status_code=503, detail='No se pudo completar la operación en la base de datos.')
-    return HTTPException(status_code=400, detail=str(exc) or 'La operación no es válida.')
+    return HTTPException(status_code=400, detail='La operación no es válida.')
 
 
 @router.get('/users', response_class=HTMLResponse)
-def users_page(user=Depends(require_page_user)):
+def users_page(user=Depends(require_admin)):
     template = templates_env.get_template('users.html')
     return HTMLResponse(template.render(active_page='users', user=user))
 
@@ -53,7 +53,7 @@ def api_update_me(payload: UsuarioUpdate, user=Depends(require_user), db: Sessio
 
 
 @router.get('/api/users', response_model=list[UsuarioOut])
-def api_list_users(q: str | None = Query(None, max_length=100), db: Session = Depends(get_db)):
+def api_list_users(q: str | None = Query(None, max_length=100), db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
         return [UsuarioOut.from_model(user) for user in list_users(db, q)]
     except SQLAlchemyError as exc:
@@ -62,7 +62,7 @@ def api_list_users(q: str | None = Query(None, max_length=100), db: Session = De
 
 
 @router.post('/api/users', response_model=UsuarioOut, status_code=201)
-def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db)):
+def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
         return UsuarioOut.from_model(create_user(db, payload))
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
@@ -71,7 +71,7 @@ def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db)):
 
 
 @router.put('/api/users/{user_id}', response_model=UsuarioOut)
-def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(get_db)):
+def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
         return UsuarioOut.from_model(update_user(db, user_id, payload))
     except UserNotFoundError as exc:
@@ -82,7 +82,7 @@ def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(
 
 
 @router.patch('/api/users/{user_id}/status', response_model=UsuarioOut)
-def api_update_user_status(user_id: int, payload: UsuarioStatusUpdate, db: Session = Depends(get_db)):
+def api_update_user_status(user_id: int, payload: UsuarioStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
         return UsuarioOut.from_model(set_user_status(db, user_id, payload.activo))
     except UserNotFoundError as exc:

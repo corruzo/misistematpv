@@ -19,6 +19,12 @@ def require_user(user: Usuario | None = Depends(current_user_optional)) -> Usuar
     return user
 
 
+def require_admin(user: Usuario = Depends(require_user)) -> Usuario:
+    if user.rol != 'Administrador':
+        raise HTTPException(status_code=403, detail='No tienes permisos para realizar esta operación.')
+    return user
+
+
 def require_page_user(request: Request, db: Session = Depends(get_db)) -> Usuario:
     user = get_user_by_token(db, request.cookies.get(SESSION_COOKIE))
     if not user:

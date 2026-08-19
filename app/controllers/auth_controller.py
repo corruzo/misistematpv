@@ -5,17 +5,27 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import STATIC_DIR
+from app.core.config import COOKIE_SECURE
 from app.database.session import get_db
 from app.services.auth_service import SESSION_COOKIE, authenticate_user, create_session, delete_session
 from app.services.user_service import create_user
 from app.schemas.user import UsuarioCreate
 from app.models.user import Usuario
+from app.core.auth import current_user_optional
 
 router = APIRouter()
 templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+
+
+@router.get('/')
+def root_page(user=Depends(current_user_optional)):
+    if not user:
+        return RedirectResponse('/login', status_code=303)
+    template = templates_env.get_template('index.html')
+    return HTMLResponse(template.render(active_page='dashboard', user=user))
 
 
 @router.get('/login', response_class=HTMLResponse)
@@ -30,8 +40,19 @@ def login_page(request: Request, db: Session = Depends(get_db)):
 @router.get('/setup', response_class=HTMLResponse)
 def setup_page(db: Session = Depends(get_db)):
     template = templates_env.get_template('setup.html')
-    if db.query(Usuario).count():
-        return RedirectResponse('/login', status_code=303)
+    try:
+        has_users = db.query(Usuario).count()
+    except SQLAlchemyError:
+        db.rollback()
+        return HTMLResponse(
+            template.render(error='No se puede acceder a SQL Server. Ejecuta scripts/create_database.sql y revisa el archivo .env.'),
+            status_code=503,
+        )
+    if has_users:
+        return HTMLResponse(
+            template.render(error='La configuración inicial ya fue completada. Inicia sesión para administrar los usuarios.'),
+            status_code=409,
+        )
     return HTMLResponse(template.render(error=None))
 
 
@@ -43,8 +64,19 @@ def setup_admin(
     db: Session = Depends(get_db),
 ):
     template = templates_env.get_template('setup.html')
-    if db.query(Usuario).count():
-        return RedirectResponse('/login', status_code=303)
+    try:
+        has_users = db.query(Usuario).count()
+    except SQLAlchemyError:
+        db.rollback()
+        return HTMLResponse(
+            template.render(error='No se puede acceder a SQL Server. Ejecuta scripts/create_database.sql y revisa el archivo .env.'),
+            status_code=503,
+        )
+    if has_users:
+        return HTMLResponse(
+            template.render(error='La configuración inicial ya fue completada. Inicia sesión para administrar los usuarios.'),
+            status_code=409,
+        )
     try:
         create_user(db, UsuarioCreate(username=username, nombre=nombre, password=password))
     except Exception:
@@ -85,7 +117,7 @@ def login(
         max_age=8 * 60 * 60,
         httponly=True,
         samesite='lax',
-        secure=False,
+        secure=COOKIE_SECURE,
         path='/',
     )
     return response

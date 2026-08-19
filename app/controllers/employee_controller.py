@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -39,19 +40,12 @@ def organization_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=409, detail='Ya existe un registro con ese nombre o hay una relación duplicada.')
     if isinstance(exc, SQLAlchemyError):
         return HTTPException(status_code=503, detail='No se pudo completar la operación en la base de datos.')
-    return HTTPException(status_code=400, detail=str(exc) or 'La operación no es válida.')
+    return HTTPException(status_code=400, detail='La operación no es válida.')
 
 templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
-
-
-@router.get('/')
-def index(user=Depends(require_page_user)):
-    tpl = templates_env.get_template('index.html')
-    content = tpl.render(active_page='dashboard', user=user)
-    return HTMLResponse(content)
 
 
 @router.get('/employees')
@@ -79,7 +73,7 @@ def api_get_system_status(db: Session = Depends(get_db)):
         db.execute(text('SELECT 1'))
         return {'connected': True, 'message': 'Base de datos conectada'}
     except Exception as exc:
-        return {'connected': False, 'message': 'Falla de conexión a la base de datos', 'detail': str(exc)}
+        return {'connected': False, 'message': 'Falla de conexión a la base de datos'}
 
 
 @router.get('/api/employees/{emp_id}')
@@ -182,7 +176,9 @@ def api_get_employees(
 @router.post('/api/employees')
 async def api_create_employee(
     cedula: str = Form(...),
+    codigo_tarjeta: Optional[str] = Form(None),
     nombre_apellido: str = Form(...),
+    fecha_nacimiento: Optional[date] = Form(None),
     gerencia: str = Form(...),
     departamento: str = Form(...),
     cargo: str = Form(...),
@@ -196,7 +192,9 @@ async def api_create_employee(
 ):
     payload = EmpleadoCreate(
         cedula=cedula,
+        codigo_tarjeta=codigo_tarjeta,
         nombre_apellido=nombre_apellido,
+        fecha_nacimiento=fecha_nacimiento,
         gerencia=gerencia,
         departamento=departamento,
         cargo=cargo,
@@ -219,7 +217,9 @@ async def api_create_employee(
 @router.put('/api/employees/{emp_id}')
 async def api_update_employee(
     emp_id: int,
+    codigo_tarjeta: Optional[str] = Form(None),
     nombre_apellido: Optional[str] = Form(None),
+    fecha_nacimiento: Optional[date] = Form(None),
     gerencia: Optional[str] = Form(None),
     departamento: Optional[str] = Form(None),
     cargo: Optional[str] = Form(None),
@@ -236,6 +236,8 @@ async def api_update_employee(
         raise HTTPException(status_code=404, detail='Empleado no encontrado')
     updates = EmpleadoUpdate(
         nombre_apellido=nombre_apellido,
+        codigo_tarjeta=codigo_tarjeta,
+        fecha_nacimiento=fecha_nacimiento,
         gerencia=gerencia,
         departamento=departamento,
         cargo=cargo,

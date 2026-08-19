@@ -41,7 +41,7 @@
                       <path d="M3 11.5L12 4l9 7.5" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </span>
-                  <span>Dashboard</span>
+                  <span>Resúmen</span>
                 </a>
                 <a class="side-link {% if active_page == 'organization' %}active{% endif %}" href="/organization" {% if active_page == 'organization' %}aria-current="page"{% endif %}>
                   <span class="side-icon">
@@ -68,6 +68,21 @@
                   <span>Gestión de usuarios</span>
                 </a>
               </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section sidebar-section--standalone">
+            <div class="sidebar-section__label">Asistencia</div>
+            <div class="sidebar-section__body">
+              <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary">
+                <span class="side-icon">&#9632;</span><span>Resumen</span>
+              </a>
+              <a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance">
+                <span class="side-icon">&#9673;</span><span>Registro de marcaje</span>
+              </a>
+              <a class="side-link {% if active_page == 'attendance_history' %}active{% endif %}" href="/attendance/history">
+                <span class="side-icon">&#9776;</span><span>Historial</span>
+              </a>
             </div>
           </div>
 

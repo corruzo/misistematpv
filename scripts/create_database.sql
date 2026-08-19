@@ -1,3 +1,7 @@
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 IF DB_ID('misistema_db') IS NULL
 BEGIN
     CREATE DATABASE misistema_db;
@@ -68,6 +72,40 @@ BEGIN
         CONSTRAINT FK_empleados_cargos FOREIGN KEY (cargo_id) REFERENCES dbo.cargos(id) ON DELETE NO ACTION,
         CONSTRAINT CK_empleados_estado CHECK (estado IN ('Activo', 'Vacaciones', 'Retirado', 'Suspendido'))
     );
+END
+GO
+
+IF COL_LENGTH('dbo.empleados', 'fecha_nacimiento') IS NULL
+BEGIN
+    ALTER TABLE dbo.empleados ADD fecha_nacimiento DATE NULL;
+END
+GO
+
+IF COL_LENGTH('dbo.empleados', 'codigo_tarjeta') IS NULL
+BEGIN
+    ALTER TABLE dbo.empleados ADD codigo_tarjeta NVARCHAR(100) NULL;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_empleados_codigo_tarjeta' AND object_id = OBJECT_ID('dbo.empleados'))
+BEGIN
+    CREATE UNIQUE INDEX UX_empleados_codigo_tarjeta ON dbo.empleados(codigo_tarjeta) WHERE codigo_tarjeta IS NOT NULL;
+END
+GO
+
+IF OBJECT_ID('dbo.marcajes_asistencia', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.marcajes_asistencia (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        empleado_id INT NOT NULL,
+        tipo NVARCHAR(10) NOT NULL,
+        fecha_hora DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        origen NVARCHAR(20) NOT NULL,
+        CONSTRAINT FK_marcajes_asistencia_empleados FOREIGN KEY (empleado_id) REFERENCES dbo.empleados(id),
+        CONSTRAINT CK_marcajes_asistencia_tipo CHECK (tipo IN ('ENTRADA', 'SALIDA')),
+        CONSTRAINT CK_marcajes_asistencia_origen CHECK (origen IN ('PUERTO_COM', 'MANUAL_ADMIN', 'SIMULADOR_DEV'))
+    );
+    CREATE INDEX IX_marcajes_asistencia_empleado_fecha ON dbo.marcajes_asistencia(empleado_id, fecha_hora DESC);
 END
 GO
 

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}Acceso / Asistencia - MarcajeTPV{% endblock %}
+{% block page_title %}Acceso / Asistencia{% endblock %}
+
+{% block content %}
+<div class="attendance-page">
+  <section class="attendance-hero">
+    <div>
+      <p class="eyebrow">Control de presencia</p>
+      <h2>Registrar marcaje</h2>
+      <p>Acerca una tarjeta RFID al lector o introduce su código para simular una lectura.</p>
+    </div>
+    <div class="attendance-live-indicator"><span></span>Listo para leer</div>
+  </section>
+
+  <section class="card attendance-capture-card">
+    <div class="attendance-mode-tabs" role="tablist">
+      <button class="attendance-mode-tab active" type="button" data-mode="rfid">Lector RFID</button>
+      <button class="attendance-mode-tab" type="button" data-mode="manual">Marcaje manual</button>
+    </div>
+    <form id="attendanceScanForm" class="attendance-scan-form">
+      <label class="form-label" for="attendanceCardCode">Código de tarjeta</label>
+      <div class="attendance-input-row">
+        <input id="attendanceCardCode" class="form-control attendance-card-input" autocomplete="off" inputmode="numeric" placeholder="Esperando lectura RFID..." required autofocus>
+        <button class="btn-ios primary" type="submit">Registrar</button>
+      </div>
+      <p class="form-text">En desarrollo, escribe el código para simular el lector. En producción llegará desde el puerto COM.</p>
+    </form>
+    <form id="attendanceManualForm" class="attendance-scan-form d-none">
+      <label class="form-label" for="attendanceEmployee">Empleado</label>
+      <div class="attendance-input-row"><select id="attendanceEmployee" class="form-select" required><option value="">Selecciona un empleado</option></select><button class="btn-ios primary" type="submit">Registrar</button></div>
+      <p class="form-text">El marcaje manual queda identificado como MANUAL_ADMIN.</p>
+    </form>
+    <div id="attendanceResult" class="attendance-result" aria-live="polite">
+      <span class="attendance-result__icon">RFID</span>
+      <div><strong>Esperando una tarjeta</strong><span>El resultado del último marcaje aparecerá aquí.</span></div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('attendanceScanForm');
+    const manualForm = document.getElementById('attendanceManualForm');
+    const input = document.getElementById('attendanceCardCode');
+    const result = document.getElementById('attendanceResult');
+
+    const renderResult = (payload) => {
+      result.className = 'attendance-result attendance-result--success';
+      result.innerHTML = `<img class="attendance-result__photo" src="${payload.foto_url ? `/static/${payload.foto_url}` : '/static/img/default-avatar.svg'}" alt=""><div><strong>${payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</strong><span>${payload.empleado_nombre} · ${payload.cedula}</span><span>${payload.departamento || 'Sin departamento'} / ${payload.cargo || 'Sin cargo'}</span><span>${new Date(payload.fecha_hora).toLocaleString()}</span></div>`;
+    };
+    const submitPayload = async (url, body) => {
+      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar el marcaje.');
+      renderResult(payload);
+    };
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const codigoTarjeta = input.value.trim();
+      if (!codigoTarjeta) return;
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      result.className = 'attendance-result attendance-result--loading';
+      result.innerHTML = '<span class="attendance-result__icon">...</span><div><strong>Procesando lectura</strong><span>Validando tarjeta...</span></div>';
+      try {
+        await submitPayload('/api/attendance/simulate-scan', { codigo_tarjeta: codigoTarjeta });
+        input.value = '';
+      } catch (error) {
+        result.className = 'attendance-result attendance-result--error';
+        result.innerHTML = `<span class="attendance-result__icon">!</span><div><strong>No se registró</strong><span>${error.message}</span></div>`;
+      } finally {
+        button.disabled = false;
+        input.focus();
+      }
+    });
+    manualForm?.addEventListener('submit', async (event) => { event.preventDefault(); const button = manualForm.querySelector('button'); button.disabled = true; try { await submitPayload('/api/attendance/manual-mark', { empleado_id: Number(document.getElementById('attendanceEmployee').value) }); } catch (error) { result.className = 'attendance-result attendance-result--error'; result.innerHTML = `<span class="attendance-result__icon">!</span><div><strong>No se registró</strong><span>${error.message}</span></div>`; } finally { button.disabled = false; } });
+    document.querySelectorAll('.attendance-mode-tab').forEach((tab) => tab.addEventListener('click', async () => { document.querySelectorAll('.attendance-mode-tab').forEach((item) => item.classList.toggle('active', item === tab)); const manual = tab.dataset.mode === 'manual'; form.classList.toggle('d-none', manual); manualForm.classList.toggle('d-none', !manual); if (manual) { const response = await fetch('/api/employees?limit=100'); const data = await response.json(); document.getElementById('attendanceEmployee').innerHTML = '<option value="">Selecciona un empleado</option>' + data.items.filter((item) => item.estado === 'Activo').map((item) => `<option value="${item.id}">${item.nombre_apellido} · ${item.cedula}</option>`).join(''); } else { input.focus(); } }));
+  });
+</script>
+{% endblock %}

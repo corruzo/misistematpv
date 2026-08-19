@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
@@ -13,7 +13,9 @@ class Empleado(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     cedula = Column(String(50), unique=True, nullable=False, index=True)
+    codigo_tarjeta = Column(String(100), unique=True, nullable=True, index=True)
     nombre_apellido = Column(String(200), nullable=False)
+    fecha_nacimiento = Column(Date, nullable=True)
     departamento_id = Column(Integer, ForeignKey('departamentos.id'), nullable=False)
     cargo_id = Column(Integer, ForeignKey('cargos.id'), nullable=False)
     estado = Column(Enum(EstadoEnum), nullable=False, default=EstadoEnum.Activo)

@@ -533,7 +533,9 @@
         this.form.reset();
         this.form.querySelector('[name="id"]').value = employee.id;
         this.form.querySelector('[name="cedula"]').value = employee.cedula || '';
+        this.form.querySelector('[name="codigo_tarjeta"]').value = employee.codigo_tarjeta || '';
         this.form.querySelector('[name="nombre_apellido"]').value = employee.nombre_apellido || '';
+        this.form.querySelector('[name="fecha_nacimiento"]').value = employee.fecha_nacimiento || '';
         this.form.querySelector('[name="estado"]').value = employee.estado || 'Activo';
         this.form.querySelector('[name="tipo_nomina"]').value = employee.tipo_nomina || '';
 

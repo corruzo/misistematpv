@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.template
+cntlm-0.92.3/
 
 # Python environments and caches
 .venv/
