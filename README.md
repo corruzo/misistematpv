@@ -17,14 +17,21 @@ Si vas a llevar la carpeta raíz a otra PC:
 3. En la raíz del proyecto, ejecuta el archivo:
    - `start_app.bat`
 
-Eso crea el entorno virtual si hace falta, instala las dependencias desde `requirements.txt`, crea `.env` si no existe y levanta la aplicación.
+Eso crea el entorno virtual si hace falta, instala las dependencias solo cuando no están disponibles, crea `.env` si no existe y levanta la aplicación. Si ya está preparado, el arranque no descarga nada.
+
+Para forzar una actualización de dependencias:
+
+```bat
+start_app.bat /update
+```
 
 ## Cómo funciona el arranque
 
 El archivo `start_app.bat` hace lo siguiente automáticamente:
 
 - Crea `.venv` si no existe
-- Instala dependencias con `pip install -r requirements.txt`
+- Comprueba las dependencias instaladas y evita descargas innecesarias
+- Permite actualizar dependencias explícitamente con `start_app.bat /update`
 - Copia `.env.example` a `.env` si aún no hay uno
 - Ejecuta la app con `python run.py`
 
@@ -41,6 +48,7 @@ DB_DRIVER=ODBC Driver 17 for SQL Server
 DB_USER=
 DB_PASSWORD=
 DB_TRUSTED=true
+APP_TIMEZONE=America/Caracas
 ```
 
 Si usas autenticación de Windows, deja `DB_TRUSTED=true` y `DB_USER`/`DB_PASSWORD` vacíos.
@@ -54,6 +62,22 @@ pip install -r requirements.txt
 python run.py
 ```
 
+Para aplicar cambios de esquema en una instalación existente, ejecuta:
+
+```bash
+python -m alembic upgrade head
+```
+
+La migración crea `alembic_version`, ajusta la unicidad de departamentos y cargos al ámbito de su padre y crea `auditoria`. El script `scripts/create_database.sql` sigue siendo útil para instalaciones nuevas; los cambios posteriores deben quedar en una revisión Alembic.
+
+Las pruebas portables se ejecutan localmente con:
+
+```bash
+python -m pytest --cov=app --cov-report=term-missing
+```
+
+GitHub Actions ejecuta automáticamente esta suite en cada push y pull request. Las pruebas que requieren SQL Server se mantienen separadas para ejecutarse contra una base configurada.
+
 La app quedará disponible en:
 
 ```text
@@ -62,7 +86,7 @@ http://127.0.0.1:8000/
 
 ## Módulo de usuarios
 
-La primera versión incluye un único rol: `Administrador`. Antes de usar la pantalla de usuarios, ejecuta nuevamente `scripts/create_database.sql` en SSMS para crear la tabla `usuarios` de forma idempotente.
+El sistema incluye tres roles: `Administrador` (gestión total), `RRHH` (empleados y reportes) y `Consulta` (solo lectura). Antes de usar la pantalla de usuarios, ejecuta nuevamente `scripts/create_database.sql` en SSMS para crear o actualizar las tablas de forma idempotente.
 
 Después, abre:
 
@@ -70,7 +94,7 @@ Después, abre:
 http://127.0.0.1:8000/users
 ```
 
-Las contraseñas no se guardan en texto plano: se almacenan usando `scrypt`. La interfaz permite crear usuarios, listarlos y activar o inhabilitar cuentas. El rol inicial disponible es `Administrador`.
+Las contraseñas no se guardan en texto plano: se almacenan usando `scrypt` con parámetros versionados en el hash. La interfaz permite crear usuarios, asignar roles, listarlos y activar o inhabilitar cuentas. El primer usuario creado por `/setup` es `Administrador`.
 
 ## Inicio de sesión y perfil
 
@@ -81,20 +105,23 @@ La aplicación ahora requiere autenticación para el dashboard, empleados, estru
 - Perfil propio: disponible desde el nombre del usuario en el header o en `/profile`.
 - Cierre de sesión: botón `Cerrar sesión` en el header.
 
-Las sesiones duran 8 horas y usan cookie `HttpOnly` y `SameSite=Lax`. En producción con HTTPS, activa `Secure` para la cookie y añade autenticación/autorización formal antes de exponer el servicio fuera de la máquina local.
+Las sesiones duran 12 horas y usan cookie `HttpOnly` y `SameSite=Lax`, adecuadas para el turno completo de los inspectores. Las operaciones mutables validan el origen, las rutas API declaran sus dependencias de autorización y las respuestas usan CSP con nonce. En producción con HTTPS, activa `Secure` para la cookie.
+
+La hora se almacena internamente en UTC y se muestra en la zona definida por `APP_TIMEZONE`. El valor recomendado para esta instalación es `America/Caracas` (UTC-04:00). Después de cambiar esta variable, reinicia la aplicación.
+
+Las altas, modificaciones, bajas, cambios de estado y marcajes manuales se registran en `auditoria` con usuario, entidad, fecha y JSON anterior/posterior. Un proceso de mantenimiento elimina sesiones expiradas una vez al día; en despliegues con varios workers conviene mover esta tarea a SQL Server Agent.
+
+Las búsquedas usan `LIKE`, aprovechando la collation case-insensitive de SQL Server configurada normalmente. Si la instalación utiliza una collation case-sensitive, debe revisarse antes de desplegar el cambio.
 
 ## Mejoras recomendadas
 
-1. Implementar inicio de sesión con sesiones seguras y expiración.
-2. Añadir protección CSRF para operaciones que cambian datos.
-3. Aplicar autorización por permisos antes de exponer la aplicación fuera de `127.0.0.1`.
-4. Incorporar auditoría de altas, cambios de estado y accesos.
-5. Añadir recuperación y cambio de contraseña con política de caducidad.
-6. Crear pruebas automatizadas de API, reglas jerárquicas y validación de archivos.
-7. Añadir rate limiting para endpoints de autenticación y operaciones sensibles.
-8. Configurar logs estructurados sin contraseñas, tokens ni datos sensibles.
-9. Añadir migraciones versionadas para cambios de esquema futuros.
-10. Servir recursos frontend con versiones fijadas y una CSP progresiva.
+1. Incorporar auditoría de altas, cambios de estado y accesos.
+2. Añadir recuperación y cambio de contraseña con política de caducidad.
+3. Ampliar pruebas automatizadas de API, reglas jerárquicas y validación de archivos.
+4. Mover el rate limiting a SQL Server o un backend compartido al desplegar varios workers.
+5. Configurar logs estructurados sin contraseñas, tokens ni datos sensibles.
+6. Añadir migraciones versionadas para cambios de esquema futuros.
+7. Servir recursos frontend con versiones fijadas y retirar gradualmente `style-src 'unsafe-inline'`.
 
 ## Ejecutable o arranque directo
 

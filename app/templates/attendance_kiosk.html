@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Kiosco de marcaje - MarcajeTPV</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=2.4">
+</head>
+<body class="kiosk-page">
+  <main class="kiosk-shell" aria-live="polite">
+    <header class="kiosk-brand"><span class="kiosk-brand__mark">M</span><strong>MarcajeTPV</strong><span>Kiosco de acceso</span></header>
+    <section class="kiosk-stage" id="kioskStage">
+      <div class="kiosk-waiting" id="kioskWaiting">
+        <div class="kiosk-reader-icon">RFID</div>
+        <p class="eyebrow">Control de acceso</p>
+        <h1>Acerca tu tarjeta al lector</h1>
+        <p>El sistema registrará automáticamente tu entrada o salida.</p>
+      </div>
+      <div class="kiosk-result d-none" id="kioskResult">
+        <img id="kioskPhoto" class="kiosk-photo" src="/static/img/default-avatar.svg" alt="">
+        <p class="eyebrow" id="kioskEventLabel">Marcaje registrado</p>
+        <h1 id="kioskEmployeeName">Empleado</h1>
+        <p class="kiosk-area" id="kioskArea">Área</p>
+        <time id="kioskTime" class="kiosk-time">00:00:00</time>
+      </div>
+      <div class="kiosk-feedback" id="kioskFeedback" role="status"></div>
+      <form id="kioskScanForm" class="kiosk-scan-form">
+        <label for="kioskCardCode">Código de tarjeta</label>
+        <input id="kioskCardCode" autocomplete="off" inputmode="numeric" aria-label="Lector de tarjeta" autofocus>
+      </form>
+    </section>
+    <footer class="kiosk-footer">Sistema de control de presencia</footer>
+  </main>
+  <script nonce="{{ csp_nonce }}">
+  (() => {
+    const form = document.getElementById('kioskScanForm');
+    const input = document.getElementById('kioskCardCode');
+    const waiting = document.getElementById('kioskWaiting');
+    const result = document.getElementById('kioskResult');
+    const feedback = document.getElementById('kioskFeedback');
+    let busy = false;
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    const keepFocus = () => { if (document.activeElement !== input) input.focus(); };
+    const reset = () => { result.classList.add('d-none'); waiting.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const code = input.value.trim();
+      if (!code || busy) return;
+      busy = true;
+      feedback.textContent = 'Validando tarjeta...';
+      try {
+        const response = await fetch('/api/attendance/kiosk-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo_tarjeta: code }) });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar el marcaje.');
+        waiting.classList.add('d-none'); result.classList.remove('d-none');
+        document.getElementById('kioskPhoto').src = payload.foto_url ? `/static/${encodeURIComponent(payload.foto_url)}` : '/static/img/default-avatar.svg';
+        document.getElementById('kioskEventLabel').textContent = payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada';
+        document.getElementById('kioskEmployeeName').textContent = payload.empleado_nombre || 'Empleado';
+        document.getElementById('kioskArea').textContent = `${payload.gerencia || 'Sin gerencia'} · ${payload.departamento || 'Sin departamento'}`;
+        document.getElementById('kioskTime').textContent = new Date(payload.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        window.setTimeout(reset, 8000);
+      } catch (error) { feedback.textContent = error.message; window.setTimeout(() => { feedback.textContent = ''; }, 5000); }
+      finally { busy = false; input.value = ''; keepFocus(); }
+    });
+    document.addEventListener('click', keepFocus);
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') event.preventDefault(); });
+    keepFocus();
+  })();
+  </script>
+</body>
+</html>

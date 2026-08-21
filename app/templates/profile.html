@@ -44,7 +44,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('profileForm');
     const button = document.getElementById('profileSave');

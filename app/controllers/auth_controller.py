@@ -7,11 +7,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import STATIC_DIR
 from app.core.config import COOKIE_SECURE
 from app.database.session import get_db
-from app.services.auth_service import SESSION_COOKIE, authenticate_user, create_session, delete_session
+from app.services.auth_service import SESSION_COOKIE, SESSION_HOURS, authenticate_user, create_session, delete_session
 from app.services.user_service import create_user
 from app.schemas.user import UsuarioCreate
 from app.models.user import Usuario
 from app.core.auth import current_user_optional
+from app.core.rate_limit import is_rate_limited
 
 router = APIRouter()
 templates_env = Environment(
@@ -21,11 +22,11 @@ templates_env = Environment(
 
 
 @router.get('/')
-def root_page(user=Depends(current_user_optional)):
+def root_page(request: Request, user=Depends(current_user_optional)):
     if not user:
         return RedirectResponse('/login', status_code=303)
     template = templates_env.get_template('index.html')
-    return HTMLResponse(template.render(active_page='dashboard', user=user))
+    return HTMLResponse(template.render(active_page='dashboard', user=user, csp_nonce=request.state.csp_nonce))
 
 
 @router.get('/login', response_class=HTMLResponse)
@@ -58,12 +59,16 @@ def setup_page(db: Session = Depends(get_db)):
 
 @router.post('/setup')
 def setup_admin(
+    request: Request,
     username: str = Form(..., min_length=3, max_length=50),
     nombre: str = Form(..., min_length=2, max_length=150),
     password: str = Form(..., min_length=10, max_length=128),
     db: Session = Depends(get_db),
 ):
     template = templates_env.get_template('setup.html')
+    client_host = request.client.host if request.client else 'unknown'
+    if is_rate_limited('/setup', client_host, username):
+        return HTMLResponse(template.render(error='Demasiados intentos. Espera un minuto e inténtalo de nuevo.'), status_code=429)
     try:
         has_users = db.query(Usuario).count()
     except SQLAlchemyError:
@@ -78,7 +83,7 @@ def setup_admin(
             status_code=409,
         )
     try:
-        create_user(db, UsuarioCreate(username=username, nombre=nombre, password=password))
+        create_user(db, UsuarioCreate(username=username, nombre=nombre, password=password, rol='Administrador'))
     except Exception:
         db.rollback()
         return HTMLResponse(template.render(error='No se pudo crear el administrador.'), status_code=400)
@@ -92,6 +97,10 @@ def login(
     password: str = Form(..., min_length=1, max_length=128),
     db: Session = Depends(get_db),
 ):
+    client_host = request.client.host if request.client else 'unknown'
+    if is_rate_limited('/login', client_host, username):
+        template = templates_env.get_template('login.html')
+        return HTMLResponse(template.render(error='Demasiados intentos. Espera un minuto e inténtalo de nuevo.'), status_code=429)
     if not username.strip() or not password:
         template = templates_env.get_template('login.html')
         return HTMLResponse(template.render(error='Escribe tu usuario y contraseña.'), status_code=400)
@@ -114,7 +123,7 @@ def login(
     response.set_cookie(
         SESSION_COOKIE,
         token,
-        max_age=8 * 60 * 60,
+        max_age=SESSION_HOURS * 60 * 60,
         httponly=True,
         samesite='lax',
         secure=COOKIE_SECURE,

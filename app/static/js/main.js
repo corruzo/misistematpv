@@ -1,4 +1,94 @@
 (() => {
+  const modalInstances = new WeakMap();
+
+  class LocalModal {
+    constructor(element) {
+      this.element = element;
+      this.backdrop = null;
+      modalInstances.set(element, this);
+    }
+
+    show() {
+      if (!this.element) return;
+      this.element.classList.add('is-open');
+      this.element.removeAttribute('aria-hidden');
+      document.body.classList.add('modal-open');
+      this.backdrop = document.createElement('div');
+      this.backdrop.className = 'modal-backdrop';
+      this.backdrop.addEventListener('click', () => this.hide());
+      document.body.appendChild(this.backdrop);
+      requestAnimationFrame(() => this.backdrop?.classList.add('is-visible'));
+      this.element.querySelector('[autofocus], .btn-close')?.focus();
+    }
+
+    hide() {
+      if (!this.element) return;
+      this.element.classList.remove('is-open');
+      this.element.setAttribute('aria-hidden', 'true');
+      this.backdrop?.remove();
+      this.backdrop = null;
+      document.body.classList.remove('modal-open');
+    }
+
+    static getInstance(element) {
+      return modalInstances.get(element) || null;
+    }
+  }
+
+  window.bootstrap = { Modal: LocalModal };
+  window.AppUI = {
+    toast(message, type = 'info') {
+      const region = document.getElementById('toastRegion');
+      if (!region) return;
+      const toast = document.createElement('div');
+      toast.className = `app-toast app-toast--${type}`;
+      toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+      toast.innerHTML = `<span aria-hidden="true">${type === 'error' ? '!' : type === 'success' ? '✓' : 'i'}</span><span>${String(message)}</span><button type="button" aria-label="Cerrar notificación">×</button>`;
+      toast.querySelector('button').addEventListener('click', () => toast.remove());
+      region.appendChild(toast);
+      window.setTimeout(() => toast.remove(), 5000);
+    },
+    confirm(message) {
+      return new Promise((resolve) => {
+        const dialog = document.createElement('div');
+        dialog.className = 'app-confirm';
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
+        dialog.innerHTML = `<div class="app-confirm__panel"><div class="app-confirm__mark">!</div><h2>Confirma esta acción</h2><p></p><div class="app-confirm__actions"><button type="button" class="btn-ios ghost" data-confirm-cancel>Cancelar</button><button type="button" class="btn-ios primary" data-confirm-ok>Continuar</button></div></div>`;
+        dialog.querySelector('p').textContent = message;
+        const finish = (value) => { dialog.remove(); resolve(value); };
+        dialog.querySelector('[data-confirm-cancel]').addEventListener('click', () => finish(false));
+        dialog.querySelector('[data-confirm-ok]').addEventListener('click', () => finish(true));
+        dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') finish(false); });
+        document.body.appendChild(dialog);
+        dialog.querySelector('[data-confirm-cancel]').focus();
+      });
+    },
+  };
+
+  document.addEventListener('click', (event) => {
+    const dismiss = event.target.closest('[data-bs-dismiss="modal"]');
+    if (dismiss) dismiss.closest('.modal') && LocalModal.getInstance(dismiss.closest('.modal'))?.hide();
+    const toggle = event.target.closest('[data-bs-toggle="collapse"]');
+    if (toggle) {
+      const target = document.querySelector(toggle.dataset.bsTarget);
+      target?.classList.toggle('show');
+      toggle.setAttribute('aria-expanded', String(target?.classList.contains('show')));
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.sidebar-wide');
+    const toggle = document.getElementById('sidebarToggle');
+    toggle?.addEventListener('click', () => sidebar?.classList.toggle('sidebar-open'));
+    sidebar?.addEventListener('click', (event) => {
+      if (event.target === sidebar) sidebar.classList.remove('sidebar-open');
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') sidebar?.classList.remove('sidebar-open');
+    });
+  });
+
   const state = {
     q: '',
     page: 1,
@@ -146,7 +236,7 @@
     },
 
     showError(message) {
-      alert(message);
+      window.AppUI.toast(message, 'error');
     },
 
     escapeHtml(value) {
@@ -313,7 +403,7 @@
         row.innerHTML = `
           <td>
             <div class="d-flex align-items-center gap-2">
-              <img class="employee-avatar" src="${fotoSrc}" onerror="this.onerror=null; this.src='${defaultAvatar}';" alt="avatar" />
+              <img class="employee-avatar" src="${fotoSrc}" alt="avatar" />
               <span class="fw-medium">${this.escapeHtml(employee.nombre_apellido || '')}</span>
             </div>
           </td>
@@ -338,6 +428,9 @@
 
         row.querySelector('[data-action="edit"]')?.addEventListener('click', () => this.editEmployee(employee.id));
         row.querySelector('[data-action="disable"]')?.addEventListener('click', () => this.disableEmployee(employee.id));
+        row.querySelector('.employee-avatar')?.addEventListener('error', (event) => {
+          event.currentTarget.src = defaultAvatar;
+        }, { once: true });
         this.list.appendChild(row);
       });
     },
@@ -622,7 +715,7 @@
     },
 
     async disableEmployee(employeeId) {
-      if (!window.confirm('¿Confirma inhabilitar este empleado?')) {
+      if (!await window.AppUI.confirm('¿Confirma inhabilitar este empleado?')) {
         return;
       }
 

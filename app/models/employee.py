@@ -1,10 +1,8 @@
 from sqlalchemy import Column, Integer, String, Date, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
 from app.core.enums import EstadoEmpleado
-
-Base = declarative_base()
+from app.models.base import Base
 
 EstadoEnum = EstadoEmpleado
 

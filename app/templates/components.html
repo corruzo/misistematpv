@@ -1,0 +1,16 @@
+{% macro icon(name, label='') -%}
+<svg class="icon icon--{{ name }}" aria-hidden="{{ 'false' if label else 'true' }}"{% if label %} role="img" aria-label="{{ label }}"{% endif %}><use href="/static/img/icons.svg#{{ name }}"></use></svg>
+{%- endmacro %}
+
+{% macro kpi_card(title, value_id, meta='', meta_id='', tone='blue', icon_name='activity') -%}
+<article class="kpi-card kpi-card--{{ tone }}">
+  <div class="kpi-card__top">
+    <span class="kpi-card__icon">{{ icon(icon_name) }}</span>
+    <span class="kpi-card__label">{{ title }}</span>
+  </div>
+  <div class="kpi-card__value-row">
+    <strong class="kpi-card__value" id="{{ value_id }}">0</strong>
+    {% if meta_id %}<span class="kpi-card__meta" id="{{ meta_id }}">{{ meta }}</span>{% endif %}
+  </div>
+</article>
+{%- endmacro %}

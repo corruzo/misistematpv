@@ -4,58 +4,100 @@
 {% block page_title %}Usuarios del Sistema{% endblock %}
 
 {% block content %}
-<div class="section-header">
+<!-- Header Principal -->
+<div class="d-flex justify-content-between align-items-center mb-4">
   <div>
+    <h1 class="h3 font-weight-bold mb-1">Gestión de Usuarios</h1>
+    <p class="text-muted small mb-0">Administra los accesos y roles del personal en la plataforma.</p>
   </div>
-  <button type="button" class="btn-ios primary" id="newUserButton">Nuevo usuario</button>
+  <button type="button" class="btn-ios primary" id="newUserButton">
+    <svg class="me-1" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    Nuevo usuario
+  </button>
 </div>
 
-<div class="user-management-grid">
-  <section class="card user-form-card" aria-labelledby="user-form-title">
-    <div class="card-panel__header">
-      <h3 id="user-form-title">Crear usuario</h3>
+<!-- Tarjeta de Contenido Principal -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent border-bottom p-3">
+    <div class="row g-2 align-items-center justify-content-between">
+      <div class="col-12 col-md-4">
+        <div class="position-relative">
+          <input class="form-control ps-4" id="userSearch" type="search" placeholder="Buscar usuario o nombre..." autocomplete="off">
+        </div>
+      </div>
     </div>
-    <form id="userForm" class="user-form">
-      <div>
-        <label class="form-label" for="username">Nombre de usuario</label>
-        <input class="form-control" id="username" name="username" autocomplete="username" pattern="[-a-zA-Z0-9._]+" minlength="3" maxlength="50" required>
-        <small class="form-hint">Usa letras, números, punto, guion o guion bajo.</small>
-      </div>
-      <div>
-        <label class="form-label" for="userName">Nombre visible</label>
-        <input class="form-control" id="userName" name="nombre" autocomplete="name" minlength="2" maxlength="150" required>
-      </div>
-      <div>
-        <label class="form-label" for="userPassword">Contraseña</label>
-        <input class="form-control" id="userPassword" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required>
-        <small class="form-hint" id="passwordHint">Mínimo 10 caracteres. Se almacena con hashing seguro.</small>
-      </div>
-      <div class="user-role-note"><strong>Rol</strong><span>Administrador</span></div>
-      <div class="user-form-actions">
-        <button class="btn-ios ghost d-none" type="button" id="cancelEditButton">Cancelar</button>
-        <button class="btn-ios primary" type="submit" id="saveUserButton">Crear usuario</button>
-      </div>
-      <p id="userFormMessage" class="form-feedback" role="status" aria-live="polite"></p>
-    </form>
-  </section>
+  </div>
 
-  <section class="card user-list-card" aria-labelledby="user-list-title">
-    <div class="card-panel__header">
-      <h3 id="user-list-title">Usuarios registrados</h3>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3" style="width: 35%;">Usuario</th>
+            <th style="width: 25%;">Rol</th>
+            <th style="width: 20%;">Estado</th>
+            <th class="text-end pe-3" style="width: 20%;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="userList" aria-live="polite">
+          <tr>
+            <td colspan="4" class="text-center py-4 text-muted">Cargando usuarios...</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <div class="user-search-wrap">
-      <label class="sr-only" for="userSearch">Buscar usuario</label>
-      <input class="form-control" id="userSearch" type="search" placeholder="Buscar por usuario o nombre" autocomplete="off">
+  </div>
+</div>
+
+<!-- Modal Extraído del Grid para evitar conflictos de Overlay -->
+<div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="user-form-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered user-modal-dialog">
+    <div class="modal-content ios-modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow mb-1 text-uppercase text-muted fw-bold" style="font-size: 10px; letter-spacing: 0.08em;">Administración</p>
+          <h5 class="modal-title h5 mb-0" id="user-form-title">Crear usuario</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="userForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="username">Nombre de usuario</label>
+            <input class="form-control" id="username" name="username" autocomplete="username" pattern="[-a-zA-Z0-9._]+" minlength="3" maxlength="50" required placeholder="ej. jperez">
+            <small class="form-text text-muted">Letras, números, punto, guion o guion bajo.</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="userName">Nombre visible</label>
+            <input class="form-control" id="userName" name="nombre" autocomplete="name" minlength="2" maxlength="150" required placeholder="ej. Juan Pérez">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="userPassword">Contraseña</label>
+            <input class="form-control" id="userPassword" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required>
+            <small class="form-text text-muted" id="passwordHint">Mínimo 10 caracteres. Almacenada con hashing seguro.</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="userRole">Rol asignado</label>
+            <select class="form-select" id="userRole" name="rol" required>
+              <option value="Administrador">Administrador</option>
+              <option value="RRHH">RRHH</option>
+              <option value="Consulta" selected>Consulta</option>
+            </select>
+          </div>
+          <p id="userFormMessage" class="form-feedback mb-0" role="status" aria-live="polite"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-ios ghost d-none" type="button" id="cancelEditButton" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn-ios primary" type="submit" id="saveUserButton">Crear usuario</button>
+        </div>
+      </form>
     </div>
-    <div class="user-list" id="userList" aria-live="polite">
-      <p class="text-muted">Cargando usuarios...</p>
-    </div>
-  </section>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('userForm');
     const list = document.getElementById('userList');
@@ -65,72 +107,103 @@
     const formTitle = document.getElementById('user-form-title');
     const passwordInput = document.getElementById('userPassword');
     const passwordHint = document.getElementById('passwordHint');
+    const roleInput = document.getElementById('userRole');
     const cancelEditButton = document.getElementById('cancelEditButton');
+    const userModalEl = document.getElementById('userModal');
+    
+    const getModalInstance = () => bootstrap.Modal.getInstance(userModalEl) || new bootstrap.Modal(userModalEl);
     let editingUser = null;
+
+    const getCsrfToken = () => {
+      return document.cookie.split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1] || '';
+    };
 
     const showMessage = (text, error = false) => {
       message.textContent = text;
-      message.className = `form-feedback ${error ? 'form-feedback--error' : 'form-feedback--success'}`;
+      message.className = `form-feedback ${error ? 'text-danger' : 'text-success'}`;
     };
 
     const resetForm = () => {
       editingUser = null;
       form.reset();
+      message.textContent = '';
       formTitle.textContent = 'Crear usuario';
       saveButton.textContent = 'Crear usuario';
       cancelEditButton.classList.add('d-none');
       passwordInput.required = true;
       passwordInput.value = '';
-      passwordHint.textContent = 'Mínimo 10 caracteres. Se almacena con hashing seguro.';
+      roleInput.value = 'Consulta';
+      passwordHint.textContent = 'Mínimo 10 caracteres. Almacenada con hashing seguro.';
     };
 
     const startEdit = (user) => {
+      resetForm();
       editingUser = user;
       formTitle.textContent = 'Editar usuario';
       saveButton.textContent = 'Guardar cambios';
       cancelEditButton.classList.remove('d-none');
       passwordInput.required = false;
-      passwordInput.value = '';
       passwordHint.textContent = 'Déjala vacía para conservar la contraseña actual.';
       document.getElementById('username').value = user.username;
       document.getElementById('userName').value = user.nombre;
-      document.getElementById('username').focus();
+      roleInput.value = user.rol;
+      
+      getModalInstance().show();
+      setTimeout(() => document.getElementById('username').focus(), 150);
     };
 
     const renderUsers = (users) => {
       list.replaceChildren();
-      if (!users.length) {
-        const empty = document.createElement('p');
-        empty.className = 'text-muted';
-        empty.textContent = 'Todavía no hay usuarios registrados.';
-        list.append(empty);
+      if (!users || !users.length) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="4" class="text-center py-4 text-muted">No se encontraron usuarios.</td>`;
+        list.append(row);
         return;
       }
+      
       users.forEach((user) => {
-        const row = document.createElement('div');
-        row.className = 'user-list-row';
-        const identity = document.createElement('div');
-        identity.className = 'user-list-identity';
-        const name = document.createElement('strong');
-        name.textContent = user.nombre;
-        const username = document.createElement('span');
-        username.textContent = `@${user.username} · ${user.rol}`;
-        identity.append(name, username);
-        const action = document.createElement('button');
-        action.type = 'button';
-        action.className = 'btn-ios secondary btn-sm';
-        action.textContent = user.activo ? 'Inhabilitar' : 'Activar';
-        action.addEventListener('click', () => updateStatus(user, action));
-        const edit = document.createElement('button');
-        edit.type = 'button';
-        edit.className = 'btn-ios ghost btn-sm';
-        edit.textContent = 'Editar';
-        edit.addEventListener('click', () => startEdit(user));
-        const actions = document.createElement('div');
-        actions.className = 'user-list-actions';
-        actions.append(edit, action);
-        row.append(identity, actions);
-        list.append(row);
+        const tr = document.createElement('tr');
+
+        // Identidad (Nombre + Username)
+        const tdIdentity = document.createElement('td');
+        tdIdentity.className = 'ps-3';
+        tdIdentity.innerHTML = `
+          <div class="fw-bold text-dark">${user.nombre}</div>
+          <div class="text-muted small">@${user.username}</div>
+        `;
+
+        // Rol con Badge
+        const tdRole = document.createElement('td');
+        const roleBadgeClass = user.rol === 'Administrador' ? 'bg-primary' : (user.rol === 'RRHH' ? 'bg-info text-dark' : 'bg-secondary');
+        tdRole.innerHTML = `<span class="badge ${roleBadgeClass}">${user.rol}</span>`;
+
+        // Estado
+        const tdStatus = document.createElement('td');
+        tdStatus.innerHTML = user.activo 
+          ? `<span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>`
+          : `<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>`;
+
+        // Acciones
+        const tdActions = document.createElement('td');
+        tdActions.className = 'text-end pe-3';
+
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'btn-ios ghost btn-sm me-1';
+        editBtn.textContent = 'Editar';
+        editBtn.addEventListener('click', () => startEdit(user));
+
+        const statusBtn = document.createElement('button');
+        statusBtn.type = 'button';
+        statusBtn.className = `btn-ios ${user.activo ? 'secondary' : 'primary'} btn-sm`;
+        statusBtn.textContent = user.activo ? 'Inhabilitar' : 'Activar';
+        statusBtn.addEventListener('click', () => updateStatus(user, statusBtn));
+
+        tdActions.append(editBtn, statusBtn);
+        tr.append(tdIdentity, tdRole, tdStatus, tdActions);
+        list.append(tr);
       });
     };
 
@@ -138,11 +211,17 @@
       try {
         const query = searchInput.value.trim();
         const response = await fetch(`/api/users${query ? `?q=${encodeURIComponent(query)}` : ''}`);
-        const payload = response.ok ? await response.json() : [];
-        if (!response.ok) throw new Error('No se pudieron cargar los usuarios.');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.detail || 'No se pudieron cargar los usuarios.');
+        }
+        const payload = await response.json();
         renderUsers(payload);
       } catch (error) {
-        list.textContent = error.message || 'No se pudieron cargar los usuarios.';
+        list.replaceChildren();
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="4" class="text-center py-4 text-danger">${error.message || 'Error al conectar con el servidor.'}</td>`;
+        list.append(row);
       }
     };
 
@@ -151,14 +230,17 @@
       try {
         const response = await fetch(`/api/users/${user.id}/status`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
           body: JSON.stringify({ activo: !user.activo }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || 'No se pudo cambiar el estado.');
         await loadUsers();
       } catch (error) {
-        showMessage(error.message || 'No se pudo cambiar el estado.', true);
+        showMessage(error.message, true);
         button.disabled = false;
       }
     };
@@ -166,32 +248,41 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!form.reportValidity()) return;
+      
       saveButton.disabled = true;
-      showMessage('Creando usuario...');
+      const isEditing = Boolean(editingUser);
+      showMessage(isEditing ? 'Guardando cambios...' : 'Creando usuario...');
+
       try {
         const payload = Object.fromEntries(new FormData(form).entries());
-        if (editingUser && !payload.password) {
+        if (isEditing && !payload.password) {
           delete payload.password;
         }
-        const response = await fetch(editingUser ? `/api/users/${editingUser.id}` : '/api/users', {
-          method: editingUser ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
+
+        const response = await fetch(isEditing ? `/api/users/${editingUser.id}` : '/api/users', {
+          method: isEditing ? 'PUT' : 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
           body: JSON.stringify(payload),
         });
+
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.detail || 'No se pudo crear el usuario.');
-        const wasEditing = Boolean(editingUser);
+        if (!response.ok) throw new Error(result.detail || 'No se pudo procesar la solicitud.');
+
         resetForm();
-        showMessage(wasEditing ? 'Usuario actualizado correctamente.' : 'Usuario creado correctamente.');
+        getModalInstance().hide();
         await loadUsers();
       } catch (error) {
-        showMessage(error.message || 'No se pudo crear el usuario.', true);
+        showMessage(error.message, true);
       } finally {
         saveButton.disabled = false;
       }
     });
 
-    cancelEditButton.addEventListener('click', resetForm);
+    userModalEl.addEventListener('hidden.bs.modal', resetForm);
+
     searchInput.addEventListener('input', (() => {
       let timeout;
       return () => {
@@ -199,10 +290,13 @@
         timeout = setTimeout(loadUsers, 250);
       };
     })());
+
     document.getElementById('newUserButton')?.addEventListener('click', () => {
       resetForm();
-      document.getElementById('username')?.focus();
+      getModalInstance().show();
+      setTimeout(() => document.getElementById('username')?.focus(), 150);
     });
+
     loadUsers();
   });
 </script>

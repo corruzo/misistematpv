@@ -1,6 +1,6 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
-from app.models.employee import Base
+from app.models.base import Base
 
 
 class AuthSession(Base):

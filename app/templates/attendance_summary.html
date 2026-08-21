@@ -1,4 +1,86 @@
 {% extends 'base.html' %}
-{% block title %}Resumen de asistencia - MarcajeTPV{% endblock %}
-{% block page_title %}Resumen de asistencia{% endblock %}
-{% block content %}<div class="attendance-page"><section class="attendance-hero"><div><p class="eyebrow">Presencia del día</p><h2>Resumen operativo</h2><p>Lecturas de hoy y distribución de empleados presentes.</p></div></section><div class="attendance-summary-grid"><div class="attendance-summary-card"><span>Presentes</span><strong id="summaryPresentes">0</strong><small>Con una entrada sin salida posterior</small></div><div class="attendance-summary-card attendance-summary-card--entrada"><span>Entradas hoy</span><strong id="summaryEntradas">0</strong></div><div class="attendance-summary-card attendance-summary-card--salida"><span>Salidas hoy</span><strong id="summarySalidas">0</strong></div></div><section class="card attendance-area-card"><div class="card-panel__header"><div><p class="eyebrow">Detalle de presentes</p><h3>Distribución por gerencia y departamento</h3></div></div><div id="summaryAreas" class="attendance-area-list"><span class="text-muted">Cargando...</span></div></section></div>{% endblock %}{% block scripts %}<script>document.addEventListener('DOMContentLoaded',async()=>{const data=await(await fetch('/api/attendance/summary')).json();document.getElementById('summaryPresentes').textContent=data.presentes;document.getElementById('summaryEntradas').textContent=data.entradas_hoy;document.getElementById('summarySalidas').textContent=data.salidas_hoy;document.getElementById('summaryAreas').innerHTML=data.presentes_por_area.map(item=>`<div class="attendance-area-row"><div><span class="attendance-area-row__gerencia">${item.gerencia}</span><strong>${item.departamento}</strong></div><span class="attendance-area-row__total"><b>${item.total}</b><small>presentes</small></span></div>`).join('')||'<span class="text-muted">Todavía no hay empleados presentes.</span>'});</script>{% endblock %}
+{% from 'components.html' import kpi_card %}
+
+{% block title %}Inspector de seguridad - MarcajeTPV{% endblock %}
+{% block page_title %}Inspector de seguridad{% endblock %}
+
+{% block content %}
+<div class="attendance-page inspector-page">
+  <section class="attendance-hero inspector-hero">
+    <div>
+      <p class="eyebrow">Control de acceso en tiempo real</p>
+      <h2>Personal dentro de la empresa</h2>
+      <p>Consulta quién permanece en las instalaciones y cuándo registró su última entrada.</p>
+    </div>
+    <div class="inspector-live"><span></span><strong id="inspectorUpdated">Actualizando...</strong></div>
+  </section>
+
+  <div class="kpi-grid kpi-grid--compact inspector-kpis">
+    {{ kpi_card('Personal dentro', 'summaryPresentes', 'Entrada sin salida', 'summaryPresentesMeta', 'green', 'users') }}
+    {{ kpi_card('Entradas de hoy', 'summaryEntradas', 'Registros', 'summaryEntradasMeta', 'blue', 'check') }}
+    {{ kpi_card('Salidas de hoy', 'summarySalidas', 'Registros', 'summarySalidasMeta', 'orange', 'activity') }}
+    {{ kpi_card('Marcajes totales', 'summaryMarcajes', 'Actividad del día', 'summaryMarcajesMeta', 'violet', 'activity') }}
+  </div>
+
+  <section class="card inspector-presence-card">
+    <div class="card-panel__header inspector-table-header">
+      <div><p class="eyebrow">Lista de presencia</p><h3>Personas actualmente dentro</h3></div>
+      <div class="inspector-table-tools"><label class="sr-only" for="presentSearch">Buscar personal presente</label><input id="presentSearch" class="form-control" type="search" placeholder="Buscar por nombre, cédula o área"></div>
+    </div>
+    <div class="table-responsive">
+      <table class="table ios-table inspector-table mb-0">
+        <thead><tr><th>Persona</th><th>Identificación</th><th>Ubicación</th><th>Entrada</th></tr></thead>
+        <tbody id="presentEmployeesList"><tr><td colspan="4" class="table-state">Cargando personal presente...</td></tr></tbody>
+      </table>
+    </div>
+    <div id="presentEmptyState" class="table-state d-none">No hay personal marcado dentro en este momento.</div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', () => {
+  const state = { items: [] };
+  const list = document.getElementById('presentEmployeesList');
+  const search = document.getElementById('presentSearch');
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+  const formatTime = (value) => value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+
+  function render() {
+    const term = search.value.trim().toLowerCase();
+    const items = state.items.filter((item) => [item.nombre_apellido, item.cedula, item.gerencia, item.departamento, item.cargo].join(' ').toLowerCase().includes(term));
+    list.replaceChildren();
+    document.getElementById('presentEmptyState').classList.toggle('d-none', items.length > 0);
+    if (!items.length) return;
+    items.forEach((item) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td><div class="presence-person"><img src="${item.foto_url ? `/static/${encodeURIComponent(item.foto_url)}` : '/static/img/default-avatar.svg'}" alt=""><strong>${escapeHtml(item.nombre_apellido)}</strong></div></td><td>${escapeHtml(item.cedula)}</td><td><strong>${escapeHtml(item.gerencia)}</strong><small>${escapeHtml(item.departamento)} · ${escapeHtml(item.cargo)}</small></td><td><time class="presence-time">${formatTime(item.entrada)}</time></td>`;
+      list.append(row);
+    });
+  }
+
+  async function load() {
+    try {
+      const [summaryResponse, presentResponse] = await Promise.all([fetch('/api/attendance/summary'), fetch('/api/attendance/present')]);
+      if (!summaryResponse.ok || !presentResponse.ok) throw new Error('No se pudo actualizar la presencia.');
+      const summary = await summaryResponse.json();
+      state.items = await presentResponse.json();
+      document.getElementById('summaryPresentes').textContent = summary.presentes ?? 0;
+      document.getElementById('summaryEntradas').textContent = summary.entradas_hoy ?? 0;
+      document.getElementById('summarySalidas').textContent = summary.salidas_hoy ?? 0;
+      document.getElementById('summaryMarcajes').textContent = summary.marcajes_hoy ?? 0;
+      document.getElementById('summaryPresentesMeta').textContent = `${state.items.length} personas`;
+      document.getElementById('summaryEntradasMeta').textContent = 'Desde medianoche';
+      document.getElementById('summarySalidasMeta').textContent = 'Desde medianoche';
+      document.getElementById('summaryMarcajesMeta').textContent = 'Entradas + salidas';
+      document.getElementById('inspectorUpdated').textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      render();
+    } catch (error) { window.AppUI.toast(error.message, 'error'); }
+  }
+  search.addEventListener('input', render);
+  load();
+  window.setInterval(load, 15000);
+});
+</script>
+{% endblock %}

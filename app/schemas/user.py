@@ -1,11 +1,15 @@
 from datetime import datetime
+from typing import Literal
 from pydantic import BaseModel, Field, field_validator
+
+Role = Literal['Administrador', 'RRHH', 'Consulta']
 
 
 class UsuarioCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9._-]+$')
     nombre: str = Field(..., min_length=2, max_length=150)
     password: str = Field(..., min_length=10, max_length=128)
+    rol: Role = 'Consulta'
 
     @field_validator('username', 'nombre', 'password', mode='before')
     @classmethod
@@ -19,6 +23,7 @@ class UsuarioUpdate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9._-]+$')
     nombre: str = Field(..., min_length=2, max_length=150)
     password: str | None = Field(None, min_length=10, max_length=128)
+    rol: Role = 'Consulta'
 
     @field_validator('username', 'nombre', 'password', mode='before')
     @classmethod

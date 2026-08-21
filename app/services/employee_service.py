@@ -9,6 +9,7 @@ from sqlalchemy.orm import joinedload
 from app.models.employee import Empleado, EstadoEnum
 from app.models.organization import Departamento, Cargo, Gerencia
 from app.core.config import ALLOWED_IMAGE_EXT, UPLOADS_DIR
+from app.services.audit_service import add_audit
 
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
 IMAGE_SIGNATURES = {
@@ -26,12 +27,12 @@ def resolve_employee_org_ids(db: Session, departamento_id: Optional[int] = None,
     resolved_cargo_id = cargo_id
 
     if resolved_departamento_id is None and departamento_name:
-        departamento = db.query(Departamento).filter(Departamento.nombre.ilike(departamento_name.strip())).first()
+        departamento = db.query(Departamento).filter(Departamento.nombre.like(departamento_name.strip())).first()
         if departamento:
             resolved_departamento_id = departamento.id
 
     if resolved_cargo_id is None and cargo_name:
-        cargo = db.query(Cargo).filter(Cargo.nombre.ilike(cargo_name.strip())).first()
+        cargo = db.query(Cargo).filter(Cargo.nombre.like(cargo_name.strip())).first()
         if cargo:
             resolved_cargo_id = cargo.id
 
@@ -79,7 +80,7 @@ def save_image(file: UploadFile) -> Optional[str]:
     return f"uploads/{unique_name}"
 
 
-def create_employee(db: Session, data, foto: Optional[UploadFile] = None) -> Empleado:
+def create_employee(db: Session, data, foto: Optional[UploadFile] = None, usuario_id: int | None = None) -> Empleado:
     cedula = str(data.cedula or '').strip()
     nombre_apellido = str(data.nombre_apellido or '').strip()
     if not cedula or not nombre_apellido:
@@ -106,12 +107,22 @@ def create_employee(db: Session, data, foto: Optional[UploadFile] = None) -> Emp
         foto_url=foto_url,
     )
     db.add(emp)
+    db.flush()
+    add_audit(db, usuario_id, 'alta', 'empleados', emp.id, despues={
+        'cedula': emp.cedula, 'nombre_apellido': emp.nombre_apellido,
+        'departamento_id': emp.departamento_id, 'cargo_id': emp.cargo_id, 'estado': emp.estado,
+    })
     db.commit()
     db.refresh(emp)
     return emp
 
 
-def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFile] = None, eliminar_foto: bool = False) -> Empleado:
+def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFile] = None, eliminar_foto: bool = False, usuario_id: int | None = None) -> Empleado:
+    antes = {
+        'nombre_apellido': emp.nombre_apellido, 'departamento_id': emp.departamento_id,
+        'cargo_id': emp.cargo_id, 'estado': emp.estado, 'tipo_nomina': emp.tipo_nomina,
+        'foto_url': emp.foto_url,
+    }
     if foto and foto.filename:
         foto_url = save_image(foto)
         old_photo = STATIC_DIR / emp.foto_url if emp.foto_url else None
@@ -128,10 +139,10 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     departamento_id = payload.get('departamento_id')
     cargo_id = payload.get('cargo_id')
     if departamento_id is None and payload.get('departamento'):
-        departamento = db.query(Departamento).filter(Departamento.nombre.ilike(str(payload['departamento']).strip())).first()
+        departamento = db.query(Departamento).filter(Departamento.nombre.like(str(payload['departamento']).strip())).first()
         departamento_id = departamento.id if departamento else None
     if cargo_id is None and payload.get('cargo'):
-        cargo = db.query(Cargo).filter(Cargo.nombre.ilike(str(payload['cargo']).strip())).first()
+        cargo = db.query(Cargo).filter(Cargo.nombre.like(str(payload['cargo']).strip())).first()
         cargo_id = cargo.id if cargo else None
 
     if departamento_id is not None or cargo_id is not None:
@@ -155,6 +166,11 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
                 raise ValueError('El nombre del empleado no puede estar vacío.')
             setattr(emp, field, normalized_value)
     db.add(emp)
+    add_audit(db, usuario_id, 'actualizacion', 'empleados', emp.id, antes, {
+        'nombre_apellido': emp.nombre_apellido, 'departamento_id': emp.departamento_id,
+        'cargo_id': emp.cargo_id, 'estado': emp.estado, 'tipo_nomina': emp.tipo_nomina,
+        'foto_url': emp.foto_url,
+    })
     db.commit()
     db.refresh(emp)
     return emp
@@ -175,14 +191,14 @@ def build_employee_query(db: Session, q: Optional[str] = None, estado: Optional[
     if q:
         like = f"%{q}%"
         query = query.filter(
-            (Empleado.nombre_apellido.ilike(like)) | (Empleado.cedula.ilike(like))
+            (Empleado.nombre_apellido.like(like)) | (Empleado.cedula.like(like))
         )
     if estado:
         query = query.filter(Empleado.estado == estado)
     if gerencia:
-        query = query.join(Empleado.departamento_rel).join(Departamento.gerencia).filter(Gerencia.nombre.ilike(f"%{gerencia}%"))
+        query = query.join(Empleado.departamento_rel).join(Departamento.gerencia).filter(Gerencia.nombre.like(f"%{gerencia}%"))
     if departamento:
-        query = query.join(Empleado.departamento_rel).filter(Departamento.nombre.ilike(f"%{departamento}%"))
+        query = query.join(Empleado.departamento_rel).filter(Departamento.nombre.like(f"%{departamento}%"))
     if tipo_nomina:
         query = query.filter(Empleado.tipo_nomina == tipo_nomina)
     return query
@@ -197,23 +213,21 @@ def count_employees(db: Session, q: Optional[str] = None, estado: Optional[str] 
     return build_employee_query(db, q, estado, gerencia, departamento, tipo_nomina).count()
 
 
-def soft_delete_employee(db: Session, emp: Empleado) -> Empleado:
+def soft_delete_employee(db: Session, emp: Empleado, usuario_id: int | None = None) -> Empleado:
+    antes = {'estado': emp.estado}
     emp.estado = EstadoEnum.Retirado
     db.add(emp)
+    add_audit(db, usuario_id, 'baja', 'empleados', emp.id, antes, {'estado': emp.estado})
     db.commit()
     db.refresh(emp)
     return emp
 
 
 def get_employee_metrics(db: Session):
-    total = db.query(Empleado).count()
-
-    estado_counts = {
-        'Activo': db.query(Empleado).filter(Empleado.estado == EstadoEnum.Activo).count(),
-        'Vacaciones': db.query(Empleado).filter(Empleado.estado == EstadoEnum.Vacaciones).count(),
-        'Retirado': db.query(Empleado).filter(Empleado.estado == EstadoEnum.Retirado).count(),
-        'Suspendido': db.query(Empleado).filter(Empleado.estado == EstadoEnum.Suspendido).count(),
-    }
+    status_rows = db.query(Empleado.estado, func.count(Empleado.id)).group_by(Empleado.estado).all()
+    estado_counts = {state.value if isinstance(state, EstadoEnum) else state: count for state, count in status_rows}
+    estado_counts = {state: estado_counts.get(state, 0) for state in ('Activo', 'Vacaciones', 'Retirado', 'Suspendido')}
+    total = sum(estado_counts.values())
 
     activos = estado_counts['Activo']
     inactivos = sum(value for key, value in estado_counts.items() if key != 'Activo')
@@ -226,21 +240,25 @@ def get_employee_metrics(db: Session):
         'fecha': latest_employee_label,
     } if latest_employee else None
 
-    total_departamentos = db.query(Departamento).count()
-    departamentos_activas = db.query(Departamento).filter(Departamento.estado == 'Activo').count()
+    departamento_counts = db.query(Departamento.estado, func.count(Departamento.id)).group_by(Departamento.estado).all()
+    departamento_counts = {state: count for state, count in departamento_counts}
+    total_departamentos = sum(departamento_counts.values())
+    departamentos_activas = departamento_counts.get('Activo', 0)
     departamentos_inactivas = total_departamentos - departamentos_activas
 
-    total_gerencias = db.query(Gerencia).count()
-    gerencias_activas = db.query(Gerencia).filter(Gerencia.estado == 'Activo').count()
+    gerencia_counts = db.query(Gerencia.estado, func.count(Gerencia.id)).group_by(Gerencia.estado).all()
+    gerencia_counts = {state: count for state, count in gerencia_counts}
+    total_gerencias = sum(gerencia_counts.values())
+    gerencias_activas = gerencia_counts.get('Activo', 0)
     gerencias_inactivas = total_gerencias - gerencias_activas
 
-    total_cargos = db.query(Cargo).count()
-    cargos_activas = db.query(Cargo).filter(Cargo.estado == 'Activo').count()
+    cargo_counts = db.query(Cargo.estado, func.count(Cargo.id)).group_by(Cargo.estado).all()
+    cargo_counts = {state: count for state, count in cargo_counts}
+    total_cargos = sum(cargo_counts.values())
+    cargos_activas = cargo_counts.get('Activo', 0)
     cargos_inactivas = total_cargos - cargos_activas
 
     unique_departments = db.query(Empleado.departamento_id).filter(Empleado.departamento_id.isnot(None)).distinct().count()
-    tipos_nomina = db.query(Empleado.tipo_nomina).filter(Empleado.tipo_nomina.isnot(None)).distinct().count()
-
     top_departamentos = db.query(
         Departamento.nombre,
         func.count(Empleado.id).label('total_empleados')

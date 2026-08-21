@@ -9,6 +9,8 @@ cntlm-0.92.3/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.coverage
+coverage.xml
 
 # Runtime logs and generated files
 uvicorn_log.txt

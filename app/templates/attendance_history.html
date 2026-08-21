@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Historial de asistencia - MarcajeTPV{% endblock %}
+{% block page_title %}Historial de asistencia{% endblock %}
+
+{% block content %}
+<div class="attendance-page">
+  <section class="section-header">
+    <div>
+      <p class="eyebrow">Trazabilidad de accesos</p>
+      <h2>Historial de marcajes</h2>
+    </div>
+  </section>
+
+  <section class="card attendance-history-card">
+    <div class="attendance-filter-bar">
+      <label>Buscar empleado<input id="historyEmployeeSearch" class="form-control" type="search" placeholder="Nombre o cédula"></label>
+      <label>Desde<input id="historyDateFrom" class="form-control" type="date"></label>
+      <label>Hasta<input id="historyDateTo" class="form-control" type="date"></label>
+      <button id="historySearchButton" class="btn-ios primary" type="button">Buscar</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table ios-table mb-0">
+        <thead><tr><th>Fecha y hora</th><th>Empleado</th><th>Área</th><th>Tipo</th><th>Origen</th></tr></thead>
+        <tbody id="attendanceHistoryList"><tr><td colspan="5" class="table-state">Cargando historial...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="history-pagination"><span id="historyInfo" class="text-muted">Página 1</span><div id="historyPagination"></div></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', () => {
+  const state = { page: 1, pageSize: 25, total: 0 };
+  const list = document.getElementById('attendanceHistoryList');
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const load = async () => {
+    const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+    const query = document.getElementById('historyEmployeeSearch').value.trim();
+    const from = document.getElementById('historyDateFrom').value;
+    const to = document.getElementById('historyDateTo').value;
+    if (query) params.set('empleado_q', query);
+    if (from) params.set('date_from', from);
+    if (to) params.set('date_to', to);
+    try {
+      const response = await fetch(`/api/attendance/history?${params}`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || 'No se pudo cargar el historial.');
+      state.total = payload.total || 0;
+      list.replaceChildren();
+      if (!payload.items?.length) { list.innerHTML = '<tr><td colspan="5" class="table-state">No hay marcajes para los filtros seleccionados.</td></tr>'; }
+      else payload.items.forEach((item) => {
+        const row = document.createElement('tr');
+        const time = item.fecha_hora ? new Date(item.fecha_hora).toLocaleString() : '-';
+        row.innerHTML = `<td>${esc(time)}</td><td><strong>${esc(item.empleado_nombre)}</strong><small>${esc(item.cedula)}</small></td><td><strong>${esc(item.gerencia)}</strong><small>${esc(item.departamento)} · ${esc(item.cargo)}</small></td><td><span class="badge-pill ${item.tipo === 'ENTRADA' ? 'badge-status--activo' : 'badge-status--retirado'}">${esc(item.tipo)}</span></td><td>${esc(item.origen)}</td>`;
+        list.append(row);
+      });
+      const pages = Math.max(1, Math.ceil(state.total / state.pageSize));
+      document.getElementById('historyInfo').textContent = `${state.total} registros · Página ${state.page} de ${pages}`;
+      document.getElementById('historyPagination').innerHTML = `<button class="btn-ios secondary btn-sm" type="button" ${state.page <= 1 ? 'disabled' : ''} data-history-prev>Anterior</button><button class="btn-ios secondary btn-sm" type="button" ${state.page >= pages ? 'disabled' : ''} data-history-next>Siguiente</button>`;
+      document.querySelector('[data-history-prev]')?.addEventListener('click', () => { state.page -= 1; load(); });
+      document.querySelector('[data-history-next]')?.addEventListener('click', () => { state.page += 1; load(); });
+    } catch (error) { window.AppUI.toast(error.message, 'error'); }
+  };
+  document.getElementById('historySearchButton').addEventListener('click', () => { state.page = 1; load(); });
+  load();
+});
+</script>
+{% endblock %}

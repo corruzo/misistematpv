@@ -2,6 +2,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from urllib.parse import quote_plus
+from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR.parent / '.env'
@@ -9,6 +11,14 @@ ENV_PATH = BASE_DIR.parent / '.env'
 load_dotenv(dotenv_path=ENV_PATH)
 
 APP_ENV = os.getenv('APP_ENV', 'development').lower()
+APP_TIMEZONE = os.getenv('APP_TIMEZONE', 'America/Caracas')
+try:
+    LOCAL_TIMEZONE = ZoneInfo(APP_TIMEZONE)
+except ZoneInfoNotFoundError:
+    if APP_TIMEZONE == 'America/Caracas':
+        LOCAL_TIMEZONE = timezone(timedelta(hours=-4), 'America/Caracas')
+    else:
+        raise RuntimeError(f'Zona horaria inválida o tzdata ausente en APP_TIMEZONE: {APP_TIMEZONE}')
 COOKIE_SECURE = os.getenv('COOKIE_SECURE', 'true' if APP_ENV == 'production' else 'false').lower() in ('1', 'true', 'yes')
 TRUST_SERVER_CERTIFICATE = os.getenv('TRUST_SERVER_CERTIFICATE', 'false' if APP_ENV == 'production' else 'true').lower() in ('1', 'true', 'yes')
 CSRF_ALLOWED_ORIGINS = tuple(

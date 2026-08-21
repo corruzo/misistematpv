@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -26,15 +26,15 @@ def user_error(exc: Exception) -> HTTPException:
 
 
 @router.get('/users', response_class=HTMLResponse)
-def users_page(user=Depends(require_admin)):
+def users_page(request: Request, user=Depends(require_admin)):
     template = templates_env.get_template('users.html')
-    return HTMLResponse(template.render(active_page='users', user=user))
+    return HTMLResponse(template.render(active_page='users', user=user, csp_nonce=request.state.csp_nonce))
 
 
 @router.get('/profile', response_class=HTMLResponse)
-def profile_page(user=Depends(require_page_user)):
+def profile_page(request: Request, user=Depends(require_page_user)):
     template = templates_env.get_template('profile.html')
-    return HTMLResponse(template.render(active_page='profile', user=user))
+    return HTMLResponse(template.render(active_page='profile', user=user, csp_nonce=request.state.csp_nonce))
 
 
 @router.get('/api/me', response_model=UsuarioOut)
@@ -64,7 +64,7 @@ def api_list_users(q: str | None = Query(None, max_length=100), db: Session = De
 @router.post('/api/users', response_model=UsuarioOut, status_code=201)
 def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return UsuarioOut.from_model(create_user(db, payload))
+        return UsuarioOut.from_model(create_user(db, payload, _admin.id))
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise user_error(exc)
@@ -73,7 +73,7 @@ def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db), _admi
 @router.put('/api/users/{user_id}', response_model=UsuarioOut)
 def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return UsuarioOut.from_model(update_user(db, user_id, payload))
+        return UsuarioOut.from_model(update_user(db, user_id, payload, _admin.id))
     except UserNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
@@ -84,7 +84,7 @@ def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(
 @router.patch('/api/users/{user_id}/status', response_model=UsuarioOut)
 def api_update_user_status(user_id: int, payload: UsuarioStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return UsuarioOut.from_model(set_user_status(db, user_id, payload.activo))
+        return UsuarioOut.from_model(set_user_status(db, user_id, payload.activo, _admin.id))
     except UserNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:

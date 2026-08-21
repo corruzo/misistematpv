@@ -7,9 +7,10 @@ import secrets
 ALGORITHM = 'scrypt'
 SALT_BYTES = 16
 HASH_BYTES = 32
-SCRYPT_N = 2**14
+SCRYPT_N = 2**16
 SCRYPT_R = 8
 SCRYPT_P = 1
+SCRYPT_MAXMEM = 128 * 1024 * 1024
 
 
 def hash_password(password: str) -> str:
@@ -23,6 +24,7 @@ def hash_password(password: str) -> str:
         r=SCRYPT_R,
         p=SCRYPT_P,
         dklen=HASH_BYTES,
+        maxmem=SCRYPT_MAXMEM,
     )
     encode = lambda value: base64.urlsafe_b64encode(value).decode('ascii')
     return f'{ALGORITHM}${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${encode(salt)}${encode(derived_key)}'
@@ -42,7 +44,16 @@ def verify_password(password: str, encoded_password: str) -> bool:
             r=int(r),
             p=int(p),
             dklen=len(expected),
+            maxmem=SCRYPT_MAXMEM,
         )
         return hmac.compare_digest(actual, expected)
     except (TypeError, ValueError, UnicodeError):
         return False
+
+
+def password_needs_rehash(encoded_password: str) -> bool:
+    try:
+        algorithm, n, r, p, *_ = encoded_password.split('$')
+        return algorithm != ALGORITHM or (int(n), int(r), int(p)) != (SCRYPT_N, SCRYPT_R, SCRYPT_P)
+    except (TypeError, ValueError):
+        return True

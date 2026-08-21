@@ -13,7 +13,7 @@
 
     <!-- CSS (Bootstrap 5.3 + Custom) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=1.0">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.4">
     
     {% block head %}{% endblock %}
   </head>
@@ -26,62 +26,59 @@
         </div>
         <nav class="sidebar-nav">
           <div class="sidebar-section sidebar-accordion">
-            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-people" aria-expanded="true" aria-controls="module-people">
+            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-people" aria-expanded="false" aria-controls="module-people">
               <span>Administración</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <div class="collapse show" id="module-people">
+            <div class="collapse" id="module-people">
               <div class="sidebar-section__body">
                 <a class="side-link {% if active_page == 'dashboard' %}active{% endif %}" href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}>
                   <span class="side-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                      <path d="M3 11.5L12 4l9 7.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg>
                   </span>
-                  <span>Resúmen</span>
+                  <span>Resumen</span>
                 </a>
-                <a class="side-link {% if active_page == 'organization' %}active{% endif %}" href="/organization" {% if active_page == 'organization' %}aria-current="page"{% endif %}>
+                {% if user.rol == 'Administrador' %}<a class="side-link {% if active_page == 'organization' %}active{% endif %}" href="/organization" {% if active_page == 'organization' %}aria-current="page"{% endif %}>
                   <span class="side-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                      <path d="M12 2v6m-6 4v6m12-6v6M4 22h16M3 12h18" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <svg class="icon"><use href="/static/img/icons.svg#building"></use></svg>
                   </span>
                   <span>Organigrama TPV</span>
-                </a>
-                <a class="side-link {% if active_page == 'employees' %}active{% endif %}" href="/employees" {% if active_page == 'employees' %}aria-current="page"{% endif %}>
+                </a>{% endif %}
+                {% if user.rol in ('Administrador', 'RRHH') %}<a class="side-link {% if active_page == 'employees' %}active{% endif %}" href="/employees" {% if active_page == 'employees' %}aria-current="page"{% endif %}>
                   <span class="side-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                      <path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zM8 11c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zM8 13c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13z"/>
-                    </svg>
+                    <svg class="icon"><use href="/static/img/icons.svg#users"></use></svg>
                   </span>
                   <span>Gestión de personal</span>
-                </a>
-                <a class="side-link {% if active_page == 'users' %}active{% endif %}" href="/users" {% if active_page == 'users' %}aria-current="page"{% endif %}>
+                </a>{% endif %}
+                {% if user.rol == 'Administrador' %}<a class="side-link {% if active_page == 'users' %}active{% endif %}" href="/users" {% if active_page == 'users' %}aria-current="page"{% endif %}>
                   <span class="side-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                      <path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0ZM4 21a8 8 0 0 1 16 0M19 8v6M22 11h-6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <svg class="icon"><use href="/static/img/icons.svg#users"></use></svg>
                   </span>
                   <span>Gestión de usuarios</span>
-                </a>
+                </a>{% endif %}
               </div>
             </div>
           </div>
 
-          <div class="sidebar-section sidebar-section--standalone">
-            <div class="sidebar-section__label">Asistencia</div>
+          <div class="sidebar-section sidebar-accordion">
+            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-attendance" aria-expanded="false" aria-controls="module-attendance">
+              <span>Asistencia</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="collapse" id="module-attendance">
             <div class="sidebar-section__body">
               <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary">
-                <span class="side-icon">&#9632;</span><span>Resumen</span>
+                <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Resumen</span>
               </a>
-              <a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance">
-                <span class="side-icon">&#9673;</span><span>Registro de marcaje</span>
-              </a>
+              {% if user.rol in ('Administrador', 'RRHH') %}<a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance">
+                <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#check"></use></svg></span><span>Registro de marcaje</span>
+              </a>{% endif %}
               <a class="side-link {% if active_page == 'attendance_history' %}active{% endif %}" href="/attendance/history">
-                <span class="side-icon">&#9776;</span><span>Historial</span>
+                <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Historial</span>
               </a>
+            </div>
             </div>
           </div>
 
@@ -99,7 +96,7 @@
       <div class="content-area">
         <header class="topbar-wide">
           <div class="top-left">
-            <button class="hamburger" id="sidebarToggle" aria-label="Abrir menú de navegación">☰</button>
+            <button class="hamburger" id="sidebarToggle" aria-label="Abrir menú de navegación"><svg class="icon"><use href="/static/img/icons.svg#menu"></use></svg></button>
             <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
           </div>
           
@@ -119,8 +116,7 @@
               </a>
               <form action="/logout" method="post" id="logoutForm">
                 <button type="submit" class="profile-logout">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>Cerrar sesión</span>
+                  <svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#logout"></use></svg>
                 </button>
               </form>
             </div>
@@ -139,12 +135,12 @@
     </div>
 
     <!-- JS Scripts (Secuencia síncrona al pie de página para prevenir conflictos de 'backdrop') -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/main.js?v=1.0"></script>
-    <script>
+    <script src="/static/js/main.js?v=2.0"></script>
+    <script nonce="{{ csp_nonce }}">
       document.addEventListener('DOMContentLoaded', async () => {
-        document.getElementById('logoutForm')?.addEventListener('submit', (event) => {
-          if (!window.confirm('¿Seguro que deseas cerrar sesión?')) event.preventDefault();
+        document.getElementById('logoutForm')?.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          if (await window.AppUI.confirm('¿Seguro que deseas cerrar sesión?')) event.currentTarget.submit();
         });
 
         const statusTag = document.getElementById('db-connect-status');
@@ -175,6 +171,7 @@
         }
       });
     </script>
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     {% block scripts %}{% endblock %}
   </body>
 </html>

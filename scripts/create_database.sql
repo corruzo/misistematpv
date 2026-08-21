@@ -29,13 +29,14 @@ IF OBJECT_ID('dbo.departamentos', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.departamentos (
         id INT IDENTITY(1,1) PRIMARY KEY,
-        nombre NVARCHAR(150) NOT NULL UNIQUE,
+        nombre NVARCHAR(150) NOT NULL,
         descripcion NVARCHAR(500) NULL,
         estado NVARCHAR(20) NOT NULL DEFAULT 'Activo',
         fecha_creacion DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
         gerencia_id INT NOT NULL,
         CONSTRAINT FK_departamentos_gerencias FOREIGN KEY (gerencia_id) REFERENCES dbo.gerencias(id) ON DELETE NO ACTION,
-        CONSTRAINT CK_departamentos_estado CHECK (estado IN ('Activo', 'Inactivo'))
+        CONSTRAINT CK_departamentos_estado CHECK (estado IN ('Activo', 'Inactivo')),
+        CONSTRAINT UX_departamentos_gerencia_nombre UNIQUE (gerencia_id, nombre)
     );
 END
 GO
@@ -44,14 +45,47 @@ IF OBJECT_ID('dbo.cargos', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.cargos (
         id INT IDENTITY(1,1) PRIMARY KEY,
-        nombre NVARCHAR(150) NOT NULL UNIQUE,
+        nombre NVARCHAR(150) NOT NULL,
         descripcion NVARCHAR(500) NULL,
         estado NVARCHAR(20) NOT NULL DEFAULT 'Activo',
         fecha_creacion DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
         departamento_id INT NOT NULL,
         CONSTRAINT FK_cargos_departamentos FOREIGN KEY (departamento_id) REFERENCES dbo.departamentos(id) ON DELETE NO ACTION,
-        CONSTRAINT CK_cargos_estado CHECK (estado IN ('Activo', 'Inactivo'))
+        CONSTRAINT CK_cargos_estado CHECK (estado IN ('Activo', 'Inactivo')),
+        CONSTRAINT UX_cargos_departamento_nombre UNIQUE (departamento_id, nombre)
     );
+END
+GO
+
+IF OBJECT_ID('dbo.departamentos', 'U') IS NOT NULL
+BEGIN
+        DECLARE @departamento_unique_constraint NVARCHAR(256);
+        SELECT TOP 1 @departamento_unique_constraint = QUOTENAME(i.name)
+        FROM sys.indexes i
+        JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.object_id = OBJECT_ID('dbo.departamentos') AND i.is_unique = 1 AND i.is_unique_constraint = 1
+            AND c.name = 'nombre';
+        IF @departamento_unique_constraint IS NOT NULL
+                EXEC('ALTER TABLE dbo.departamentos DROP CONSTRAINT ' + @departamento_unique_constraint);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_departamentos_gerencia_nombre' AND object_id = OBJECT_ID('dbo.departamentos'))
+                CREATE UNIQUE INDEX UX_departamentos_gerencia_nombre ON dbo.departamentos(gerencia_id, nombre);
+END
+GO
+
+IF OBJECT_ID('dbo.cargos', 'U') IS NOT NULL
+BEGIN
+        DECLARE @cargo_unique_constraint NVARCHAR(256);
+        SELECT TOP 1 @cargo_unique_constraint = QUOTENAME(i.name)
+        FROM sys.indexes i
+        JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.object_id = OBJECT_ID('dbo.cargos') AND i.is_unique = 1 AND i.is_unique_constraint = 1
+            AND c.name = 'nombre';
+        IF @cargo_unique_constraint IS NOT NULL
+                EXEC('ALTER TABLE dbo.cargos DROP CONSTRAINT ' + @cargo_unique_constraint);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_cargos_departamento_nombre' AND object_id = OBJECT_ID('dbo.cargos'))
+                CREATE UNIQUE INDEX UX_cargos_departamento_nombre ON dbo.cargos(departamento_id, nombre);
 END
 GO
 
@@ -109,7 +143,7 @@ BEGIN
 END
 GO
 
--- 4) Usuarios del sistema (rol único inicial: Administrador)
+-- 4) Usuarios del sistema
 IF OBJECT_ID('dbo.usuarios', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.usuarios (
@@ -121,9 +155,21 @@ BEGIN
         activo BIT NOT NULL DEFAULT 1,
         fecha_creacion DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
         ultimo_acceso DATETIME2 NULL,
-        CONSTRAINT CK_usuarios_rol CHECK (rol = 'Administrador')
+        CONSTRAINT CK_usuarios_rol CHECK (rol IN ('Administrador', 'RRHH', 'Consulta'))
     );
 END
+GO
+
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_usuarios_rol' AND parent_object_id = OBJECT_ID('dbo.usuarios'))
+BEGIN
+    ALTER TABLE dbo.usuarios DROP CONSTRAINT CK_usuarios_rol;
+END
+GO
+
+UPDATE dbo.usuarios SET rol = 'Administrador' WHERE rol IS NULL OR rol NOT IN ('Administrador', 'RRHH', 'Consulta');
+GO
+
+ALTER TABLE dbo.usuarios ADD CONSTRAINT CK_usuarios_rol CHECK (rol IN ('Administrador', 'RRHH', 'Consulta'));
 GO
 
 -- 5) Sesiones de inicio de sesión; solo se guarda el hash del token
@@ -139,5 +185,23 @@ BEGIN
     );
     CREATE INDEX IX_sesiones_usuario_user_id ON dbo.sesiones_usuario(user_id);
     CREATE INDEX IX_sesiones_usuario_expires_at ON dbo.sesiones_usuario(expires_at);
+END
+GO
+
+IF OBJECT_ID('dbo.auditoria', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.auditoria (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        usuario_id INT NULL,
+        accion NVARCHAR(50) NOT NULL,
+        entidad NVARCHAR(50) NOT NULL,
+        entidad_id INT NULL,
+        datos_antes NVARCHAR(MAX) NULL,
+        datos_despues NVARCHAR(MAX) NULL,
+        fecha DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_auditoria_usuario FOREIGN KEY (usuario_id) REFERENCES dbo.usuarios(id) ON DELETE NO ACTION
+    );
+    CREATE INDEX IX_auditoria_usuario_fecha ON dbo.auditoria(usuario_id, fecha DESC);
+    CREATE INDEX IX_auditoria_entidad_fecha ON dbo.auditoria(entidad, entidad_id, fecha DESC);
 END
 GO

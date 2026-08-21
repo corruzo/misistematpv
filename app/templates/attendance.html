@@ -5,28 +5,24 @@
 
 {% block content %}
 <div class="attendance-page">
+  <div class="section-header attendance-inspector-toolbar">
+    <div><p class="eyebrow">Operación del inspector</p><h2>Marcaje manual</h2></div>
+    <a class="btn-ios primary" href="/attendance/kiosk" target="_blank" rel="noopener">Abrir pantalla kiosco</a>
+  </div>
   <section class="attendance-hero">
     <div>
-      <h2>Registrar marcaje</h2>
-      <p>Emulador del HID ProxPro 5352a</p>
+      <h2>Registrar asistencia</h2>
+      <p>Usa el registro manual cuando una persona no tenga tarjeta disponible.</p>
     </div>
     <div class="attendance-live-indicator"><span></span>Listo para leer</div>
   </section>
 
   <section class="card attendance-capture-card">
     <div class="attendance-mode-tabs" role="tablist">
-      <button class="attendance-mode-tab active" type="button" data-mode="rfid">Lector RFID</button>
-      <button class="attendance-mode-tab" type="button" data-mode="manual">Marcaje manual</button>
+      <button class="attendance-mode-tab active" type="button" data-mode="manual">Marcaje manual</button>
+      <a class="attendance-mode-tab attendance-mode-tab--link" href="/attendance/kiosk" target="_blank" rel="noopener">Pantalla kiosco</a>
     </div>
-    <form id="attendanceScanForm" class="attendance-scan-form">
-      <label class="form-label" for="attendanceCardCode">Código de tarjeta</label>
-      <div class="attendance-input-row">
-        <input id="attendanceCardCode" class="form-control attendance-card-input" autocomplete="off" inputmode="numeric" placeholder="Esperando lectura RFID..." required autofocus>
-        <button class="btn-ios primary" type="submit">Registrar</button>
-      </div>
-      <p class="form-text">En desarrollo, escribe el código para simular el lector. En producción llegará desde el puerto COM.</p>
-    </form>
-    <form id="attendanceManualForm" class="attendance-scan-form d-none">
+    <form id="attendanceManualForm" class="attendance-scan-form">
       <label class="form-label" for="attendanceEmployee">Empleado</label>
       <div class="attendance-input-row"><select id="attendanceEmployee" class="form-select" required><option value="">Selecciona un empleado</option></select><button class="btn-ios primary" type="submit">Registrar</button></div>
       <p class="form-text">El marcaje manual queda identificado como MANUAL_ADMIN.</p>
@@ -40,7 +36,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('attendanceScanForm');
     const manualForm = document.getElementById('attendanceManualForm');
@@ -56,6 +52,12 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar el marcaje.');
       renderResult(payload);
+    };
+    const loadManualEmployees = async () => {
+      const response = await fetch('/api/employees?limit=100');
+      if (!response.ok) throw new Error('No se pudo cargar la lista de empleados.');
+      const data = await response.json();
+      document.getElementById('attendanceEmployee').innerHTML = '<option value="">Selecciona un empleado</option>' + data.items.filter((item) => item.estado === 'Activo').map((item) => `<option value="${item.id}">${item.nombre_apellido} · ${item.cedula}</option>`).join('');
     };
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -77,7 +79,8 @@
       }
     });
     manualForm?.addEventListener('submit', async (event) => { event.preventDefault(); const button = manualForm.querySelector('button'); button.disabled = true; try { await submitPayload('/api/attendance/manual-mark', { empleado_id: Number(document.getElementById('attendanceEmployee').value) }); } catch (error) { result.className = 'attendance-result attendance-result--error'; result.innerHTML = `<span class="attendance-result__icon">!</span><div><strong>No se registró</strong><span>${error.message}</span></div>`; } finally { button.disabled = false; } });
-    document.querySelectorAll('.attendance-mode-tab').forEach((tab) => tab.addEventListener('click', async () => { document.querySelectorAll('.attendance-mode-tab').forEach((item) => item.classList.toggle('active', item === tab)); const manual = tab.dataset.mode === 'manual'; form.classList.toggle('d-none', manual); manualForm.classList.toggle('d-none', !manual); if (manual) { const response = await fetch('/api/employees?limit=100'); const data = await response.json(); document.getElementById('attendanceEmployee').innerHTML = '<option value="">Selecciona un empleado</option>' + data.items.filter((item) => item.estado === 'Activo').map((item) => `<option value="${item.id}">${item.nombre_apellido} · ${item.cedula}</option>`).join(''); } else { input.focus(); } }));
+    document.querySelectorAll('.attendance-mode-tab').forEach((tab) => tab.addEventListener('click', async () => { document.querySelectorAll('.attendance-mode-tab').forEach((item) => item.classList.toggle('active', item === tab)); const manual = tab.dataset.mode === 'manual'; form.classList.toggle('d-none', manual); manualForm.classList.toggle('d-none', !manual); if (manual) { try { await loadManualEmployees(); } catch (error) { window.AppUI.toast(error.message, 'error'); } } else { input.focus(); } }));
+    loadManualEmployees().catch((error) => window.AppUI.toast(error.message, 'error'));
   });
 </script>
 {% endblock %}

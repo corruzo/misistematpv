@@ -1,6 +1,6 @@
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import text
@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.core.auth import require_page_user
+from app.core.auth import require_admin, require_employee_manager, require_page_user, require_read_access
 from app.schemas.employee import EmpleadoCreate, EmpleadoOut, EmpleadoUpdate
 from app.schemas.organization import GerenciaCreate, DepartamentoCreate, CargoCreate, OrganizationStatusUpdate
 from app.services.employee_service import (
@@ -49,26 +49,26 @@ templates_env = Environment(
 
 
 @router.get('/employees')
-def employees_page(user=Depends(require_page_user)):
+def employees_page(request: Request, user=Depends(require_employee_manager)):
     tpl = templates_env.get_template('employees.html')
-    content = tpl.render(active_page='employees', user=user)
+    content = tpl.render(active_page='employees', user=user, csp_nonce=request.state.csp_nonce)
     return HTMLResponse(content)
 
 
 @router.get('/organization')
-def organization_page(user=Depends(require_page_user)):
+def organization_page(request: Request, user=Depends(require_admin)):
     tpl = templates_env.get_template('organization.html')
-    content = tpl.render(active_page='organization', user=user)
+    content = tpl.render(active_page='organization', user=user, csp_nonce=request.state.csp_nonce)
     return HTMLResponse(content)
 
 
 @router.get('/api/organization')
-def api_get_organization(db: Session = Depends(get_db)):
+def api_get_organization(db: Session = Depends(get_db), _user=Depends(require_read_access)):
     return get_organization_tree(db)
 
 
 @router.get('/api/system/status')
-def api_get_system_status(db: Session = Depends(get_db)):
+def api_get_system_status(db: Session = Depends(get_db), _user=Depends(require_read_access)):
     try:
         db.execute(text('SELECT 1'))
         return {'connected': True, 'message': 'Base de datos conectada'}
@@ -77,7 +77,7 @@ def api_get_system_status(db: Session = Depends(get_db)):
 
 
 @router.get('/api/employees/{emp_id}')
-def api_get_employee_by_id_route(emp_id: int, db: Session = Depends(get_db)):
+def api_get_employee_by_id_route(emp_id: int, db: Session = Depends(get_db), _user=Depends(require_read_access)):
     emp = get_employee_by_id(db, emp_id)
     if not emp:
         raise HTTPException(status_code=404, detail='Empleado no encontrado')
@@ -85,59 +85,59 @@ def api_get_employee_by_id_route(emp_id: int, db: Session = Depends(get_db)):
 
 
 @router.get('/api/dashboard/metrics')
-def api_get_dashboard_metrics(db: Session = Depends(get_db)):
+def api_get_dashboard_metrics(db: Session = Depends(get_db), _user=Depends(require_read_access)):
     return get_employee_metrics(db)
 
 
 @router.post('/api/organization/gerencias')
-def api_create_gerencia_route(payload: GerenciaCreate, db: Session = Depends(get_db)):
+def api_create_gerencia_route(payload: GerenciaCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return create_gerencia(db, payload)
+        return create_gerencia(db, payload, _admin.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise organization_error(exc)
 
 
 @router.post('/api/organization/departamentos')
-def api_create_departamento_route(payload: DepartamentoCreate, db: Session = Depends(get_db)):
+def api_create_departamento_route(payload: DepartamentoCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return create_departamento(db, payload)
+        return create_departamento(db, payload, _admin.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise organization_error(exc)
 
 
 @router.post('/api/organization/cargos')
-def api_create_cargo_route(payload: CargoCreate, db: Session = Depends(get_db)):
+def api_create_cargo_route(payload: CargoCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return create_cargo(db, payload)
+        return create_cargo(db, payload, _admin.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise organization_error(exc)
 
 
 @router.patch('/api/organization/gerencias/{gerencia_id}/status')
-def api_update_gerencia_status(gerencia_id: int, payload: OrganizationStatusUpdate, db: Session = Depends(get_db)):
+def api_update_gerencia_status(gerencia_id: int, payload: OrganizationStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return set_organization_state(db, Gerencia, gerencia_id, payload.estado)
+        return set_organization_state(db, Gerencia, gerencia_id, payload.estado, _admin.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise organization_error(exc)
 
 
 @router.patch('/api/organization/departamentos/{departamento_id}/status')
-def api_update_departamento_status(departamento_id: int, payload: OrganizationStatusUpdate, db: Session = Depends(get_db)):
+def api_update_departamento_status(departamento_id: int, payload: OrganizationStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return set_organization_state(db, Departamento, departamento_id, payload.estado)
+        return set_organization_state(db, Departamento, departamento_id, payload.estado, _admin.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise organization_error(exc)
 
 
 @router.patch('/api/organization/cargos/{cargo_id}/status')
-def api_update_cargo_status(cargo_id: int, payload: OrganizationStatusUpdate, db: Session = Depends(get_db)):
+def api_update_cargo_status(cargo_id: int, payload: OrganizationStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
     try:
-        return set_organization_state(db, Cargo, cargo_id, payload.estado)
+        return set_organization_state(db, Cargo, cargo_id, payload.estado, _admin.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         raise organization_error(exc)
@@ -152,7 +152,7 @@ def api_get_employees(
     tipo_nomina: Optional[str] = None,
     limit: int = Query(100, ge=1, le=100),
     offset: int = Query(0, ge=0, le=1_000_000),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), _user=Depends(require_read_access)
 ):
     emps = search_employees(
         db,
@@ -188,7 +188,7 @@ async def api_create_employee(
     estado: str = Form('Activo'),
     tipo_nomina: Optional[str] = Form(None),
     foto: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), _manager=Depends(require_employee_manager)
 ):
     payload = EmpleadoCreate(
         cedula=cedula,
@@ -205,7 +205,7 @@ async def api_create_employee(
         tipo_nomina=tipo_nomina,
     )
     try:
-        emp = create_employee(db, payload, foto)
+        emp = create_employee(db, payload, foto, _manager.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         if isinstance(exc, IntegrityError):
@@ -230,7 +230,7 @@ async def api_update_employee(
     tipo_nomina: Optional[str] = Form(None),
     foto: Optional[UploadFile] = File(None),
     eliminar_foto: bool = Form(False),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), _manager=Depends(require_employee_manager)
 ):
     emp = get_employee_by_id(db, emp_id)
     if not emp:
@@ -249,7 +249,7 @@ async def api_update_employee(
         tipo_nomina=tipo_nomina,
     )
     try:
-        emp = update_employee(db, emp, updates, foto, eliminar_foto=eliminar_foto)
+        emp = update_employee(db, emp, updates, foto, eliminar_foto=eliminar_foto, usuario_id=_manager.id)
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
         db.rollback()
         if isinstance(exc, IntegrityError):
@@ -259,12 +259,12 @@ async def api_update_employee(
 
 
 @router.patch('/api/employees/{emp_id}/disable')
-def api_disable_employee(emp_id: int, db: Session = Depends(get_db)):
+def api_disable_employee(emp_id: int, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
     emp = get_employee_by_id(db, emp_id)
     if not emp:
         raise HTTPException(status_code=404, detail='Empleado no encontrado')
     try:
-        emp = soft_delete_employee(db, emp)
+        emp = soft_delete_employee(db, emp, _manager.id)
     except SQLAlchemyError as exc:
         db.rollback()
         raise organization_error(exc)

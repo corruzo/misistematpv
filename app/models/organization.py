@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.models.employee import Base
+from app.models.base import Base
 
 
 class Gerencia(Base):
@@ -17,9 +17,10 @@ class Gerencia(Base):
 
 class Departamento(Base):
     __tablename__ = 'departamentos'
+    __table_args__ = (UniqueConstraint('gerencia_id', 'nombre', name='UX_departamentos_gerencia_nombre'),)
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    nombre = Column(String(150), unique=True, nullable=False, index=True)
+    nombre = Column(String(150), nullable=False, index=True)
     descripcion = Column(String(500), nullable=True)
     estado = Column(String(20), nullable=False, default='Activo', server_default='Activo')
     fecha_creacion = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -30,9 +31,10 @@ class Departamento(Base):
 
 class Cargo(Base):
     __tablename__ = 'cargos'
+    __table_args__ = (UniqueConstraint('departamento_id', 'nombre', name='UX_cargos_departamento_nombre'),)
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    nombre = Column(String(150), unique=True, nullable=False, index=True)
+    nombre = Column(String(150), nullable=False, index=True)
     descripcion = Column(String(500), nullable=True)
     estado = Column(String(20), nullable=False, default='Activo', server_default='Activo')
     fecha_creacion = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
