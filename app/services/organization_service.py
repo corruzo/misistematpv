@@ -18,34 +18,6 @@ def normalize_organization_state(value: Optional[str]) -> str:
     raise ValueError('El estado debe ser Activo o Inactivo.')
 
 
-def ensure_default_organization(db: Session):
-    if db.query(Gerencia).count() > 0:
-        return get_organization_tree(db)
-
-    gerencia_rrhh = create_gerencia(db, GerenciaCreate(nombre='Gerencia de Recursos Humanos', descripcion='Apoya la estructura corporativa y la administración del personal.', estado='Activo'))
-    rrhh = db.query(Gerencia).filter(Gerencia.id == gerencia_rrhh['id']).first()
-    rrhh_departamentos = [
-        'Departamento de Recursos Humanos',
-        'Departamento de Sistemas',
-        'Departamento de Seguridad y Salud en el Trabajo (SST)',
-    ]
-
-    for nombre in rrhh_departamentos:
-        descripcion = 'Departamento operativo de la gerencia.'
-        departamento = create_departamento(db, DepartamentoCreate(nombre=nombre, descripcion=descripcion, estado='Activo', gerencia_id=rrhh.id))
-        dep = db.query(Departamento).filter(Departamento.id == departamento['id']).first()
-        if nombre == 'Departamento de Recursos Humanos':
-            cargos = [('Analista de RR. HH.', 'Atiende procesos de personal y nómina'), ('Especialista en Selección', ' Gestiona reclutamiento y contratación'), ('Coordinador de Personal', 'Coordina acciones de personal')] 
-        elif nombre == 'Departamento de Sistemas':
-            cargos = [('Analista de Sistemas', 'Administra sistemas y soluciones de negocio'), ('Desarrollador', 'Implementa mejoras y nuevos módulos'), ('Soporte Técnico', 'Resuelve incidencias de sistemas')] 
-        else:
-            cargos = [('Inspector SST', 'Supervisa cumplimiento de seguridad'), ('Especialista en Seguridad', 'Apoya control de riesgos'), ('Coordinador SST', 'Coordina actividades del área')] 
-        for cargo_nombre, carg_desc in cargos:
-            create_cargo(db, CargoCreate(nombre=cargo_nombre, descripcion=carg_desc, estado='Activo', departamento_id=dep.id))
-
-    return get_organization_tree(db)
-
-
 def get_organization_tree(db: Session):
     gerencias = db.query(Gerencia).order_by(Gerencia.nombre.asc()).all()
     result = []

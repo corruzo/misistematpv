@@ -5,6 +5,7 @@ from app.core.enums import EstadoEmpleado
 from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado
 from app.schemas.attendance import AttendanceOrigin, AttendanceType
+from app.schemas.attendance import AttendanceManualBatchRequest
 from app.services.attendance_service import AttendanceError, register_manual, register_scan
 
 
@@ -89,6 +90,26 @@ class AttendanceServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(AttendanceError, 'Lectura duplicada'):
             register_manual(db, 1)
 
+    def test_manual_accepts_past_time(self):
+        db = DatabaseDouble(self.make_employee())
+        marked_at = datetime.now(timezone.utc) - timedelta(hours=2)
+
+        result = register_manual(db, 1, marked_at=marked_at)
+
+        self.assertEqual(result.tipo, AttendanceType.ENTRADA)
+        self.assertEqual(db.records[0].fecha_hora, marked_at)
+
+    def test_manual_rejects_future_time(self):
+        db = DatabaseDouble(self.make_employee())
+        marked_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+
+        with self.assertRaisesRegex(AttendanceError, 'no puede ser futura'):
+            register_manual(db, 1, marked_at=marked_at)
+
+    def test_manual_batch_rejects_duplicate_employee(self):
+        with self.assertRaises(ValueError):
+            AttendanceManualBatchRequest(marcajes=[{'empleado_id': 1}, {'empleado_id': 1}])
+
     def test_inactive_employee_and_unknown_card_are_rejected(self):
         inactive_db = DatabaseDouble(self.make_employee(EstadoEmpleado.Retirado))
         with self.assertRaisesRegex(AttendanceError, 'no está activo'):
@@ -97,7 +118,7 @@ class AttendanceServiceTest(unittest.TestCase):
         unknown_db = DatabaseDouble(self.make_employee())
         unknown_db.employees[0].codigo_tarjeta = 'OTHER'
         with self.assertRaisesRegex(AttendanceError, 'Tarjeta no asociada'):
-            register_scan(unknown_db, 'RFID-1', AttendanceOrigin.SIMULADOR_DEV)
+            register_scan(unknown_db, 'RFID-1', AttendanceOrigin.PUERTO_COM)
 
 
 if __name__ == '__main__':

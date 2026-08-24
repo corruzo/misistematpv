@@ -43,8 +43,17 @@
       const toast = document.createElement('div');
       toast.className = `app-toast app-toast--${type}`;
       toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-      toast.innerHTML = `<span aria-hidden="true">${type === 'error' ? '!' : type === 'success' ? '✓' : 'i'}</span><span>${String(message)}</span><button type="button" aria-label="Cerrar notificación">×</button>`;
-      toast.querySelector('button').addEventListener('click', () => toast.remove());
+      const icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = type === 'error' ? '!' : type === 'success' ? 'OK' : 'i';
+      const content = document.createElement('span');
+      content.textContent = String(message);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Cerrar notificación');
+      close.textContent = 'x';
+      toast.append(icon, content, close);
+      close.addEventListener('click', () => toast.remove());
       region.appendChild(toast);
       window.setTimeout(() => toast.remove(), 5000);
     },

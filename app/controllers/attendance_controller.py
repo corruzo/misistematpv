@@ -4,13 +4,12 @@ from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_admin, require_employee_manager, require_page_user, require_read_access, require_user
-from app.core.config import APP_ENV, STATIC_DIR
+from app.core.auth import require_employee_manager, require_page_user, require_read_access, require_user
+from app.core.config import STATIC_DIR
 from app.database.session import get_db
-from app.schemas.attendance import AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest
-from app.services.attendance_service import AttendanceError, attendance_summary, list_attendance, list_present_employees, register_manual, register_scan
+from app.schemas.attendance import AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest
+from app.services.attendance_service import AttendanceError, attendance_summary, get_attendance_since, list_attendance, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan
 from app.services.organization_service import get_organization_tree
-from app.services.card_reader import SimulatedCardReader
 
 
 router = APIRouter()
@@ -44,17 +43,6 @@ def attendance_summary_page(request: Request, user=Depends(require_page_user)):
     return HTMLResponse(template.render(active_page='attendance_summary', user=user, csp_nonce=request.state.csp_nonce))
 
 
-@router.post('/api/attendance/simulate-scan')
-def simulate_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
-    if APP_ENV != 'development':
-        raise HTTPException(status_code=404, detail='Recurso no disponible.')
-    try:
-        reader = SimulatedCardReader(payload.codigo_tarjeta)
-        return register_scan(db, reader.read_card_code(), AttendanceOrigin.SIMULADOR_DEV)
-    except AttendanceError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-
-
 @router.post('/api/attendance/kiosk-scan')
 def kiosk_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _user=Depends(require_user)):
     try:
@@ -64,11 +52,21 @@ def kiosk_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _u
 
 
 @router.post('/api/attendance/manual-mark')
-def manual_mark(payload: AttendanceManualRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+def manual_mark(payload: AttendanceManualRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
     try:
-        return register_manual(db, payload.empleado_id, _admin.id)
+        return register_manual(db, payload.empleado_id, _manager.id, payload.fecha_hora)
     except AttendanceError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.post('/api/attendance/manual-mark/batch')
+def manual_mark_batch(payload: AttendanceManualBatchRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
+    return register_manual_batch(db, payload.marcajes, _manager.id)
+
+
+@router.post('/api/attendance/manual-mark/preview')
+def manual_mark_preview(payload: AttendanceManualBatchRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
+    return {'types': preview_manual_batch(db, payload.marcajes)}
 
 
 @router.get('/api/attendance/history')
@@ -90,6 +88,15 @@ def attendance_summary_route(db: Session = Depends(get_db), _user=Depends(requir
 @router.get('/api/attendance/present')
 def attendance_present_route(db: Session = Depends(get_db), _user=Depends(require_read_access)):
     return list_present_employees(db)
+
+
+@router.get('/api/attendance/latest')
+def attendance_latest_route(
+    after_id: int | None = Query(None, ge=0),
+    db: Session = Depends(get_db), _user=Depends(require_read_access),
+):
+    records = get_attendance_since(db, after_id, AttendanceOrigin.PUERTO_COM)
+    return {'items': records, 'item': records[-1] if records else None}
 
 
 @router.get('/api/attendance/filter-options')

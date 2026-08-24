@@ -19,11 +19,11 @@ except ZoneInfoNotFoundError:
         LOCAL_TIMEZONE = timezone(timedelta(hours=-4), 'America/Caracas')
     else:
         raise RuntimeError(f'Zona horaria inválida o tzdata ausente en APP_TIMEZONE: {APP_TIMEZONE}')
-COOKIE_SECURE = os.getenv('COOKIE_SECURE', 'true' if APP_ENV == 'production' else 'false').lower() in ('1', 'true', 'yes')
+COOKIE_SECURE = APP_ENV == 'production' or os.getenv('COOKIE_SECURE', 'false').lower() in ('1', 'true', 'yes')
 TRUST_SERVER_CERTIFICATE = os.getenv('TRUST_SERVER_CERTIFICATE', 'false' if APP_ENV == 'production' else 'true').lower() in ('1', 'true', 'yes')
 CSRF_ALLOWED_ORIGINS = tuple(
     origin.strip().rstrip('/')
-    for origin in os.getenv('CSRF_ALLOWED_ORIGINS', 'http://127.0.0.1:8000,http://localhost:8000').split(',')
+    for origin in os.getenv('CSRF_ALLOWED_ORIGINS', '' if APP_ENV == 'production' else 'http://127.0.0.1:8000,http://localhost:8000').split(',')
     if origin.strip()
 )
 

@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Kiosco de marcaje - MarcajeTPV</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.4">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.5">
 </head>
 <body class="kiosk-page">
   <main class="kiosk-shell" aria-live="polite">
-    <header class="kiosk-brand"><span class="kiosk-brand__mark">M</span><strong>MarcajeTPV</strong><span>Kiosco de acceso</span></header>
+    <header class="kiosk-brand"><span class="kiosk-brand__mark">M</span><strong>MarcajeTPV</strong></header>
+    <div class="kiosk-clock" id="kioskClock" aria-label="Hora actual">00:00:00</div>
     <section class="kiosk-stage" id="kioskStage">
       <div class="kiosk-waiting" id="kioskWaiting">
-        <div class="kiosk-reader-icon">RFID</div>
-        <p class="eyebrow">Control de acceso</p>
+        <div class="kiosk-reader-icon">TPV</div>
         <h1>Acerca tu tarjeta al lector</h1>
         <p>El sistema registrará automáticamente tu entrada o salida.</p>
       </div>
@@ -30,7 +30,6 @@
         <input id="kioskCardCode" autocomplete="off" inputmode="numeric" aria-label="Lector de tarjeta" autofocus>
       </form>
     </section>
-    <footer class="kiosk-footer">Sistema de control de presencia</footer>
   </main>
   <script nonce="{{ csp_nonce }}">
   (() => {
@@ -40,9 +39,62 @@
     const result = document.getElementById('kioskResult');
     const feedback = document.getElementById('kioskFeedback');
     let busy = false;
+    let latestEventId = 0;
+    let pollTimer = null;
+    let pollingInitialized = false;
+    const eventQueue = [];
+    let displayingEvent = false;
+    let lastDisplayedEventId = 0;
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     const keepFocus = () => { if (document.activeElement !== input) input.focus(); };
     const reset = () => { result.classList.add('d-none'); waiting.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
+    const showResult = (payload) => {
+      if (!payload) return;
+      if (Number(payload.id) === lastDisplayedEventId) return;
+      lastDisplayedEventId = Number(payload.id) || lastDisplayedEventId;
+      latestEventId = Math.max(latestEventId, Number(payload.id) || 0);
+      waiting.classList.add('d-none');
+      result.classList.remove('d-none');
+      document.getElementById('kioskPhoto').src = payload.foto_url ? `/static/${encodeURIComponent(payload.foto_url)}` : '/static/img/default-avatar.svg';
+      document.getElementById('kioskEventLabel').textContent = payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada';
+      document.getElementById('kioskEmployeeName').textContent = payload.empleado_nombre || 'Empleado';
+      document.getElementById('kioskArea').textContent = `${payload.gerencia || 'Sin gerencia'} · ${payload.departamento || 'Sin departamento'}`;
+      document.getElementById('kioskTime').textContent = new Date(payload.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      window.setTimeout(reset, 8000);
+    };
+    const displayNextEvent = () => {
+      if (displayingEvent || !eventQueue.length) return;
+      displayingEvent = true;
+      showResult(eventQueue.shift());
+      window.setTimeout(() => {
+        reset();
+        displayingEvent = false;
+        displayNextEvent();
+      }, 8000);
+    };
+    const pollLatestAttendance = async () => {
+      try {
+        const response = await fetch(`/api/attendance/latest?after_id=${latestEventId}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const items = Array.isArray(payload.items) ? payload.items : (payload.item ? [payload.item] : []);
+        if (items.length) {
+          if (pollingInitialized) {
+            items.forEach((item) => eventQueue.push(item));
+            displayNextEvent();
+          } else {
+            latestEventId = Number(items[items.length - 1].id) || 0;
+          }
+        }
+        pollingInitialized = true;
+      } catch (error) {
+        // El kiosco sigue listo para leer aunque el servidor esté temporalmente ocupado.
+      }
+      pollTimer = window.setTimeout(pollLatestAttendance, 1500);
+    };
+    const updateClock = () => {
+      document.getElementById('kioskClock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const code = input.value.trim();
@@ -53,19 +105,16 @@
         const response = await fetch('/api/attendance/kiosk-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo_tarjeta: code }) });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar el marcaje.');
-        waiting.classList.add('d-none'); result.classList.remove('d-none');
-        document.getElementById('kioskPhoto').src = payload.foto_url ? `/static/${encodeURIComponent(payload.foto_url)}` : '/static/img/default-avatar.svg';
-        document.getElementById('kioskEventLabel').textContent = payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada';
-        document.getElementById('kioskEmployeeName').textContent = payload.empleado_nombre || 'Empleado';
-        document.getElementById('kioskArea').textContent = `${payload.gerencia || 'Sin gerencia'} · ${payload.departamento || 'Sin departamento'}`;
-        document.getElementById('kioskTime').textContent = new Date(payload.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        window.setTimeout(reset, 8000);
+        showResult(payload);
       } catch (error) { feedback.textContent = error.message; window.setTimeout(() => { feedback.textContent = ''; }, 5000); }
       finally { busy = false; input.value = ''; keepFocus(); }
     });
     document.addEventListener('click', keepFocus);
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') event.preventDefault(); });
     keepFocus();
+    updateClock();
+    window.setInterval(updateClock, 1000);
+    pollLatestAttendance();
   })();
   </script>
 </body>

@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 from sqlalchemy.orm import Session
@@ -231,8 +230,6 @@ def get_employee_metrics(db: Session):
 
     activos = estado_counts['Activo']
     inactivos = sum(value for key, value in estado_counts.items() if key != 'Activo')
-    today = datetime.utcnow()
-
     latest_employee = db.query(Empleado).order_by(Empleado.fecha_creacion.desc()).first()
     latest_employee_label = latest_employee.fecha_creacion.strftime('%d/%m/%Y') if latest_employee and latest_employee.fecha_creacion else 'Sin registros'
     latest_activity = {

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 
@@ -9,7 +9,7 @@ from app.models.employee import Empleado, EstadoEnum
 from app.models.organization import Departamento
 from app.schemas.attendance import AttendanceHistoryPage, AttendanceOrigin, AttendanceRecordOut, AttendanceSummary, AttendanceType
 from app.services.audit_service import add_audit
-from app.core.datetime_utils import local_day_start_as_utc, to_local, utc_now
+from app.core.datetime_utils import LOCAL_TIMEZONE, as_utc, local_day_start_as_utc, to_local, utc_now
 
 
 DEBOUNCE_SECONDS = 60
@@ -19,14 +19,28 @@ class AttendanceError(ValueError):
     pass
 
 
-def _register_employee(db: Session, employee: Empleado, origen: AttendanceOrigin, usuario_id: int | None = None) -> AttendanceRecordOut:
+def _register_employee(
+    db: Session,
+    employee: Empleado,
+    origen: AttendanceOrigin,
+    usuario_id: int | None = None,
+    marked_at: datetime | None = None,
+) -> AttendanceRecordOut:
+    employee_query = db.query(Empleado).filter(Empleado.id == employee.id)
+    with_hint = getattr(employee_query, 'with_hint', None)
+    if with_hint:
+        locked_employee = with_hint(Empleado, 'WITH (UPDLOCK, ROWLOCK)', 'mssql').populate_existing().first()
+        if locked_employee:
+            employee = locked_employee
     if employee.estado != EstadoEnum.Activo:
         raise AttendanceError('El empleado no está activo.')
 
-    now = utc_now()
+    now = as_utc(marked_at or utc_now())
+    if now > utc_now():
+        raise AttendanceError('La hora del marcaje no puede ser futura.')
     last_record = (
         db.query(AttendanceRecord)
-        .filter(AttendanceRecord.empleado_id == employee.id)
+        .filter(AttendanceRecord.empleado_id == employee.id, AttendanceRecord.fecha_hora <= now)
         .order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc())
         .first()
     )
@@ -70,11 +84,68 @@ def register_scan(db: Session, codigo_tarjeta: str, origen: AttendanceOrigin) ->
     return _register_employee(db, employee, origen)
 
 
-def register_manual(db: Session, empleado_id: int, usuario_id: int | None = None) -> AttendanceRecordOut:
+def register_manual(
+    db: Session,
+    empleado_id: int,
+    usuario_id: int | None = None,
+    marked_at: datetime | None = None,
+) -> AttendanceRecordOut:
     employee = db.query(Empleado).filter(Empleado.id == empleado_id).first()
     if not employee:
         raise AttendanceError('Empleado no encontrado.')
-    return _register_employee(db, employee, AttendanceOrigin.MANUAL_ADMIN, usuario_id)
+    if marked_at is not None and marked_at.tzinfo is None:
+        marked_at = marked_at.replace(tzinfo=LOCAL_TIMEZONE)
+    return _register_employee(db, employee, AttendanceOrigin.MANUAL_ADMIN, usuario_id, marked_at)
+
+
+def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
+    results = []
+    errors = []
+    for mark in marks:
+        try:
+            results.append(register_manual(db, mark.empleado_id, usuario_id, mark.fecha_hora))
+        except AttendanceError as exc:
+            errors.append({'empleado_id': mark.empleado_id, 'detail': str(exc)})
+        except SQLAlchemyError:
+            db.rollback()
+            errors.append({'empleado_id': mark.empleado_id, 'detail': 'No se pudo consultar la base de datos.'})
+    return {'items': results, 'errors': errors}
+
+
+def preview_manual_batch(db: Session, marks):
+    preview = {}
+    for mark in marks:
+        marked_at = mark.fecha_hora
+        if marked_at is not None and marked_at.tzinfo is None:
+            marked_at = marked_at.replace(tzinfo=LOCAL_TIMEZONE)
+        marked_at = as_utc(marked_at or utc_now())
+        last_record = (
+            db.query(AttendanceRecord)
+            .filter(AttendanceRecord.empleado_id == mark.empleado_id, AttendanceRecord.fecha_hora <= marked_at)
+            .order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc())
+            .first()
+        )
+        preview[str(mark.empleado_id)] = (
+            AttendanceType.SALIDA.value if last_record and last_record.tipo == AttendanceType.ENTRADA.value
+            else AttendanceType.ENTRADA.value
+        )
+    return preview
+
+
+def get_attendance_since(
+    db: Session,
+    after_id: int | None = None,
+    origen: AttendanceOrigin | None = None,
+) -> list[AttendanceRecordOut]:
+    query = db.query(AttendanceRecord).options(
+        joinedload(AttendanceRecord.empleado).joinedload(Empleado.departamento_rel),
+        joinedload(AttendanceRecord.empleado).joinedload(Empleado.cargo_rel),
+    ).order_by(AttendanceRecord.id.asc())
+    if after_id is not None:
+        query = query.filter(AttendanceRecord.id > after_id)
+    if origen is not None:
+        query = query.filter(AttendanceRecord.origen == origen.value)
+    return [_to_output(record, record.empleado) for record in query.limit(100).all()]
 
 
 def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=None, date_to=None, empleado_q=None, departamento_ids=None, gerencia_ids=None):
@@ -100,7 +171,9 @@ def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=N
 
 def attendance_summary(db: Session):
     start = local_day_start_as_utc()
-    records_today = db.query(AttendanceRecord).filter(AttendanceRecord.fecha_hora >= start).all()
+    records_today = db.query(AttendanceRecord).filter(AttendanceRecord.fecha_hora >= start).order_by(
+        AttendanceRecord.fecha_hora.asc(), AttendanceRecord.id.asc()
+    ).all()
     last_by_employee = {}
     for record in records_today:
         last_by_employee[record.empleado_id] = record
@@ -133,7 +206,9 @@ def attendance_summary(db: Session):
 
 def list_present_employees(db: Session):
     start = local_day_start_as_utc()
-    records_today = db.query(AttendanceRecord).filter(AttendanceRecord.fecha_hora >= start).all()
+    records_today = db.query(AttendanceRecord).filter(AttendanceRecord.fecha_hora >= start).order_by(
+        AttendanceRecord.fecha_hora.asc(), AttendanceRecord.id.asc()
+    ).all()
     last_by_employee = {}
     for record in records_today:
         last_by_employee[record.empleado_id] = record

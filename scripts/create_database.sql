@@ -137,7 +137,7 @@ BEGIN
         origen NVARCHAR(20) NOT NULL,
         CONSTRAINT FK_marcajes_asistencia_empleados FOREIGN KEY (empleado_id) REFERENCES dbo.empleados(id),
         CONSTRAINT CK_marcajes_asistencia_tipo CHECK (tipo IN ('ENTRADA', 'SALIDA')),
-        CONSTRAINT CK_marcajes_asistencia_origen CHECK (origen IN ('PUERTO_COM', 'MANUAL_ADMIN', 'SIMULADOR_DEV'))
+        CONSTRAINT CK_marcajes_asistencia_origen CHECK (origen IN ('PUERTO_COM', 'MANUAL_ADMIN'))
     );
     CREATE INDEX IX_marcajes_asistencia_empleado_fecha ON dbo.marcajes_asistencia(empleado_id, fecha_hora DESC);
 END

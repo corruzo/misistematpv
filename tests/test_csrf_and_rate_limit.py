@@ -19,6 +19,26 @@ class CsrfAndRateLimitTest(unittest.TestCase):
         response = TestClient(app).post('/change', headers={'Origin': 'https://untrusted.example'})
         self.assertEqual(response.status_code, 403)
 
+    def test_missing_origin_is_rejected_and_get_issues_csrf_cookie(self):
+        app = FastAPI()
+        app.add_middleware(SecurityHeadersMiddleware)
+
+        @app.get('/page')
+        def page():
+            return {'ok': True}
+
+        @app.post('/change')
+        def change():
+            return {'ok': True}
+
+        client = TestClient(app)
+        page_response = client.get('/page')
+        change_response = client.post('/change')
+
+        self.assertEqual(page_response.status_code, 200)
+        self.assertIn('csrftoken=', page_response.headers['set-cookie'])
+        self.assertEqual(change_response.status_code, 403)
+
     def test_allowed_origin_is_accepted(self):
         app = FastAPI()
         app.add_middleware(SecurityHeadersMiddleware)

@@ -119,6 +119,7 @@
         .find(row => row.startsWith('csrftoken='))
         ?.split('=')[1] || '';
     };
+      const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 
     const showMessage = (text, error = false) => {
       message.textContent = text;
@@ -170,14 +171,14 @@
         const tdIdentity = document.createElement('td');
         tdIdentity.className = 'ps-3';
         tdIdentity.innerHTML = `
-          <div class="fw-bold text-dark">${user.nombre}</div>
-          <div class="text-muted small">@${user.username}</div>
+          <div class="fw-bold text-dark">${escapeHtml(user.nombre)}</div>
+          <div class="text-muted small">@${escapeHtml(user.username)}</div>
         `;
 
         // Rol con Badge
         const tdRole = document.createElement('td');
         const roleBadgeClass = user.rol === 'Administrador' ? 'bg-primary' : (user.rol === 'RRHH' ? 'bg-info text-dark' : 'bg-secondary');
-        tdRole.innerHTML = `<span class="badge ${roleBadgeClass}">${user.rol}</span>`;
+        tdRole.innerHTML = `<span class="badge ${roleBadgeClass}">${escapeHtml(user.rol)}</span>`;
 
         // Estado
         const tdStatus = document.createElement('td');
@@ -220,7 +221,7 @@
       } catch (error) {
         list.replaceChildren();
         const row = document.createElement('tr');
-        row.innerHTML = `<td colspan="4" class="text-center py-4 text-danger">${error.message || 'Error al conectar con el servidor.'}</td>`;
+        row.innerHTML = `<td colspan="4" class="text-center py-4 text-danger">${escapeHtml(error.message || 'Error al conectar con el servidor.')}</td>`;
         list.append(row);
       }
     };

@@ -6,26 +6,26 @@
 {% block content %}
 <div class="attendance-page">
   <div class="section-header attendance-inspector-toolbar">
-    <div><p class="eyebrow">Operación del inspector</p><h2>Marcaje manual</h2></div>
+    <div><h2>Marcaje manual</h2></div>
     <a class="btn-ios primary" href="/attendance/kiosk" target="_blank" rel="noopener">Abrir pantalla kiosco</a>
   </div>
-  <section class="attendance-hero">
-    <div>
-      <h2>Registrar asistencia</h2>
-      <p>Usa el registro manual cuando una persona no tenga tarjeta disponible.</p>
-    </div>
-    <div class="attendance-live-indicator"><span></span>Listo para leer</div>
-  </section>
 
   <section class="card attendance-capture-card">
-    <div class="attendance-mode-tabs" role="tablist">
-      <button class="attendance-mode-tab active" type="button" data-mode="manual">Marcaje manual</button>
-      <a class="attendance-mode-tab attendance-mode-tab--link" href="/attendance/kiosk" target="_blank" rel="noopener">Pantalla kiosco</a>
-    </div>
     <form id="attendanceManualForm" class="attendance-scan-form">
-      <label class="form-label" for="attendanceEmployee">Empleado</label>
-      <div class="attendance-input-row"><select id="attendanceEmployee" class="form-select" required><option value="">Selecciona un empleado</option></select><button class="btn-ios primary" type="submit">Registrar</button></div>
-      <p class="form-text">El marcaje manual queda identificado como MANUAL_ADMIN.</p>
+      <label class="form-label" for="attendanceEmployeeSearch">Buscar empleado</label>
+      <input id="attendanceEmployeeSearch" class="form-control" type="search" autocomplete="off" placeholder="Nombre, cédula o tarjeta">
+      <div id="attendanceEmployeeResults" class="attendance-employee-results" role="listbox" aria-label="Resultados de empleados"></div>
+      <div class="attendance-batch-heading"><strong>Empleados seleccionados</strong><span id="attendanceBatchCount">0</span></div>
+      <div class="table-responsive attendance-batch-table-wrap">
+        <table class="table attendance-batch-table">
+          <thead><tr><th>Empleado</th><th>Marcaje</th><th>Fecha y hora</th><th></th></tr></thead>
+          <tbody id="attendanceBatchRows"><tr><td colspan="4" class="text-muted">Busca y selecciona uno o varios empleados.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="attendance-form-actions">
+        <span class="form-text">La hora se establece por defecto al momento actual. Solo se permiten horas pasadas o actuales.</span>
+        <button class="btn-ios primary" type="submit" id="attendanceBatchSubmit" disabled>Registrar marcajes</button>
+      </div>
     </form>
     <div id="attendanceResult" class="attendance-result" aria-live="polite">
       <span class="attendance-result__icon">RFID</span>
@@ -38,14 +38,35 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('attendanceScanForm');
     const manualForm = document.getElementById('attendanceManualForm');
-    const input = document.getElementById('attendanceCardCode');
     const result = document.getElementById('attendanceResult');
+    const searchInput = document.getElementById('attendanceEmployeeSearch');
+    const employeeResults = document.getElementById('attendanceEmployeeResults');
+    const batchRows = document.getElementById('attendanceBatchRows');
+    const batchCount = document.getElementById('attendanceBatchCount');
+    const submitButton = document.getElementById('attendanceBatchSubmit');
+    const selectedEmployees = new Map();
+    let employees = [];
 
     const renderResult = (payload) => {
       result.className = 'attendance-result attendance-result--success';
-      result.innerHTML = `<img class="attendance-result__photo" src="${payload.foto_url ? `/static/${payload.foto_url}` : '/static/img/default-avatar.svg'}" alt=""><div><strong>${payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada'}</strong><span>${payload.empleado_nombre} · ${payload.cedula}</span><span>${payload.departamento || 'Sin departamento'} / ${payload.cargo || 'Sin cargo'}</span><span>${new Date(payload.fecha_hora).toLocaleString()}</span></div>`;
+      result.replaceChildren();
+      const photo = document.createElement('img');
+      photo.className = 'attendance-result__photo';
+      photo.src = payload.foto_url ? `/static/${encodeURIComponent(payload.foto_url)}` : '/static/img/default-avatar.svg';
+      photo.alt = '';
+      const details = document.createElement('div');
+      [
+        payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada',
+        `${payload.empleado_nombre || 'Empleado'} · ${payload.cedula || ''}`,
+        `${payload.departamento || 'Sin departamento'} / ${payload.cargo || 'Sin cargo'}`,
+        new Date(payload.fecha_hora).toLocaleString(),
+      ].forEach((text, index) => {
+        const element = document.createElement(index === 0 ? 'strong' : 'span');
+        element.textContent = text;
+        details.appendChild(element);
+      });
+      result.append(photo, details);
     };
     const submitPayload = async (url, body) => {
       const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -57,29 +78,100 @@
       const response = await fetch('/api/employees?limit=100');
       if (!response.ok) throw new Error('No se pudo cargar la lista de empleados.');
       const data = await response.json();
-      document.getElementById('attendanceEmployee').innerHTML = '<option value="">Selecciona un empleado</option>' + data.items.filter((item) => item.estado === 'Activo').map((item) => `<option value="${item.id}">${item.nombre_apellido} · ${item.cedula}</option>`).join('');
+      employees = data.items.filter((item) => item.estado === 'Activo');
     };
-    form?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const codigoTarjeta = input.value.trim();
-      if (!codigoTarjeta) return;
-      const button = form.querySelector('button[type="submit"]');
-      button.disabled = true;
-      result.className = 'attendance-result attendance-result--loading';
-      result.innerHTML = '<span class="attendance-result__icon">...</span><div><strong>Procesando lectura</strong><span>Validando tarjeta...</span></div>';
+    const formatDateTimeLocal = (date) => {
+      const pad = (value) => String(value).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
+    const renderSearchResults = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      const matches = query ? employees.filter((item) => [item.nombre_apellido, item.cedula, item.codigo_tarjeta].some((value) => String(value || '').toLowerCase().includes(query))).slice(0, 8) : [];
+      employeeResults.replaceChildren();
+      matches.forEach((employee) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'attendance-employee-result';
+        button.disabled = selectedEmployees.has(employee.id);
+        button.innerHTML = `<strong>${escapeHtml(employee.nombre_apellido)}</strong><span>${escapeHtml(employee.cedula)}${employee.codigo_tarjeta ? ` · Tarjeta ${escapeHtml(employee.codigo_tarjeta)}` : ''}</span>`;
+        button.addEventListener('click', () => {
+          selectedEmployees.set(employee.id, { employee, fecha_hora: formatDateTimeLocal(new Date()) });
+          searchInput.value = '';
+          employeeResults.replaceChildren();
+          renderBatch();
+        });
+        employeeResults.appendChild(button);
+      });
+    };
+    const refreshTypes = async () => {
+      if (!selectedEmployees.size) return;
+      const marcajes = Array.from(selectedEmployees.values()).map((item) => ({ empleado_id: item.employee.id, fecha_hora: new Date(item.fecha_hora).toISOString() }));
       try {
-        await submitPayload('/api/attendance/simulate-scan', { codigo_tarjeta: codigoTarjeta });
-        input.value = '';
+        const response = await fetch('/api/attendance/manual-mark/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marcajes }) });
+        if (!response.ok) return;
+        const payload = await response.json();
+        selectedEmployees.forEach((item) => { item.tipo = payload.types?.[String(item.employee.id)] || 'ENTRADA'; });
+        batchRows.querySelectorAll('[data-attendance-type]').forEach((element) => { element.textContent = selectedEmployees.get(Number(element.dataset.employeeId))?.tipo || 'ENTRADA'; });
+      } catch (error) {
+        // La validación definitiva se realiza al registrar el lote.
+      }
+    };
+    const renderBatch = () => {
+      batchCount.textContent = String(selectedEmployees.size);
+      submitButton.disabled = selectedEmployees.size === 0;
+      batchRows.replaceChildren();
+      if (!selectedEmployees.size) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="4" class="text-muted">Busca y selecciona uno o varios empleados.</td>';
+        batchRows.appendChild(row);
+        return;
+      }
+      selectedEmployees.forEach((item, id) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td><strong>${escapeHtml(item.employee.nombre_apellido)}</strong><small>${escapeHtml(item.employee.cedula)}${item.employee.codigo_tarjeta ? ` · ${escapeHtml(item.employee.codigo_tarjeta)}` : ''}</small></td><td><span class="attendance-type-badge" data-attendance-type data-employee-id="${item.employee.id}">${item.tipo || 'Calculando...'}</span></td><td><input class="form-control attendance-time-input" type="datetime-local" value="${item.fecha_hora}" required></td><td><button class="btn-ios ghost btn-sm" type="button">Quitar</button></td>`;
+        row.querySelector('input').addEventListener('change', (event) => { item.fecha_hora = event.target.value; item.tipo = null; refreshTypes(); });
+        row.querySelector('button').addEventListener('click', () => { selectedEmployees.delete(id); renderBatch(); });
+        batchRows.appendChild(row);
+      });
+      refreshTypes();
+    };
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    searchInput.addEventListener('input', renderSearchResults);
+    manualForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      submitButton.disabled = true;
+      try {
+        const now = new Date();
+        const marcajes = Array.from(selectedEmployees.values()).map((item) => {
+          const fecha = new Date(item.fecha_hora);
+          if (Number.isNaN(fecha.getTime()) || fecha > now) throw new Error('No se permiten horas futuras.');
+          return { empleado_id: item.employee.id, fecha_hora: fecha.toISOString() };
+        });
+        const response = await fetch('/api/attendance/manual-mark/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marcajes }) });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || 'No se pudieron registrar los marcajes.');
+        if (payload.items?.length) renderResult(payload.items[payload.items.length - 1]);
+        selectedEmployees.clear();
+        renderBatch();
+        window.AppUI.toast(`${payload.items?.length || 0} marcaje(s) registrado(s).`, 'success');
+        if (payload.errors?.length) window.AppUI.toast(`${payload.errors.length} marcaje(s) no se registraron.`, 'error');
       } catch (error) {
         result.className = 'attendance-result attendance-result--error';
-        result.innerHTML = `<span class="attendance-result__icon">!</span><div><strong>No se registró</strong><span>${error.message}</span></div>`;
+        result.replaceChildren();
+        const icon = document.createElement('span');
+        icon.className = 'attendance-result__icon';
+        icon.textContent = '!';
+        const details = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = 'No se registró';
+        const message = document.createElement('span');
+        message.textContent = error.message || 'No se pudo registrar el marcaje.';
+        details.append(title, message);
+        result.append(icon, details);
       } finally {
-        button.disabled = false;
-        input.focus();
+        submitButton.disabled = selectedEmployees.size === 0;
       }
     });
-    manualForm?.addEventListener('submit', async (event) => { event.preventDefault(); const button = manualForm.querySelector('button'); button.disabled = true; try { await submitPayload('/api/attendance/manual-mark', { empleado_id: Number(document.getElementById('attendanceEmployee').value) }); } catch (error) { result.className = 'attendance-result attendance-result--error'; result.innerHTML = `<span class="attendance-result__icon">!</span><div><strong>No se registró</strong><span>${error.message}</span></div>`; } finally { button.disabled = false; } });
-    document.querySelectorAll('.attendance-mode-tab').forEach((tab) => tab.addEventListener('click', async () => { document.querySelectorAll('.attendance-mode-tab').forEach((item) => item.classList.toggle('active', item === tab)); const manual = tab.dataset.mode === 'manual'; form.classList.toggle('d-none', manual); manualForm.classList.toggle('d-none', !manual); if (manual) { try { await loadManualEmployees(); } catch (error) { window.AppUI.toast(error.message, 'error'); } } else { input.focus(); } }));
     loadManualEmployees().catch((error) => window.AppUI.toast(error.message, 'error'));
   });
 </script>
