@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Backups del sistema - MarcajeTPV{% endblock %}
+{% block page_title %}Backups del sistema{% endblock %}
+
+{% block content %}
+<div class="system-page">
+  <section class="system-intro">
+    <div>
+      <span class="eyebrow">Protección de datos</span>
+      <h2>Copias de seguridad</h2>
+      <p>Se conservan las tres copias más recientes en el servidor.</p>
+    </div>
+    <button id="createBackupButton" class="btn-ios primary" type="button">Crear backup ahora</button>
+  </section>
+
+  <section class="card system-backups-card">
+    <div class="card-panel__header system-section-header">
+      <div><h3>Últimas copias</h3><p>Descarga una copia para guardarla en un dispositivo externo.</p></div>
+      <span id="backupStatus" class="system-status">Consultando...</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table ios-table mb-0">
+        <thead><tr><th>Archivo</th><th>Fecha</th><th>Tamaño</th><th class="text-end">Acción</th></tr></thead>
+        <tbody id="backupList"><tr><td colspan="4" class="table-state">Cargando copias...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', () => {
+  const list = document.getElementById('backupList');
+  const status = document.getElementById('backupStatus');
+  const button = document.getElementById('createBackupButton');
+  const formatSize = (bytes) => bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(2)} GB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  const formatDate = (value) => new Date(value).toLocaleString();
+  const render = (items) => {
+    list.replaceChildren();
+    if (!items.length) {
+      list.innerHTML = '<tr><td colspan="4" class="table-state">Todavía no hay copias de seguridad.</td></tr>';
+      status.textContent = 'Sin copias';
+      return;
+    }
+    status.textContent = `${items.length} de 3 slots ocupados`;
+    items.forEach((item) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td><strong>${item.filename}</strong></td><td>${formatDate(item.modified_at)}</td><td>${formatSize(item.size_bytes)}</td><td class="text-end"><a class="btn-ios secondary btn-sm" href="/api/system/backups/${encodeURIComponent(item.filename)}/download">Descargar</a></td>`;
+      list.append(row);
+    });
+  };
+  const load = async () => {
+    const response = await fetch('/api/system/backups');
+    if (!response.ok) throw new Error('No se pudieron consultar los backups.');
+    render((await response.json()).items || []);
+  };
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    status.textContent = 'Creando...';
+    try {
+      const response = await fetch('/api/system/backups', { method: 'POST', headers: window.AppUI.csrfHeaders() });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || 'No se pudo crear el backup.');
+      window.AppUI.toast('Copia de seguridad creada correctamente.', 'success');
+      await load();
+    } catch (error) { window.AppUI.toast(error.message, 'error'); }
+    finally { button.disabled = false; }
+  });
+  load().catch((error) => { status.textContent = 'Error'; window.AppUI.toast(error.message, 'error'); });
+});
+</script>
+{% endblock %}

@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Control de presencia - MarcajeTPV{% endblock %}
-{% block page_title %}Control de presencia{% endblock %}
+{% block title %}Marcaje manual rápido - MarcajeTPV{% endblock %}
+{% block page_title %}Marcaje manual rápido{% endblock %}
 
 {% block content %}
 <div class="attendance-page">
   <div class="section-header attendance-inspector-toolbar">
-    <div></div>
+    <span class="attendance-page-status"><span></span>Registro manual</span>
     <div class="attendance-toolbar-actions">
       <a class="btn-ios secondary" href="/attendance/simulator">Simulador temporal</a>
       <a class="btn-ios primary" href="/attendance/kiosk" target="_blank" rel="noopener">Abrir pantalla kiosco</a>
@@ -15,22 +15,33 @@
 
   <section class="card attendance-capture-card">
     <form id="attendanceManualForm" class="attendance-scan-form">
-      <div class="attendance-search-block">
-        <label class="form-label" for="attendanceEmployeeSearch">Buscar empleado</label>
-        <input id="attendanceEmployeeSearch" class="form-control" type="search" autocomplete="off" placeholder="Nombre, cédula o tarjeta">
-        <div id="attendanceEmployeeResults" class="attendance-employee-results" role="listbox" aria-label="Resultados de empleados"></div>
-      </div>
-      <div class="attendance-batch-section">
-        <div class="attendance-batch-heading"><strong>Empleados seleccionados</strong><span id="attendanceBatchCount">0</span></div>
-        <div class="table-responsive attendance-batch-table-wrap">
-          <table class="table attendance-batch-table">
-            <thead><tr><th>Empleado</th><th>Marcaje</th><th>Fecha y hora</th><th></th></tr></thead>
-            <tbody id="attendanceBatchRows"><tr><td colspan="4" class="text-muted">Busca y selecciona uno o varios empleados.</td></tr></tbody>
-          </table>
-        </div>
+      <div class="attendance-workspace">
+        <section class="attendance-search-block" aria-labelledby="attendanceSearchTitle">
+          <div class="attendance-panel-heading">
+            <div><span class="attendance-step">1</span><div><h2 id="attendanceSearchTitle">Agregar empleados</h2><p>Busca por nombre, cédula o tarjeta.</p></div></div>
+          </div>
+          <label class="form-label" for="attendanceEmployeeSearch">Buscar empleado</label>
+          <input id="attendanceEmployeeSearch" class="form-control" type="search" autocomplete="off" placeholder="Escribe para buscar...">
+          <div id="attendanceEmployeeResults" class="attendance-employee-results" role="listbox" aria-label="Resultados de empleados"></div>
+        </section>
+        <section class="attendance-batch-section" aria-labelledby="attendanceBatchTitle">
+          <div class="attendance-panel-heading">
+            <div><span class="attendance-step">2</span><div><h2 id="attendanceBatchTitle">Revisar marcajes</h2><p>Confirma el tipo y la hora antes de registrar.</p></div></div>
+            <span class="attendance-batch-count"><strong id="attendanceBatchCount">0</strong> seleccionados</span>
+          </div>
+          <div class="table-responsive attendance-batch-table-wrap">
+            <table class="table attendance-batch-table">
+              <thead><tr><th>Empleado</th><th>Marcaje</th><th>Fecha y hora</th><th></th></tr></thead>
+              <tbody id="attendanceBatchRows"><tr><td colspan="4" class="text-muted">Los empleados seleccionados aparecerán aquí.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
       </div>
       <div class="attendance-form-actions">
-        <span class="form-text">La hora se establece por defecto al momento actual. Solo se permiten horas pasadas o actuales.</span>
+        <div class="attendance-form-help">
+          <span class="form-text">La hora se establece por defecto al momento actual. Solo se permiten horas pasadas o actuales.</span>
+          <span class="attendance-shortcuts" aria-label="Atajos de teclado"><kbd>/</kbd> buscar <kbd>Enter</kbd> seleccionar <kbd>Ctrl</kbd> + <kbd>Enter</kbd> registrar</span>
+        </div>
         <button class="btn-ios primary" type="submit" id="attendanceBatchSubmit" disabled>Registrar marcajes</button>
       </div>
     </form>
@@ -119,6 +130,25 @@
     };
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     searchInput.addEventListener('input', renderSearchResults);
+    manualForm.addEventListener('keydown', (event) => {
+      if (event.key === '/' && document.activeElement !== searchInput) {
+        event.preventDefault();
+        searchInput.focus();
+      } else if (event.key === 'Enter' && document.activeElement === searchInput) {
+        const firstResult = employeeResults.querySelector('button:not(:disabled)');
+        if (firstResult) {
+          event.preventDefault();
+          firstResult.click();
+        }
+      } else if (event.key === 'Backspace' && document.activeElement === searchInput && !searchInput.value && selectedEmployees.size) {
+        const lastSelectedId = Array.from(selectedEmployees.keys()).pop();
+        selectedEmployees.delete(lastSelectedId);
+        renderBatch();
+      } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && selectedEmployees.size) {
+        event.preventDefault();
+        if (!submitButton.disabled) manualForm.requestSubmit();
+      }
+    });
     manualForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       submitButton.disabled = true;

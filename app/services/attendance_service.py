@@ -115,6 +115,50 @@ def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
     return {'items': results, 'errors': errors}
 
 
+def correct_attendance(
+    db: Session,
+    record_id: int,
+    usuario_id: int,
+    motivo: str,
+    empleado_id: int | None = None,
+    marked_at: datetime | None = None,
+    attendance_type: AttendanceType | None = None,
+) -> AttendanceRecordOut:
+    reason = motivo.strip()
+    if len(reason) < 5:
+        raise AttendanceError('El motivo de la corrección es obligatorio.')
+    record = db.query(AttendanceRecord).filter(AttendanceRecord.id == record_id).first()
+    if not record:
+        raise AttendanceError('Marcaje no encontrado.')
+    employee = record.empleado
+    if empleado_id is not None and empleado_id != record.empleado_id:
+        employee = db.query(Empleado).filter(Empleado.id == empleado_id).first()
+        if not employee:
+            raise AttendanceError('Empleado no encontrado.')
+    if marked_at is not None and marked_at.tzinfo is None:
+        marked_at = marked_at.replace(tzinfo=LOCAL_TIMEZONE)
+    normalized_time = as_utc(marked_at) if marked_at is not None else record.fecha_hora
+    if normalized_time > utc_now():
+        raise AttendanceError('La hora del marcaje no puede ser futura.')
+    new_type = attendance_type.value if attendance_type is not None else record.tipo
+    new_employee_id = employee.id
+    old_values = {'empleado_id': record.empleado_id, 'tipo': record.tipo, 'fecha_hora': record.fecha_hora, 'origen': record.origen}
+    new_values = {'empleado_id': new_employee_id, 'tipo': new_type, 'fecha_hora': normalized_time, 'origen': record.origen, 'motivo': reason}
+    if old_values == {key: value for key, value in new_values.items() if key != 'motivo'}:
+        raise AttendanceError('Debes cambiar al menos un valor del marcaje.')
+    record.empleado_id = new_employee_id
+    record.tipo = new_type
+    record.fecha_hora = normalized_time
+    try:
+        add_audit(db, usuario_id, 'correccion_marcaje', 'marcajes_asistencia', record.id, antes=old_values, despues=new_values)
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise AttendanceError('No se pudo guardar la corrección.')
+    db.refresh(record)
+    return _to_output(record, employee)
+
+
 def preview_manual_batch(db: Session, marks):
     preview = {}
     for mark in marks:
@@ -258,3 +302,43 @@ def list_present_employees(db: Session):
         }
         for employee in employees
     ]
+
+
+def inspector_dashboard(db: Session):
+    start = local_day_start_as_utc()
+    summary = attendance_summary(db).model_dump()
+    present = list_present_employees(db)
+    recent_records = db.query(AttendanceRecord).options(
+        joinedload(AttendanceRecord.empleado).joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
+        joinedload(AttendanceRecord.empleado).joinedload(Empleado.cargo_rel),
+    ).filter(AttendanceRecord.fecha_hora >= start).order_by(
+        AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()
+    ).limit(12).all()
+    alert_records = db.query(AttendanceRecord).filter(
+        AttendanceRecord.fecha_hora >= start
+    ).order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).limit(100).all()
+    employee_types = {}
+    alerts = []
+    for record in alert_records:
+        previous_type = employee_types.get(record.empleado_id)
+        if previous_type == record.tipo:
+            alerts.append({'kind': 'sequence', 'message': f'El empleado {record.empleado_id} tiene dos marcajes {record.tipo.lower()} consecutivos.'})
+        employee_types[record.empleado_id] = record.tipo
+    marked_employee_ids = db.query(AttendanceRecord.empleado_id).filter(AttendanceRecord.fecha_hora >= start).distinct().subquery()
+    expected_employees = db.query(Empleado).options(
+        joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
+        joinedload(Empleado.cargo_rel),
+    ).filter(
+        Empleado.estado == EstadoEnum.Activo,
+        ~Empleado.id.in_(db.query(marked_employee_ids.c.empleado_id)),
+    ).order_by(Empleado.nombre_apellido.asc()).limit(PRESENT_EMPLOYEES_LIMIT).all()
+    return {
+        'summary': summary,
+        'present': present,
+        'recent': [_to_output(record, record.empleado).model_dump(mode='json') for record in recent_records],
+        'expected': [
+            {'id': employee.id, 'nombre_apellido': employee.nombre_apellido, 'departamento': employee.departamento or 'Sin departamento', 'gerencia': employee.gerencia or 'Sin gerencia'}
+            for employee in expected_employees
+        ],
+        'alerts': alerts[:10],
+    }

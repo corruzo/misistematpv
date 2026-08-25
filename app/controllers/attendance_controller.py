@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_employee_manager, require_page_user, require_read_access, require_user
 from app.core.config import APP_ENV, DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, ATTENDANCE_HISTORY_DEFAULT_DAYS
 from app.database.session import get_db
-from app.schemas.attendance import AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest
-from app.services.attendance_service import AttendanceError, attendance_summary, get_attendance_since, list_attendance, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan
+from app.schemas.attendance import AttendanceCorrectionRequest, AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest
+from app.services.attendance_service import AttendanceError, attendance_summary, correct_attendance, get_attendance_since, inspector_dashboard, list_attendance, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan
+from app.services.serial_reader import get_reader_status
 from app.services.organization_service import get_organization_tree
 
 
@@ -84,6 +85,14 @@ def manual_mark_preview(payload: AttendanceManualBatchRequest, db: Session = Dep
     return {'types': preview_manual_batch(db, payload.marcajes)}
 
 
+@router.patch('/api/attendance/{record_id}/correct')
+def correct_attendance_route(record_id: int, payload: AttendanceCorrectionRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
+    try:
+        return correct_attendance(db, record_id, _manager.id, payload.motivo, payload.empleado_id, payload.fecha_hora, payload.tipo)
+    except AttendanceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
 @router.get('/api/attendance/history')
 def attendance_history(
     page: int = Query(1, ge=1), page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
@@ -107,6 +116,15 @@ def attendance_summary_route(db: Session = Depends(get_db), _user=Depends(requir
 @router.get('/api/attendance/present')
 def attendance_present_route(db: Session = Depends(get_db), _user=Depends(require_read_access)):
     return list_present_employees(db)
+
+
+@router.get('/api/attendance/inspector-dashboard')
+def inspector_dashboard_route(db: Session = Depends(get_db), _user=Depends(require_read_access)):
+    payload = inspector_dashboard(db)
+    payload['reader'] = get_reader_status()
+    if not payload['reader']['connected']:
+        payload['alerts'].insert(0, {'kind': 'reader', 'message': payload['reader']['message']})
+    return payload
 
 
 @router.get('/api/attendance/latest')

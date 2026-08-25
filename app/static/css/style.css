@@ -1165,6 +1165,7 @@ textarea {
 
 .user-role-badge--admin { background: #dce7ef; border-color: #b8cad8; color: #12304a; }
 .user-role-badge--rrhh { background: #e2edf0; border-color: #bed4d8; color: #245b68; }
+.user-role-badge--systems { background: #e6e8f5; border-color: #c6cbe7; color: #394276; }
 .user-role-badge--consulta { background: #eef1f4; border-color: #d5dce2; color: #596b7a; }
 .user-status-badge--active { background: #e5f2ed; border-color: #bfddd1; color: #176b5d; }
 .user-status-badge--inactive { background: #f2e7e7; border-color: #e3caca; color: #8f2934; }
@@ -1870,6 +1871,8 @@ body.modal-open { overflow: hidden; }
   margin-bottom: 2px;
 }
 
+.attendance-page-status { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: 700; }
+.attendance-page-status > span { width: 8px; height: 8px; border-radius: 50%; background: #2b9a72; box-shadow: 0 0 0 4px rgba(43,154,114,.12); }
 .attendance-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .simulator-panel {
@@ -1966,11 +1969,12 @@ body.modal-open { overflow: hidden; }
 
 .attendance-capture-card {
   max-width: none;
-  padding: clamp(20px, 3vw, 32px);
+  padding: clamp(20px, 3vw, 30px);
   background: #ffffff;
 }
 
 .attendance-scan-form { display: grid; gap: 12px; }
+.attendance-workspace { display: grid; grid-template-columns: minmax(260px, .78fr) minmax(0, 1.55fr); gap: 14px; align-items: stretch; }
 .attendance-search-block,
 .attendance-batch-section {
   padding: 16px;
@@ -1987,6 +1991,14 @@ body.modal-open { overflow: hidden; }
   background: #ffffff;
   border-top: 3px solid var(--accent-primary);
 }
+
+.attendance-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 48px; margin-bottom: 16px; }
+.attendance-panel-heading > div { display: flex; align-items: flex-start; gap: 10px; }
+.attendance-panel-heading h2 { margin: 0; color: var(--text-primary); font-size: 1rem; }
+.attendance-panel-heading p { margin: 4px 0 0; color: var(--text-secondary); font-size: var(--font-size-caption); line-height: 1.35; }
+.attendance-step { display: grid; flex: 0 0 auto; width: 25px; height: 25px; place-items: center; border-radius: 50%; background: #d9f5e7; color: #147052; font-size: .78rem; font-weight: 800; }
+.attendance-batch-count { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #bdd0d6; border-radius: var(--radius-pill); background: #eef4f5; color: var(--text-secondary); font-size: var(--font-size-caption); white-space: nowrap; }
+.attendance-batch-count strong { color: var(--primary); }
 
 .attendance-search-block .form-label { color: var(--primary); }
 .attendance-scan-form > .form-label { margin: 0; color: var(--text-primary); font-size: var(--font-size-body); font-weight: 800; }
@@ -2064,7 +2076,10 @@ body.modal-open { overflow: hidden; }
 .attendance-type-select { min-width: 116px; }
 .attendance-time-input { min-width: 190px; }
 .attendance-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 4px; }
-.attendance-form-actions .form-text { margin: 0; max-width: 650px; }
+.attendance-form-help { display: grid; gap: 6px; max-width: 720px; }
+.attendance-form-actions .form-text { margin: 0; }
+.attendance-shortcuts { color: var(--text-secondary); font-size: var(--font-size-caption); }
+.attendance-shortcuts kbd { display: inline-block; min-width: 22px; margin: 0 2px; padding: 2px 5px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; background: #f8fafc; color: var(--text-primary); font-size: .72rem; font-weight: 800; text-align: center; }
 .attendance-input-row { display: flex; gap: 10px; }
 .attendance-card-input { min-height: 50px; font-size: 1.05rem; letter-spacing: .03em; }
 .attendance-input-row .btn-ios { min-width: 132px; }
@@ -2076,6 +2091,10 @@ body.modal-open { overflow: hidden; }
 
 .attendance-result__photo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; }
 .attendance-history-card { padding: 24px; }
+.attendance-correction-button { white-space: nowrap; }
+.correction-form-body { display: grid; gap: 16px; }
+.correction-form-body label { display: grid; gap: 6px; color: var(--text-primary); font-size: .8rem; font-weight: 700; }
+.correction-form-row { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 12px; }
 
 .history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .history-toolbar h2 { margin: 0; color: var(--text-primary); font-size: 1.15rem; }
@@ -2209,6 +2228,27 @@ body.modal-open { overflow: hidden; }
 }
 
 .inspector-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.inspector-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 18px; }
+.inspector-panel--alerts { grid-column: 1 / -1; }
+.inspector-panel { min-width: 0; overflow: hidden; }
+.inspector-panel .card-panel__header { padding: 18px 20px 12px; }
+.inspector-panel .card-panel__header h3 { color: var(--text-primary); }
+.inspector-panel .card-panel__header p { margin: 4px 0 0; color: var(--text-secondary); font-size: var(--font-size-caption); }
+.inspector-recent-list,
+.inspector-expected-list { display: grid; gap: 0; padding: 0 20px 12px; }
+.inspector-recent-item,
+.inspector-expected-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border-subtle); }
+.inspector-recent-item span,
+.inspector-expected-item span { display: block; margin-top: 3px; color: var(--text-secondary); font-size: var(--font-size-caption); }
+.inspector-recent-item time { color: var(--text-primary); font-size: var(--font-size-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inspector-expected-item { display: grid; justify-content: stretch; gap: 0; }
+.inspector-alerts-list { display: grid; gap: 8px; padding: 0 20px 18px; }
+.inspector-alert { padding: 10px 12px; border: 1px solid; border-radius: var(--radius-sm); font-size: var(--font-size-body); }
+.inspector-alert--reader { color: #8f2934; background: #f2e7e7; border-color: #e3caca; }
+.inspector-alert--sequence { color: #8a5a12; background: #fff5df; border-color: #f1d69a; }
+.inspector-reader-status { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-pill); font-size: var(--font-size-caption); white-space: nowrap; }
+.inspector-reader-status.is-connected { color: #176b5d; background: #e5f2ed; border-color: #bfddd1; }
+.inspector-reader-status.is-disconnected { color: #8f2934; background: #f2e7e7; border-color: #e3caca; }
 .inspector-table-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-bottom: 18px; }
 .inspector-table-tools { width: min(100%, 330px); }
 .inspector-table td { padding-top: 14px; padding-bottom: 14px; }
@@ -2490,6 +2530,23 @@ body.modal-open { overflow: hidden; }
 .auth-error { padding: 10px 12px; margin-bottom: 14px; border-radius: 8px; color: #b42318; background: #fef3f2; font-size: 13px; }
 .auth-link { display: block; margin-top: 18px; color: var(--accent-blue); font-size: 13px; text-align: center; }
 
+.system-page { display: grid; gap: 20px; }
+.system-intro,
+.system-section-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.system-intro { padding: 22px 24px; border-left: 4px solid var(--accent-primary); border-radius: var(--radius-md); background: var(--bg-surface); box-shadow: var(--shadow-sm); }
+.system-intro h2 { margin: 4px 0 6px; font-size: 1.45rem; }
+.system-intro p,
+.system-section-header p { margin: 0; color: var(--text-secondary); font-size: var(--font-size-body); }
+.system-backups-card { overflow: hidden; }
+.system-backups-card .card-panel__header { padding: 18px 20px; }
+.system-status { padding: 6px 10px; border-radius: var(--radius-pill); background: var(--bg-subtle); color: var(--text-secondary); font-size: var(--font-size-caption); font-weight: 700; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .system-intro,
+  .system-section-header { align-items: flex-start; flex-direction: column; }
+  .system-intro .btn-ios { width: 100%; }
+}
+
 
 /* ==========================================================================
    10. RESPONSIVE BREAKPOINTS ENGINE
@@ -2524,6 +2581,9 @@ body.modal-open { overflow: hidden; }
   .inspector-table-tools {
     width: 100%;
   }
+
+  .inspector-dashboard-grid { grid-template-columns: 1fr; }
+  .inspector-panel--alerts { grid-column: auto; }
 }
 
 @media (max-width: 768px) {
@@ -2629,6 +2689,7 @@ body.modal-open { overflow: hidden; }
   .attendance-capture-card { padding: 20px; }
   .attendance-inspector-toolbar { align-items: flex-start; flex-direction: column; }
   .attendance-inspector-toolbar .btn-ios { width: 100%; }
+  .attendance-workspace { grid-template-columns: 1fr; }
   .attendance-form-actions { align-items: stretch; flex-direction: column; }
   .attendance-form-actions .btn-ios { width: 100%; }
   .attendance-batch-table-wrap { margin-inline: -4px; }

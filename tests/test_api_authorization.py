@@ -44,6 +44,7 @@ class ApiAuthorizationTest(unittest.TestCase):
             ('PUT', '/api/users/1', {}),
             ('PATCH', '/api/users/1/status', {}),
             ('POST', '/api/attendance/manual-mark', {}),
+            ('PATCH', '/api/attendance/1/correct', {}),
             ('GET', '/api/attendance/history', None),
             ('GET', '/api/attendance/summary', None),
             ('GET', '/api/attendance/present', None),

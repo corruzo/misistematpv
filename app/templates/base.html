@@ -55,6 +55,9 @@
                   </span>
                   <span>Gestión de usuarios</span>
                 </a>{% endif %}
+                {% if user.rol in ('Administrador', 'Sistemas') %}<a class="side-link {% if active_page == 'system' %}active{% endif %}" href="/system/backups" {% if active_page == 'system' %}aria-current="page"{% endif %}>
+                  <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#building"></use></svg></span><span>Sistema y backups</span>
+                </a>{% endif %}
               </div>
             </div>
           </div>

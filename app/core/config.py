@@ -52,6 +52,11 @@ MAX_OFFSET = int(os.getenv('MAX_OFFSET', '1000000'))
 MAX_ORGANIZATION_CHILDREN = int(os.getenv('MAX_ORGANIZATION_CHILDREN', '1000'))
 PRESENT_EMPLOYEES_LIMIT = int(os.getenv('PRESENT_EMPLOYEES_LIMIT', '500'))
 
+# Server-side SQL Server backups. The SQL Server service account needs write access.
+BACKUP_DIR = Path(os.getenv('BACKUP_DIR', str(BASE_DIR / 'backups'))).resolve()
+BACKUP_SLOT_COUNT = int(os.getenv('BACKUP_SLOT_COUNT', '3'))
+BACKUP_INTERVAL_SECONDS = int(os.getenv('BACKUP_INTERVAL_SECONDS', str(24 * 60 * 60)))
+
 # Build SQLAlchemy URL. Prefer Trusted Connection if configured.
 if DB_TRUSTED or not DB_USER:
     # Use Windows Authentication / Trusted Connection
@@ -69,6 +74,7 @@ DATABASE_URL = "mssql+pyodbc:///?odbc_connect=" + quote_plus(odbc_str)
 STATIC_DIR = BASE_DIR / 'static'
 UPLOADS_DIR = STATIC_DIR / 'uploads'
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_IMAGE_EXT = {'.png', '.jpg', '.jpeg', '.gif'}
 

@@ -3,14 +3,22 @@ import hashlib
 import secrets
 import unittest
 
-from app.core.auth import ROLE_ADMIN, ROLE_HR, ROLE_VIEWER, require_roles
+from app.core.auth import ROLE_ADMIN, ROLE_HR, ROLE_SYSTEMS, ROLE_VIEWER, require_roles, require_systems
 from app.core.rate_limit import is_rate_limited
 from app.core.security import hash_password, password_needs_rehash, verify_password
 from app.controllers.employee_controller import router
 from run import configured_worker_count, validate_serial_worker_count
+from app.services.backup_service import backup_path
 
 
 class SecurityContractTest(unittest.TestCase):
+    def test_backup_download_accepts_only_configured_slots(self):
+        self.assertEqual(backup_path('backup_1.bak').name, 'backup_1.bak')
+        with self.assertRaises(ValueError):
+            backup_path('../.env')
+        with self.assertRaises(ValueError):
+            backup_path('database.bak')
+
     def test_serial_reader_rejects_multiple_workers(self):
         with self.assertRaisesRegex(RuntimeError, 'un solo worker'):
             validate_serial_worker_count(2, 'COM3')
@@ -49,6 +57,14 @@ class SecurityContractTest(unittest.TestCase):
         self.assertIs(require_roles(ROLE_ADMIN, ROLE_HR)(hr), hr)
         with self.assertRaises(Exception):
             require_roles(ROLE_ADMIN, ROLE_HR)(viewer)
+
+    def test_systems_role_can_access_system_tools(self):
+        systems = type('User', (), {'rol': ROLE_SYSTEMS})()
+        viewer = type('User', (), {'rol': ROLE_VIEWER})()
+
+        self.assertIs(require_systems(systems), systems)
+        with self.assertRaises(Exception):
+            require_systems(viewer)
 
     def test_rate_limit_is_scoped_by_username(self):
         self.assertFalse(is_rate_limited('/login-test', '127.0.0.1', 'ana'))

@@ -14,6 +14,7 @@ from app.controllers.employee_controller import router
 from app.controllers.user_controller import router as user_router
 from app.controllers.auth_controller import router as auth_router
 from app.controllers.attendance_controller import router as attendance_router
+from app.controllers.system_controller import router as system_router, backup_loop
 from fastapi import Depends
 from app.core.auth import require_user
 from app.core.config import APP_ENV, COOKIE_SECURE, CSRF_ALLOWED_ORIGINS, SERIAL_PORT, STATIC_DIR
@@ -27,6 +28,7 @@ app = FastAPI(
     openapi_url='/openapi.json' if APP_ENV != 'production' else None,
 )
 _session_cleanup_task = None
+_backup_task = None
 _serial_reader = SerialAttendanceReader()
 
 
@@ -86,14 +88,16 @@ app.include_router(auth_router)
 app.include_router(router, dependencies=[Depends(require_user)])
 app.include_router(user_router, dependencies=[Depends(require_user)])
 app.include_router(attendance_router, dependencies=[Depends(require_user)])
+app.include_router(system_router, dependencies=[Depends(require_user)])
 app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
 
 
 @app.on_event('startup')
 def on_startup():
-    global _session_cleanup_task
+    global _session_cleanup_task, _backup_task
     validate_serial_worker_count(configured_worker_count(), SERIAL_PORT)
     _session_cleanup_task = asyncio.create_task(_session_cleanup_loop())
+    _backup_task = asyncio.create_task(backup_loop())
     _serial_reader.start()
 
 
@@ -111,8 +115,9 @@ async def _session_cleanup_loop():
 
 @app.on_event('shutdown')
 async def on_shutdown():
-    if _session_cleanup_task:
-        _session_cleanup_task.cancel()
+    for task in (_session_cleanup_task, _backup_task):
+        if task:
+            task.cancel()
     _serial_reader.stop()
 
 

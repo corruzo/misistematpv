@@ -2,6 +2,12 @@
 
 Aplicación web para gestión de empleados y organización empresarial con SQL Server.
 
+## Guía del sistema
+
+La referencia operativa y técnica está en [docs/GUIA_DEL_SISTEMA.md](docs/GUIA_DEL_SISTEMA.md). Incluye el mapa de pantallas, el flujo diario de asistencia, los roles actuales, las reglas de corrección y el procedimiento para documentar nuevas funciones.
+
+El archivo [prioridades_inspector_garita.md](prioridades_inspector_garita.md) conserva el checklist de producto. Las casillas solo deben marcarse cuando la función esté implementada y validada; las decisiones o pendientes deben explicarse en la guía central.
+
 ## Requisitos previos
 
 - SQL Server con la base de datos disponible.
@@ -65,6 +71,12 @@ Para el lector serial, configura `SERIAL_PORT` con el COM asignado por Windows. 
 El lector se abre automáticamente al iniciar el servidor. Si el COM no está disponible, la aplicación continúa funcionando y registra el problema en consola mientras intenta reconectar; no se generan marcajes hasta recibir una lectura válida.
 
 La PC del kiosco debe ejecutar la aplicación con un solo worker cuando `SERIAL_PORT` esté configurado. El arranque rechaza explícitamente `WEB_CONCURRENCY` mayor que `1` para evitar lectores seriales duplicados. Si se usan varios workers para otro entorno, deja `SERIAL_PORT=` vacío y utiliza el lector como proceso independiente.
+
+## Backups del sistema
+
+El rol `Sistemas` (y `Administrador` como respaldo) puede abrir `/system/backups`, crear una copia manual y descargar cualquiera de los tres slots disponibles. La aplicación crea automáticamente una copia cada 24 horas y rota `backup_1.bak`, `backup_2.bak` y `backup_3.bak` en la carpeta indicada por `BACKUP_DIR`.
+
+La carpeta debe existir en el servidor y la cuenta del servicio de SQL Server debe tener permisos de escritura allí. El archivo `.bak` se genera en el servidor; el navegador solo recibe una descarga autorizada de un slot válido. Configura `BACKUP_DIR` con una ruta absoluta en producción si la aplicación y SQL Server usan directorios de trabajo distintos.
 
 En desarrollo existe temporalmente `/attendance/simulator`, una pantalla protegida para probar el flujo del kiosco escribiendo un código de tarjeta. Esta ruta no se registra cuando `APP_ENV=production`.
 

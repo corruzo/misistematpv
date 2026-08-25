@@ -16,6 +16,8 @@ coverage.xml
 uvicorn_log.txt
 app/static/uploads/*
 !app/static/uploads/.gitkeep
+backups/*.bak
+backups/*.tmp.bak
 
 # IDE and OS files
 .vscode/

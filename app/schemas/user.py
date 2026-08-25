@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
-Role = Literal['Administrador', 'RRHH', 'Consulta']
+Role = Literal['Administrador', 'RRHH', 'Consulta', 'Sistemas']
 
 
 class UsuarioCreate(BaseModel):

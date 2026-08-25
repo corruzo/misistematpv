@@ -35,6 +35,13 @@ class AttendanceManualBatchRequest(BaseModel):
         return self
 
 
+class AttendanceCorrectionRequest(BaseModel):
+    empleado_id: int | None = Field(None, gt=0)
+    fecha_hora: datetime | None = None
+    tipo: AttendanceType | None = None
+    motivo: str = Field(..., min_length=5, max_length=500)
+
+
 class AttendanceRecordOut(BaseModel):
     id: int
     empleado_id: int

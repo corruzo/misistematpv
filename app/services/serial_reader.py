@@ -19,6 +19,7 @@ from app.schemas.attendance import AttendanceOrigin
 from app.services.attendance_service import AttendanceError, register_scan
 
 logger = logging.getLogger(__name__)
+_reader_status = {'configured': bool(SERIAL_PORT), 'connected': False, 'message': 'Lector no configurado' if not SERIAL_PORT else 'Lector desconectado'}
 
 _BYTESIZES = {7: SEVENBITS, 8: EIGHTBITS}
 _PARITIES = {
@@ -46,8 +47,10 @@ class SerialAttendanceReader:
 
     def start(self):
         if not self.enabled:
+            _reader_status.update(connected=False, message='Lector no configurado')
             logger.info('Lector serial desactivado: SERIAL_PORT no está configurado.')
             return
+        _reader_status.update(configured=True, message='Lector conectando...')
         self._thread = threading.Thread(target=self._run, name='serial-attendance-reader', daemon=True)
         self._thread.start()
 
@@ -55,6 +58,8 @@ class SerialAttendanceReader:
         self._stop_event.set()
         if self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=3)
+        if self.enabled:
+            _reader_status.update(connected=False, message='Lector detenido')
 
     def _run(self):
         try:
@@ -62,6 +67,7 @@ class SerialAttendanceReader:
             parity = _PARITIES[SERIAL_PARITY]
             stopbits = _STOPBITS[SERIAL_STOPBITS]
         except KeyError:
+            _reader_status.update(connected=False, message='Configuración serial inválida')
             logger.error('Configuración serial inválida. Use bytes 7/8, paridad N/E/O/M/S y stop bits 1/1.5/2.')
             return
 
@@ -76,8 +82,10 @@ class SerialAttendanceReader:
                     timeout=SERIAL_TIMEOUT,
                 ) as connection:
                     logger.info('Lector serial conectado en %s.', SERIAL_PORT)
+                    _reader_status.update(connected=True, message=f'Lector conectado en {SERIAL_PORT}')
                     self._read_connection(connection)
             except serial.SerialException as exc:
+                _reader_status.update(connected=False, message='Lector desconectado')
                 logger.error('No se pudo abrir el lector serial %s: %s', SERIAL_PORT, exc)
                 self._stop_event.wait(5)
 
@@ -107,3 +115,7 @@ class SerialAttendanceReader:
             logger.exception('Error procesando lectura serial.')
         finally:
             db.close()
+
+
+def get_reader_status() -> dict:
+    return dict(_reader_status)

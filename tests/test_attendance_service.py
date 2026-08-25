@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 import unittest
 
@@ -6,7 +7,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado
 from app.schemas.attendance import AttendanceOrigin, AttendanceType
 from app.schemas.attendance import AttendanceManualBatchRequest
-from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, register_manual, register_scan
+from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, correct_attendance, register_manual, register_scan
 
 
 class QueryDouble:
@@ -107,6 +108,30 @@ class AttendanceServiceTest(unittest.TestCase):
 
         self.assertEqual(result.tipo, AttendanceType.SALIDA)
         self.assertEqual(db.records[0].tipo, AttendanceType.SALIDA.value)
+
+    def test_correction_updates_values_and_audits_reason(self):
+        db = DatabaseDouble(self.make_employee())
+        register_manual(db, 1)
+        record = db.records[0]
+        record.empleado = db.employee_by_id
+
+        corrected = correct_attendance(db, record.id, 7, 'Error de digitación', attendance_type=AttendanceType.SALIDA)
+
+        self.assertEqual(corrected.tipo, AttendanceType.SALIDA)
+        self.assertEqual(record.tipo, AttendanceType.SALIDA.value)
+        self.assertEqual(db.audit_records[-1].accion, 'correccion_marcaje')
+        self.assertEqual(json.loads(db.audit_records[-1].datos_despues)['motivo'], 'Error de digitación')
+
+    def test_correction_requires_reason_and_a_changed_value(self):
+        db = DatabaseDouble(self.make_employee())
+        register_manual(db, 1)
+        record = db.records[0]
+        record.empleado = db.employee_by_id
+
+        with self.assertRaisesRegex(AttendanceError, 'motivo'):
+            correct_attendance(db, record.id, 7, 'no', attendance_type=AttendanceType.SALIDA)
+        with self.assertRaisesRegex(AttendanceError, 'al menos un valor'):
+            correct_attendance(db, record.id, 7, 'Corrección válida')
 
     def test_manual_rejects_future_time(self):
         db = DatabaseDouble(self.make_employee())

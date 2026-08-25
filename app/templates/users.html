@@ -81,6 +81,7 @@
               <option value="Administrador">Administrador</option>
               <option value="RRHH">RRHH</option>
               <option value="Consulta" selected>Consulta</option>
+              <option value="Sistemas">Sistemas</option>
             </select>
           </div>
           <p id="userFormMessage" class="form-feedback mb-0" role="status" aria-live="polite"></p>
@@ -176,7 +177,7 @@
         `;
 
         const tdRole = document.createElement('td');
-        const roleBadgeClass = user.rol === 'Administrador' ? 'user-role-badge--admin' : (user.rol === 'RRHH' ? 'user-role-badge--rrhh' : 'user-role-badge--consulta');
+        const roleBadgeClass = user.rol === 'Administrador' ? 'user-role-badge--admin' : (user.rol === 'RRHH' ? 'user-role-badge--rrhh' : (user.rol === 'Sistemas' ? 'user-role-badge--systems' : 'user-role-badge--consulta'));
         tdRole.innerHTML = `<span class="user-role-badge ${roleBadgeClass}">${escapeHtml(user.rol)}</span>`;
 
         const tdStatus = document.createElement('td');

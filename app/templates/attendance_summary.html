@@ -14,6 +14,7 @@
     <div class="attendance-context-meta">
       <span id="summaryDate"></span>
       <span class="inspector-live"><span></span><strong id="inspectorUpdated">Actualizando...</strong></span>
+      <span id="readerStatus" class="inspector-live inspector-reader-status is-disconnected">Lector no configurado</span>
     </div>
   </section>
 
@@ -22,6 +23,21 @@
     {{ kpi_card('Entradas de hoy', 'summaryEntradas', 'Registros', 'summaryEntradasMeta', 'blue', 'check') }}
     {{ kpi_card('Salidas de hoy', 'summarySalidas', 'Registros', 'summarySalidasMeta', 'orange', 'activity') }}
     {{ kpi_card('Marcajes totales', 'summaryMarcajes', 'Actividad del día', 'summaryMarcajesMeta', 'violet', 'activity') }}
+  </div>
+
+  <div class="inspector-dashboard-grid">
+    <section class="card inspector-panel inspector-panel--recent">
+      <div class="card-panel__header"><h3>Últimos movimientos</h3><p>Entradas y salidas registradas hoy.</p></div>
+      <div id="recentAttendanceList" class="inspector-recent-list"><p class="table-state">Cargando movimientos...</p></div>
+    </section>
+    <section class="card inspector-panel inspector-panel--expected">
+      <div class="card-panel__header"><h3>Sin marcaje hoy</h3><p>Personal activo que aún no registra entrada.</p></div>
+      <div id="expectedEmployeesList" class="inspector-expected-list"><p class="table-state">Cargando personal...</p></div>
+    </section>
+    <section class="card inspector-panel inspector-panel--alerts">
+      <div class="card-panel__header"><h3>Alertas operativas</h3><p>Situaciones que requieren atención.</p></div>
+      <div id="inspectorAlertsList" class="inspector-alerts-list"><p class="table-state">Cargando alertas...</p></div>
+    </section>
   </div>
 
   <section class="card inspector-presence-card">
@@ -64,10 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function load() {
     try {
-      const [summaryResponse, presentResponse] = await Promise.all([fetch('/api/attendance/summary'), fetch('/api/attendance/present')]);
-      if (!summaryResponse.ok || !presentResponse.ok) throw new Error('No se pudo actualizar la presencia.');
-      const summary = await summaryResponse.json();
-      state.items = await presentResponse.json();
+      const response = await fetch('/api/attendance/inspector-dashboard');
+      if (!response.ok) throw new Error('No se pudo actualizar el panel de garita.');
+      const payload = await response.json();
+      const summary = payload.summary || {};
+      state.items = payload.present || [];
       document.getElementById('summaryPresentes').textContent = summary.presentes ?? 0;
       document.getElementById('summaryEntradas').textContent = summary.entradas_hoy ?? 0;
       document.getElementById('summarySalidas').textContent = summary.salidas_hoy ?? 0;
@@ -78,8 +95,29 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('summaryMarcajesMeta').textContent = 'Entradas + salidas';
       document.getElementById('summaryDate').textContent = new Date().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
       document.getElementById('inspectorUpdated').textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      renderRecent(payload.recent || []);
+      renderExpected(payload.expected || []);
+      renderAlerts(payload.alerts || []);
+      const reader = payload.reader || {};
+      document.getElementById('readerStatus').textContent = reader.message || 'Estado no disponible';
+      document.getElementById('readerStatus').className = `inspector-live inspector-reader-status ${reader.connected ? 'is-connected' : 'is-disconnected'}`;
       render();
     } catch (error) { window.AppUI.toast(error.message, 'error'); }
+  }
+  function renderRecent(items) {
+    const container = document.getElementById('recentAttendanceList'); container.replaceChildren();
+    if (!items.length) { container.innerHTML = '<p class="table-state">No hay movimientos registrados hoy.</p>'; return; }
+    items.forEach((item) => { const element = document.createElement('div'); element.className = 'inspector-recent-item'; element.innerHTML = `<div><strong>${escapeHtml(item.empleado_nombre)}</strong><span>${item.tipo === 'ENTRADA' ? 'Entrada' : 'Salida'} · ${escapeHtml(item.origen === 'PUERTO_COM' ? 'Lector RFID' : 'Registro manual')}</span></div><time>${formatTime(item.fecha_hora)}</time>`; container.append(element); });
+  }
+  function renderExpected(items) {
+    const container = document.getElementById('expectedEmployeesList'); container.replaceChildren();
+    if (!items.length) { container.innerHTML = '<p class="table-state">Todo el personal activo tiene marcaje hoy.</p>'; return; }
+    items.forEach((item) => { const element = document.createElement('div'); element.className = 'inspector-expected-item'; element.innerHTML = `<strong>${escapeHtml(item.nombre_apellido)}</strong><span>${escapeHtml(item.gerencia)} · ${escapeHtml(item.departamento)}</span>`; container.append(element); });
+  }
+  function renderAlerts(items) {
+    const container = document.getElementById('inspectorAlertsList'); container.replaceChildren();
+    if (!items.length) { container.innerHTML = '<p class="table-state">No hay alertas activas.</p>'; return; }
+    items.forEach((item) => { const element = document.createElement('div'); element.className = `inspector-alert inspector-alert--${item.kind === 'reader' ? 'reader' : 'sequence'}`; element.textContent = item.message; container.append(element); });
   }
   search.addEventListener('input', render);
   load();

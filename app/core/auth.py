@@ -8,7 +8,8 @@ from app.services.auth_service import SESSION_COOKIE, get_user_by_token
 ROLE_ADMIN = 'Administrador'
 ROLE_HR = 'RRHH'
 ROLE_VIEWER = 'Consulta'
-ALL_ROLES = (ROLE_ADMIN, ROLE_HR, ROLE_VIEWER)
+ROLE_SYSTEMS = 'Sistemas'
+ALL_ROLES = (ROLE_ADMIN, ROLE_HR, ROLE_VIEWER, ROLE_SYSTEMS)
 
 
 def current_user_optional(
@@ -44,6 +45,10 @@ def require_employee_manager(user: Usuario = Depends(require_user)) -> Usuario:
 
 def require_read_access(user: Usuario = Depends(require_user)) -> Usuario:
     return require_roles(*ALL_ROLES)(user)
+
+
+def require_systems(user: Usuario = Depends(require_user)) -> Usuario:
+    return require_roles(ROLE_ADMIN, ROLE_SYSTEMS)(user)
 
 
 def require_page_user(request: Request, db: Session = Depends(get_db)) -> Usuario:
