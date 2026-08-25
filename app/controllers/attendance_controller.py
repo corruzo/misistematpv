@@ -5,7 +5,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_employee_manager, require_page_user, require_read_access, require_user
-from app.core.config import STATIC_DIR
+from app.core.config import APP_ENV, DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, ATTENDANCE_HISTORY_DEFAULT_DAYS
 from app.database.session import get_db
 from app.schemas.attendance import AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest
 from app.services.attendance_service import AttendanceError, attendance_summary, get_attendance_since, list_attendance, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan
@@ -25,6 +25,21 @@ def attendance_page(request: Request, user=Depends(require_employee_manager)):
     return HTMLResponse(template.render(active_page='attendance', user=user, csp_nonce=request.state.csp_nonce))
 
 
+if APP_ENV != 'production':
+    @router.get('/attendance/simulator', response_class=HTMLResponse)
+    def attendance_simulator_page(request: Request, user=Depends(require_employee_manager)):
+        template = templates_env.get_template('attendance_simulator.html')
+        return HTMLResponse(template.render(active_page='attendance', user=user, csp_nonce=request.state.csp_nonce))
+
+
+    @router.post('/api/attendance/simulator-scan')
+    def attendance_simulator_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
+        try:
+            return register_scan(db, payload.codigo_tarjeta, AttendanceOrigin.PUERTO_COM)
+        except AttendanceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+
 @router.get('/attendance/kiosk', response_class=HTMLResponse)
 def attendance_kiosk_page(request: Request, user=Depends(require_user)):
     template = templates_env.get_template('attendance_kiosk.html')
@@ -34,7 +49,7 @@ def attendance_kiosk_page(request: Request, user=Depends(require_user)):
 @router.get('/attendance/history', response_class=HTMLResponse)
 def attendance_history_page(request: Request, user=Depends(require_page_user)):
     template = templates_env.get_template('attendance_history.html')
-    return HTMLResponse(template.render(active_page='attendance_history', user=user, csp_nonce=request.state.csp_nonce))
+    return HTMLResponse(template.render(active_page='attendance_history', user=user, csp_nonce=request.state.csp_nonce, attendance_history_default_days=ATTENDANCE_HISTORY_DEFAULT_DAYS, attendance_default_page_size=DEFAULT_PAGE_SIZE))
 
 
 @router.get('/attendance/summary', response_class=HTMLResponse)
@@ -54,7 +69,7 @@ def kiosk_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _u
 @router.post('/api/attendance/manual-mark')
 def manual_mark(payload: AttendanceManualRequest, db: Session = Depends(get_db), _manager=Depends(require_employee_manager)):
     try:
-        return register_manual(db, payload.empleado_id, _manager.id, payload.fecha_hora)
+        return register_manual(db, payload.empleado_id, _manager.id, payload.fecha_hora, payload.tipo)
     except AttendanceError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
@@ -71,13 +86,17 @@ def manual_mark_preview(payload: AttendanceManualBatchRequest, db: Session = Dep
 
 @router.get('/api/attendance/history')
 def attendance_history(
-    page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
+    page: int = Query(1, ge=1), page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     date_from: date | None = None, date_to: date | None = None,
-    empleado_q: str | None = Query(None, max_length=150),
-    departamento_ids: list[int] | None = Query(None), gerencia_ids: list[int] | None = Query(None),
+    empleado_q: str | None = Query(None, max_length=150), empleado_ids: list[int] | None = Query(None),
+    departamento_ids: list[int] | None = Query(None), gerencia_ids: list[int] | None = Query(None), tipo: str | None = Query(None),
     db: Session = Depends(get_db), _user=Depends(require_read_access),
 ):
-    return list_attendance(db, page, page_size, date_from, date_to, empleado_q, departamento_ids, gerencia_ids)
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail='La fecha inicial no puede ser posterior a la fecha final.')
+    if (page - 1) * page_size > MAX_OFFSET:
+        raise HTTPException(status_code=422, detail='La página solicitada supera el límite permitido.')
+    return list_attendance(db, page, page_size, date_from, date_to, empleado_q, empleado_ids, departamento_ids, gerencia_ids, tipo)
 
 
 @router.get('/api/attendance/summary')

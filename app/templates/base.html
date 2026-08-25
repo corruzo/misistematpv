@@ -8,31 +8,28 @@
     
     <title>{% block title %}MarcajeTPV - Gestión{% endblock %}</title>
 
-    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
 
-    <!-- CSS (Bootstrap 5.3 + Custom) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.5">
+    <link rel="stylesheet" href="/static/css/style.css?v=2.7">
     
     {% block head %}{% endblock %}
   </head>
   <body class="ios-bg">
     <div class="app-shell">
-      <!-- Sidebar / Menú Lateral -->
       <aside class="sidebar-wide" aria-label="Navegación principal">
         <div class="sidebar-brand">
-          <div class="brand-text">MarcajeTPV</div>
+          <div class="brand-text">Tripoliven</div>
         </div>
         <nav class="sidebar-nav">
           <div class="sidebar-section sidebar-accordion">
-            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-people" aria-expanded="false" aria-controls="module-people">
+            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-people" aria-expanded="{{ 'true' if active_page in ('dashboard', 'organization', 'employees', 'users') else 'false' }}" aria-controls="module-people">
               <span>Administración</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <div class="collapse" id="module-people">
+            <div class="collapse {{ 'show' if active_page in ('dashboard', 'organization', 'employees', 'users') else '' }}" id="module-people">
               <div class="sidebar-section__body">
                 <a class="side-link {% if active_page == 'dashboard' %}active{% endif %}" href="/" {% if active_page == 'dashboard' %}aria-current="page"{% endif %}>
                   <span class="side-icon">
@@ -63,11 +60,11 @@
           </div>
 
           <div class="sidebar-section sidebar-accordion">
-            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-attendance" aria-expanded="false" aria-controls="module-attendance">
+            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-attendance" aria-expanded="{{ 'true' if active_page in ('attendance_summary', 'attendance', 'attendance_history') else 'false' }}" aria-controls="module-attendance">
               <span>Asistencia</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div class="collapse" id="module-attendance">
+            <div class="collapse {{ 'show' if active_page in ('attendance_summary', 'attendance', 'attendance_history') else '' }}" id="module-attendance">
             <div class="sidebar-section__body">
               <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary">
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Resumen</span>
@@ -92,7 +89,6 @@
         </div>
       </aside>
 
-      <!-- Área de Contenido Principal -->
       <div class="content-area">
         <header class="topbar-wide">
           <div class="top-left">
@@ -104,7 +100,6 @@
             {% block top_search %}{% endblock %}
             {% block actions %}{% endblock %}
             
-            <!-- User Profile Widget con Menú Desplegable -->
             <div class="profile-menu">
               <a class="profile-chip" href="/profile" aria-label="Abrir mi perfil">
                 <div class="profile-avatar-placeholder">
@@ -134,8 +129,7 @@
       </div>
     </div>
 
-    <!-- JS Scripts (Secuencia síncrona al pie de página para prevenir conflictos de 'backdrop') -->
-    <script src="/static/js/main.js?v=2.0"></script>
+    <script src="/static/js/main.js?v=2.1"></script>
     <script nonce="{{ csp_nonce }}">
       document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('logoutForm')?.addEventListener('submit', async (event) => {

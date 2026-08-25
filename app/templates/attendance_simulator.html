@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Simulador temporal - MarcajeTPV{% endblock %}
+{% block page_title %}Borrar cuando termine{% endblock %}
+
+{% block content %}
+<section class="simulator-panel">
+  <div>
+    <h2>Simulador HID</h2>
+  </div>
+  <form id="simulatorForm" class="simulator-form">
+    <label class="form-label" for="simulatorCardCode">codigo de tarjeta vinculada al empleado</label>
+    <input id="simulatorCardCode" class="form-control" autocomplete="off" autofocus required maxlength="100" placeholder="Ej. 00123456">
+    <button class="btn-ios primary" type="submit" id="simulatorSubmit">Simular</button>
+  </form>
+  <p id="simulatorMessage" class="form-feedback" role="status" aria-live="polite"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('simulatorForm');
+    const input = document.getElementById('simulatorCardCode');
+    const button = document.getElementById('simulatorSubmit');
+    const message = document.getElementById('simulatorMessage');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      button.disabled = true;
+      message.className = 'form-feedback';
+      message.textContent = 'Enviando lectura...';
+      try {
+        const response = await fetch('/api/attendance/simulator-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...window.AppUI.csrfHeaders() },
+          body: JSON.stringify({ codigo_tarjeta: input.value.trim() }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || 'No se pudo simular la lectura.');
+        message.className = 'form-feedback form-feedback--success';
+        message.textContent = `${payload.tipo} registrada para ${payload.empleado_nombre}.`;
+        input.select();
+      } catch (error) {
+        message.className = 'form-feedback form-feedback--error';
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        input.focus();
+      }
+    });
+  });
+</script>
+{% endblock %}

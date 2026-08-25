@@ -1,18 +1,20 @@
 {% extends 'base.html' %}
 {% from 'components.html' import kpi_card %}
 
-{% block title %}Inspector de seguridad - MarcajeTPV{% endblock %}
-{% block page_title %}Inspector de seguridad{% endblock %}
+{% block title %}Resumen de asistencia - MarcajeTPV{% endblock %}
+{% block page_title %}Resumen de asistencia{% endblock %}
 
 {% block content %}
 <div class="attendance-page inspector-page">
-  <section class="attendance-hero inspector-hero">
+  <section class="attendance-context-bar" aria-label="Estado de asistencia">
     <div>
-      <p class="eyebrow">Control de acceso en tiempo real</p>
-      <h2>Personal dentro de la empresa</h2>
-      <p>Consulta quién permanece en las instalaciones y cuándo registró su última entrada.</p>
+      <span class="eyebrow">Estado de asistencia</span>
+      <strong>Control operativo del día</strong>
     </div>
-    <div class="inspector-live"><span></span><strong id="inspectorUpdated">Actualizando...</strong></div>
+    <div class="attendance-context-meta">
+      <span id="summaryDate"></span>
+      <span class="inspector-live"><span></span><strong id="inspectorUpdated">Actualizando...</strong></span>
+    </div>
   </section>
 
   <div class="kpi-grid kpi-grid--compact inspector-kpis">
@@ -24,8 +26,8 @@
 
   <section class="card inspector-presence-card">
     <div class="card-panel__header inspector-table-header">
-      <div><p class="eyebrow">Lista de presencia</p><h3>Personas actualmente dentro</h3></div>
-      <div class="inspector-table-tools"><label class="sr-only" for="presentSearch">Buscar personal presente</label><input id="presentSearch" class="form-control" type="search" placeholder="Buscar por nombre, cédula o área"></div>
+      <div><h3>Personas actualmente dentro</h3></div>
+      <div class="inspector-table-tools"><label class="sr-only" for="presentSearch"></label><input id="presentSearch" class="form-control" type="search" placeholder="Buscar empleado por nombre, cédula o área"></div>
     </div>
     <div class="table-responsive">
       <table class="table ios-table inspector-table mb-0">
@@ -74,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('summaryEntradasMeta').textContent = 'Desde medianoche';
       document.getElementById('summarySalidasMeta').textContent = 'Desde medianoche';
       document.getElementById('summaryMarcajesMeta').textContent = 'Entradas + salidas';
+      document.getElementById('summaryDate').textContent = new Date().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
       document.getElementById('inspectorUpdated').textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
       render();
     } catch (error) { window.AppUI.toast(error.message, 'error'); }

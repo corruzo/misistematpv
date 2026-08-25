@@ -35,6 +35,23 @@ DB_USER = os.getenv('DB_USER', '')
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 DB_TRUSTED = os.getenv('DB_TRUSTED', 'false').lower() in ('1', 'true', 'yes')
 
+# Serial reader settings. Empty port keeps the hardware listener disabled.
+SERIAL_PORT = os.getenv('SERIAL_PORT', '').strip()
+SERIAL_BAUDRATE = int(os.getenv('SERIAL_BAUDRATE', '9600'))
+SERIAL_BYTESIZE = int(os.getenv('SERIAL_BYTESIZE', '8'))
+SERIAL_PARITY = os.getenv('SERIAL_PARITY', 'N').strip().upper()
+SERIAL_STOPBITS = float(os.getenv('SERIAL_STOPBITS', '1'))
+SERIAL_TIMEOUT = float(os.getenv('SERIAL_TIMEOUT', '1'))
+SERIAL_ENCODING = os.getenv('SERIAL_ENCODING', 'ascii').strip() or 'ascii'
+
+# Query safety defaults. Keep list endpoints bounded even when clients omit parameters.
+ATTENDANCE_HISTORY_DEFAULT_DAYS = int(os.getenv('ATTENDANCE_HISTORY_DEFAULT_DAYS', '15'))
+DEFAULT_PAGE_SIZE = int(os.getenv('DEFAULT_PAGE_SIZE', '25'))
+MAX_PAGE_SIZE = int(os.getenv('MAX_PAGE_SIZE', '100'))
+MAX_OFFSET = int(os.getenv('MAX_OFFSET', '1000000'))
+MAX_ORGANIZATION_CHILDREN = int(os.getenv('MAX_ORGANIZATION_CHILDREN', '1000'))
+PRESENT_EMPLOYEES_LIMIT = int(os.getenv('PRESENT_EMPLOYEES_LIMIT', '500'))
+
 # Build SQLAlchemy URL. Prefer Trusted Connection if configured.
 if DB_TRUSTED or not DB_USER:
     # Use Windows Authentication / Trusted Connection

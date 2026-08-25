@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models.user import Usuario
+from app.services.auth_service import invalidate_user_sessions
 from app.schemas.user import UsuarioCreate, UsuarioUpdate
 from app.services.audit_service import add_audit
 
@@ -40,12 +41,20 @@ def create_user(db: Session, payload: UsuarioCreate, actor_id: int | None = None
     return usuario
 
 
-def list_users(db: Session, query: str | None = None):
+def build_user_query(db: Session, query: str | None = None):
     statement = db.query(Usuario)
     if query and query.strip():
         search = f'%{query.strip()}%'
         statement = statement.filter((Usuario.username.like(search)) | (Usuario.nombre.like(search)))
-    return statement.order_by(Usuario.nombre.asc(), Usuario.username.asc()).all()
+    return statement
+
+
+def list_users(db: Session, query: str | None = None, limit: int = 25, offset: int = 0):
+    return build_user_query(db, query).order_by(Usuario.nombre.asc(), Usuario.username.asc()).offset(offset).limit(limit).all()
+
+
+def count_users(db: Session, query: str | None = None) -> int:
+    return build_user_query(db, query).count()
 
 
 def update_user(db: Session, user_id: int, payload: UsuarioUpdate, actor_id: int | None = None) -> Usuario:
@@ -60,6 +69,10 @@ def update_user(db: Session, user_id: int, payload: UsuarioUpdate, actor_id: int
         raise ValueError('Ya existe otro usuario con ese nombre.')
     if not username or not nombre:
         raise ValueError('El usuario y el nombre son obligatorios.')
+    if actor_id == usuario.id and payload.rol != ROLE_ADMIN:
+        raise ValueError('No puedes quitarte el rol de administrador.')
+    if usuario.rol == ROLE_ADMIN and payload.rol != ROLE_ADMIN and db.query(Usuario).filter(Usuario.rol == ROLE_ADMIN, Usuario.activo == 1).count() <= 1:
+        raise ValueError('Debe existir al menos un administrador activo.')
 
     antes = {'username': usuario.username, 'nombre': usuario.nombre, 'rol': usuario.rol, 'activo': bool(usuario.activo)}
     usuario.username = username
@@ -67,6 +80,7 @@ def update_user(db: Session, user_id: int, payload: UsuarioUpdate, actor_id: int
     usuario.rol = payload.rol
     if payload.password:
         usuario.password_hash = hash_password(payload.password)
+        invalidate_user_sessions(db, usuario.id)
     db.add(usuario)
     add_audit(db, actor_id, 'actualizacion', 'usuarios', usuario.id, antes, {'username': usuario.username, 'nombre': usuario.nombre, 'rol': usuario.rol, 'activo': bool(usuario.activo)})
     db.commit()
@@ -78,6 +92,10 @@ def set_user_status(db: Session, user_id: int, active: bool, actor_id: int | Non
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
         raise UserNotFoundError('El usuario no existe.')
+    if not active and actor_id == usuario.id:
+        raise ValueError('No puedes inhabilitar tu propio usuario.')
+    if not active and usuario.rol == ROLE_ADMIN and db.query(Usuario).filter(Usuario.rol == ROLE_ADMIN, Usuario.activo == 1).count() <= 1:
+        raise ValueError('Debe existir al menos un administrador activo.')
     antes = {'activo': bool(usuario.activo)}
     usuario.activo = 1 if active else 0
     db.add(usuario)

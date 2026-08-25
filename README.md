@@ -32,7 +32,7 @@ El archivo `start_app.bat` hace lo siguiente automáticamente:
 - Crea `.venv` si no existe
 - Comprueba las dependencias instaladas y evita descargas innecesarias
 - Permite actualizar dependencias explícitamente con `start_app.bat /update`
-- Copia `.env.example` a `.env` si aún no hay uno
+- Copia `.env.template` a `.env` si aún no hay uno
 - Ejecuta la app con `python run.py`
 
 ## Variables de entorno
@@ -49,9 +49,24 @@ DB_USER=
 DB_PASSWORD=
 DB_TRUSTED=true
 APP_TIMEZONE=America/Caracas
+SERIAL_PORT=COM3
+SERIAL_BAUDRATE=9600
+SERIAL_BYTESIZE=8
+SERIAL_PARITY=N
+SERIAL_STOPBITS=1
+SERIAL_TIMEOUT=1
+SERIAL_ENCODING=ascii
 ```
 
 Si usas autenticación de Windows, deja `DB_TRUSTED=true` y `DB_USER`/`DB_PASSWORD` vacíos.
+
+Para el lector serial, configura `SERIAL_PORT` con el COM asignado por Windows. En equipos de desarrollo sin lector, deja `SERIAL_PORT=` vacío: la aplicación funciona normalmente y no intenta abrir ningún puerto. En la PC de producción, conecta el lector, revisa el COM en el Administrador de dispositivos y configura ese valor, por ejemplo `SERIAL_PORT=COM5`. La configuración inicial usa 9600 baudios, 8 bits, sin paridad y 1 bit de parada (8N1); cambia `SERIAL_PARITY` a `E` u `O`, o `SERIAL_STOPBITS`, si el fabricante indica otros valores. El lector debe enviar el código de tarjeta terminado en salto de línea (`CR` o `LF`).
+
+El lector se abre automáticamente al iniciar el servidor. Si el COM no está disponible, la aplicación continúa funcionando y registra el problema en consola mientras intenta reconectar; no se generan marcajes hasta recibir una lectura válida.
+
+La PC del kiosco debe ejecutar la aplicación con un solo worker cuando `SERIAL_PORT` esté configurado. El arranque rechaza explícitamente `WEB_CONCURRENCY` mayor que `1` para evitar lectores seriales duplicados. Si se usan varios workers para otro entorno, deja `SERIAL_PORT=` vacío y utiliza el lector como proceso independiente.
+
+En desarrollo existe temporalmente `/attendance/simulator`, una pantalla protegida para probar el flujo del kiosco escribiendo un código de tarjeta. Esta ruta no se registra cuando `APP_ENV=production`.
 
 ## Arranque manual
 

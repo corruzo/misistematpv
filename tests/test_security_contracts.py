@@ -7,9 +7,23 @@ from app.core.auth import ROLE_ADMIN, ROLE_HR, ROLE_VIEWER, require_roles
 from app.core.rate_limit import is_rate_limited
 from app.core.security import hash_password, password_needs_rehash, verify_password
 from app.controllers.employee_controller import router
+from run import configured_worker_count, validate_serial_worker_count
 
 
 class SecurityContractTest(unittest.TestCase):
+    def test_serial_reader_rejects_multiple_workers(self):
+        with self.assertRaisesRegex(RuntimeError, 'un solo worker'):
+            validate_serial_worker_count(2, 'COM3')
+
+    def test_serial_reader_allows_single_worker_or_no_port(self):
+        validate_serial_worker_count(1, 'COM3')
+        validate_serial_worker_count(4, '')
+
+    def test_worker_count_reads_uvicorn_argument_or_environment(self):
+        self.assertEqual(configured_worker_count(['uvicorn', 'run:app', '--workers', '3'], {}), 3)
+        self.assertEqual(configured_worker_count(['uvicorn', 'run:app', '--workers=4'], {}), 4)
+        self.assertEqual(configured_worker_count(['uvicorn', 'run:app'], {'WEB_CONCURRENCY': '2'}), 2)
+
     def test_password_hashes_verify_and_old_cost_is_rehashed(self):
         password = 'UnaClaveSegura123'
         encoded = hash_password(password)

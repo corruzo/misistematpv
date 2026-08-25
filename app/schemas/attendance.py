@@ -21,6 +21,7 @@ class AttendanceScanRequest(BaseModel):
 class AttendanceManualRequest(BaseModel):
     empleado_id: int = Field(..., gt=0)
     fecha_hora: datetime | None = None
+    tipo: AttendanceType | None = None
 
 
 class AttendanceManualBatchRequest(BaseModel):

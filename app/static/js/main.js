@@ -37,6 +37,10 @@
 
   window.bootstrap = { Modal: LocalModal };
   window.AppUI = {
+    csrfHeaders() {
+      const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      return token ? { 'X-CSRFToken': token } : {};
+    },
     toast(message, type = 'info') {
       const region = document.getElementById('toastRegion');
       if (!region) return;
@@ -73,6 +77,47 @@
         dialog.querySelector('[data-confirm-cancel]').focus();
       });
     },
+    renderPagination(container, { total, page, pageSize, onPageChange, label = 'registros' }) {
+      if (!container) return;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      container.replaceChildren();
+      container.className = 'table-pagination';
+
+      const info = document.createElement('span');
+      info.className = 'table-pagination__info';
+      info.textContent = `${total} ${label} · Página ${page} de ${totalPages}`;
+
+      const controls = document.createElement('div');
+      controls.className = 'table-pagination__controls';
+      [['Anterior', page - 1, page <= 1], ['Siguiente', page + 1, page >= totalPages]].forEach(([text, nextPage, disabled]) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn-ios secondary btn-sm';
+        button.textContent = text;
+        button.disabled = disabled;
+        button.addEventListener('click', () => onPageChange(nextPage));
+        controls.append(button);
+      });
+
+      container.append(info, controls);
+    },
+    rowActions(actions) {
+      const container = document.createElement('div');
+      container.className = 'table-row-actions';
+      actions.forEach(({ label, icon, variant = 'ghost', onClick, disabled = false }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `btn-ios ${variant} btn-sm table-row-actions__button`;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        button.disabled = disabled;
+        if (icon) button.innerHTML = `<svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#${icon}"></use></svg>`;
+        else button.textContent = label;
+        button.addEventListener('click', onClick);
+        container.append(button);
+      });
+      return container;
+    },
   };
 
   document.addEventListener('click', (event) => {
@@ -101,7 +146,7 @@
   const state = {
     q: '',
     page: 1,
-    pageSize: 10,
+    pageSize: 25,
     total: 0,
     loading: false,
   };
@@ -182,6 +227,9 @@
 
       [gerenciaFilter, departamentoFilter, estadoFilter].forEach((select) => {
         select?.addEventListener('change', () => {
+          if (select === gerenciaFilter) {
+            this.populateFilterSelects();
+          }
           state.page = 1;
           this.fetchEmployees();
         });
@@ -296,6 +344,7 @@
         if (saveBtn) saveBtn.disabled = true;
         const res = await fetch(id ? `/api/employees/${id}` : '/api/employees', {
           method: id ? 'PUT' : 'POST',
+          headers: window.AppUI.csrfHeaders(),
           body: formData,
         });
 
@@ -328,10 +377,10 @@
           params.set('estado', estadoFilter.value);
         }
         if (gerenciaFilter && gerenciaFilter.value) {
-          params.set('gerencia', gerenciaFilter.value);
+          params.set('gerencia_id', gerenciaFilter.value);
         }
         if (departamentoFilter && departamentoFilter.value) {
-          params.set('departamento', departamentoFilter.value);
+          params.set('departamento_id', departamentoFilter.value);
         }
         params.set('limit', String(state.pageSize));
         params.set('offset', String(offset));
@@ -363,9 +412,9 @@
       if (!metrics) return;
 
       const map = {
-        total: '#metric-total',
         active: '#metric-active',
-        depts: '#metric-depts',
+        vacation: '#metric-vacation',
+        retired_suspended: '#metric-retired-suspended',
       };
 
       Object.entries(map).forEach(([key, selector]) => {
@@ -427,16 +476,13 @@
               ${this.escapeHtml(employee.estado || '')}
             </span>
           </td>
-          <td class="text-end">
-            <div class="btn-group btn-group-sm">
-              <button type="button" class="btn-ios secondary btn-sm" data-action="edit" data-id="${employee.id}">Editar</button>
-              <button type="button" class="btn-ios secondary btn-sm text-danger" data-action="disable" data-id="${employee.id}">Inhabilitar</button>
-            </div>
-          </td>
+          <td class="text-end"><div data-row-actions></div></td>
         `;
 
-        row.querySelector('[data-action="edit"]')?.addEventListener('click', () => this.editEmployee(employee.id));
-        row.querySelector('[data-action="disable"]')?.addEventListener('click', () => this.disableEmployee(employee.id));
+        row.querySelector('[data-row-actions]').replaceWith(window.AppUI.rowActions([
+          { label: 'Editar empleado', icon: 'edit', variant: 'ghost', onClick: () => this.editEmployee(employee.id) },
+          { label: 'Inhabilitar empleado', icon: 'trash', variant: 'danger', onClick: () => this.disableEmployee(employee.id) },
+        ]));
         row.querySelector('.employee-avatar')?.addEventListener('error', (event) => {
           event.currentTarget.src = defaultAvatar;
         }, { once: true });
@@ -447,42 +493,15 @@
     renderPagination() {
       if (!this.pagination) return;
 
-      const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
-      this.pagination.innerHTML = '';
-
-      const prevButton = document.createElement('button');
-      prevButton.type = 'button';
-      prevButton.textContent = 'Anterior';
-      prevButton.className = 'btn-ios secondary btn-sm';
-      prevButton.disabled = state.page <= 1;
-      prevButton.addEventListener('click', () => {
-        if (state.page > 1) {
-          state.page -= 1;
+      window.AppUI.renderPagination(this.pagination, {
+        total: state.total,
+        page: state.page,
+        pageSize: state.pageSize,
+        onPageChange: (nextPage) => {
+          state.page = nextPage;
           this.fetchEmployees();
-        }
+        },
       });
-
-      const nextButton = document.createElement('button');
-      nextButton.type = 'button';
-      nextButton.textContent = 'Siguiente';
-      nextButton.className = 'btn-ios secondary btn-sm';
-      nextButton.disabled = state.page >= totalPages;
-      nextButton.addEventListener('click', () => {
-        if (state.page < totalPages) {
-          state.page += 1;
-          this.fetchEmployees();
-        }
-      });
-
-      const info = document.createElement('div');
-      info.className = 'small text-muted align-self-center px-2';
-      info.textContent = `Página ${state.page} de ${totalPages}`;
-
-      this.pagination.append(prevButton, info, nextButton);
-
-      if (this.paginationInfo) {
-        this.paginationInfo.textContent = `${state.total} registros`;
-      }
     },
 
     async ensureOrganizationCatalog(force = false) {
@@ -524,21 +543,21 @@
       const selectedDepartamento = departamentoFilter.value;
 
       const gerencias = (this.organizationCatalog || []).filter((gerencia) => (gerencia.estado || 'Activo') === 'Activo');
-      gerenciaFilter.innerHTML = '<option value="">Gerencia</option>' + gerencias.map((gerencia) => `<option value="${this.escapeHtml(gerencia.nombre)}">${this.escapeHtml(gerencia.nombre)}</option>`).join('');
+      gerenciaFilter.innerHTML = '<option value="">Gerencia</option>' + gerencias.map((gerencia) => `<option value="${gerencia.id}">${this.escapeHtml(gerencia.nombre)}</option>`).join('');
 
-      if (selectedGerencia && gerencias.some((gerencia) => gerencia.nombre === selectedGerencia)) {
+      if (selectedGerencia && gerencias.some((gerencia) => String(gerencia.id) === selectedGerencia)) {
         gerenciaFilter.value = selectedGerencia;
       } else {
         gerenciaFilter.value = '';
       }
 
-      const departments = selectedGerencia && gerencias.some((gerencia) => gerencia.nombre === selectedGerencia)
-        ? (gerencias.find((gerencia) => gerencia.nombre === selectedGerencia)?.departamentos || []).filter((departamento) => (departamento.estado || 'Activo') === 'Activo')
+      const departments = selectedGerencia && gerencias.some((gerencia) => String(gerencia.id) === selectedGerencia)
+        ? (gerencias.find((gerencia) => String(gerencia.id) === selectedGerencia)?.departamentos || []).filter((departamento) => (departamento.estado || 'Activo') === 'Activo')
         : gerencias.flatMap((gerencia) => (gerencia.departamentos || []).filter((departamento) => (departamento.estado || 'Activo') === 'Activo'));
 
-      departamentoFilter.innerHTML = '<option value="">Departamento</option>' + departments.map((departamento) => `<option value="${this.escapeHtml(departamento.nombre)}">${this.escapeHtml(departamento.nombre)}</option>`).join('');
+      departamentoFilter.innerHTML = '<option value="">Departamento</option>' + departments.map((departamento) => `<option value="${departamento.id}">${this.escapeHtml(departamento.nombre)}</option>`).join('');
 
-      if (selectedDepartamento && departments.some((departamento) => departamento.nombre === selectedDepartamento)) {
+      if (selectedDepartamento && departments.some((departamento) => String(departamento.id) === selectedDepartamento)) {
         departamentoFilter.value = selectedDepartamento;
       } else {
         departamentoFilter.value = '';
@@ -730,7 +749,7 @@
 
       this.setLoading(true);
       try {
-        const response = await fetch(`/api/employees/${employeeId}/disable`, { method: 'PATCH' });
+        const response = await fetch(`/api/employees/${employeeId}/disable`, { method: 'PATCH', headers: window.AppUI.csrfHeaders() });
         if (!response.ok) throw new Error('Error');
         this.fetchEmployees();
       } catch (error) {

@@ -9,31 +9,25 @@
 {% block content %}
 {% from 'components.html' import kpi_card %}
 
-<!-- Header principal y botones de acción -->
-<div class="row align-items-center mb-4 g-3">
-  <div class="col">
-    <h2 class="h4 mb-0 font-weight-bold">Gestión de Empleados</h2>
-  </div>
+<div class="row justify-content-end mb-4 g-3">
   <div class="col-auto d-flex gap-2">
     <button id="viewStructureBtn" type="button" class="btn-ios secondary">Ver estructura</button>
-    <button id="newBtn" type="button" class="btn-ios primary" data-bs-toggle="modal" data-bs-target="#employeeModal">+ Nuevo registro</button>
+    <button id="newBtn" type="button" class="btn-ios primary" data-bs-toggle="modal" data-bs-target="#employeeModal">Nuevo registro</button>
   </div>
 </div>
 
-<!-- Grid de KPIs -->
 <div class="row g-3 mb-4">
   <div class="col-12 col-sm-6 col-md-4">
-    {{ kpi_card('Total empleados', 'metric-total', tone='blue', icon_name='users') }}
+    {{ kpi_card('Total empleados activos', 'metric-active', tone='green', icon_name='users') }}
   </div>
   <div class="col-12 col-sm-6 col-md-4">
-    {{ kpi_card('Activos', 'metric-active', tone='green', icon_name='check') }}
+    {{ kpi_card('Total empleados de vacaciones', 'metric-vacation', tone='blue', icon_name='check') }}
   </div>
   <div class="col-12 col-sm-12 col-md-4">
-    {{ kpi_card('Gerencias / departamentos', 'metric-depts', tone='orange', icon_name='building') }}
+    {{ kpi_card('Total retirados / suspendidos', 'metric-retired-suspended', tone='orange', icon_name='building') }}
   </div>
 </div>
 
-<!-- Tabla y Filtros -->
 <div class="card card-table border-0 shadow-sm rounded-4 overflow-hidden mb-4">
   <div class="card-header-toolbar p-3 border-bottom bg-white">
     <div class="row g-3 align-items-end">
@@ -111,19 +105,16 @@
       </div>
     </div>
 
-    <div class="card-footer bg-white border-top px-4 py-3 d-flex align-items-center justify-content-between">
-      <span class="text-muted small" id="paginationInfo">Cargando...</span>
-      <div id="pagination" class="d-flex align-items-center gap-2"></div>
+    <div class="card-footer bg-white border-top p-0">
+      <div id="pagination" class="table-pagination" aria-live="polite"></div>
     </div>
   </div>
 </div>
 
-<!-- Modal Corregido -->
 <div class="modal fade" id="employeeModal" tabindex="-1" aria-labelledby="employeeModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content ios-modal border-0 shadow">
       
-      <!-- Form Wrapping Completo -->
       <form id="employeeForm" enctype="multipart/form-data" class="d-flex flex-column h-100">
         <input type="hidden" name="id" value="">
         
@@ -136,12 +127,10 @@
         </div>
 
         <div class="modal-body p-4">
-          <!-- Sección 01 -->
           <section class="employee-form-section mb-4">
             <div class="employee-form-section__heading mb-3">
               <span class="badge bg-light text-dark me-2">01</span>
               <strong class="d-inline-block">Datos personales</strong>
-              <p class="text-muted small mb-0">Identificación y fecha de cumpleaños</p>
             </div>
             <div class="row g-3">
               <div class="col-md-6">
@@ -150,8 +139,8 @@
               </div>
               <div class="col-md-6">
                 <label class="form-label fw-medium" for="codigo_tarjeta">Código de tarjeta RFID</label>
-                <input id="codigo_tarjeta" name="codigo_tarjeta" type="text" class="form-control" placeholder="Código leído por el lector">
-                <div class="form-text">Debe ser único. Puedes escribirlo o pegarlo desde el lector.</div>
+                <input id="codigo_tarjeta" name="codigo_tarjeta" type="text"class="form-control" placeholder="Código leído por el lector">
+                <div class="form-text">Escríbelo o escanéalo para leerlo automáticamente.</div>
               </div>
               <div class="col-md-6">
                 <label class="form-label fw-medium" for="nombre_apellido">Nombre y apellido</label>
@@ -160,19 +149,16 @@
               <div class="col-md-6">
                 <label class="form-label fw-medium" for="fecha_nacimiento">Fecha de cumpleaños</label>
                 <input id="fecha_nacimiento" name="fecha_nacimiento" type="date" class="form-control">
-                <div class="form-text">Se usa para identificar próximas celebraciones.</div>
               </div>
             </div>
           </section>
 
           <hr class="my-4 text-muted">
 
-          <!-- Sección 02 -->
           <section class="employee-form-section mb-4">
             <div class="employee-form-section__heading mb-3">
               <span class="badge bg-light text-dark me-2">02</span>
               <strong class="d-inline-block">Ubicación organizativa</strong>
-              <p class="text-muted small mb-0">Asigna su gerencia, departamento y cargo</p>
             </div>
             <div class="row g-3">
               <div class="col-md-4">
@@ -195,12 +181,10 @@
 
           <hr class="my-4 text-muted">
 
-          <!-- Sección 03 -->
           <section class="employee-form-section">
             <div class="employee-form-section__heading mb-3">
               <span class="badge bg-light text-dark me-2">03</span>
               <strong class="d-inline-block">Información laboral</strong>
-              <p class="text-muted small mb-0">Estatus, nómina y fotografía</p>
             </div>
             <div class="row g-3">
               <div class="col-md-6">

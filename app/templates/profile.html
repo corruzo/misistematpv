@@ -4,10 +4,6 @@
 {% block page_title %}Mi perfil{% endblock %}
 
 {% block content %}
-<div class="section-header">
-  <div>
-  </div>
-</div>
 <section class="profile-layout">
   <div class="card profile-summary-card">
     <div class="profile-summary-avatar">{{ user.nombre[0]|upper }}</div>
@@ -57,7 +53,7 @@
       try {
         const payload = Object.fromEntries(new FormData(form).entries());
         if (!payload.password) delete payload.password;
-        const response = await fetch('/api/me', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        const response = await fetch('/api/me', { method: 'PUT', headers: {'Content-Type': 'application/json', ...window.AppUI.csrfHeaders()}, body: JSON.stringify(payload) });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.detail || 'No se pudieron guardar los cambios.');
         message.textContent = 'Cambios guardados correctamente.';

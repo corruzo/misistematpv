@@ -55,5 +55,12 @@ class UsuarioOut(BaseModel):
         )
 
 
+class UsuarioPage(BaseModel):
+    items: list[UsuarioOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class UsuarioStatusUpdate(BaseModel):
     activo: bool

@@ -1,80 +1,23 @@
 {% extends 'base.html' %}
 
-{% block title %}Resúmen - MarcajeTPV{% endblock %}
-{% block page_title %}Resúmen de la Organización TPV{% endblock %}
+{% block title %}Resumen - MarcajeTPV{% endblock %}
+{% block page_title %}Resumen general{% endblock %}
 {% block actions %}
 {% endblock %}
 
 {% block content %}
 {% from 'components.html' import kpi_card %}
 <div class="panel-shell">
-  <div class="section-header">
+  <div id="dashboardError" class="auth-error d-none" role="alert">
+    No se pudieron cargar las métricas. <button type="button" class="btn-ios ghost btn-sm" id="dashboardRetry">Reintentar</button>
   </div>
   <div class="dashboard-cards">
     {{ kpi_card('Total empleados', 'metric-total', '0 activos', 'metric-total-active', 'blue', 'users') }}
     {{ kpi_card('Activos', 'metric-active', '0% del total', 'metric-active-share', 'green', 'check') }}
-    <!-- 
-    <div class="metric-card metric-card--warning">
-      <div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 4v4M17 4v4M4 10h16M6 6h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" stroke-linecap="round"/><path d="M12 14v3M10.5 15.5h3" stroke-linecap="round"/></svg></div>
-      <div class="metric-title">Nuevos en 30 días</div>
-      <div class="metric-value-row">
-        <div class="metric-value" id="metric-new-30">0</div>
-        <div class="metric-count-subtle" id="metric-new-7">0 en 7 días</div>
-      </div>
-      <div class="metric-meta">Contrataciones recientes</div>
-    </div>
-
-    -->
-
 
     {{ kpi_card('Departamentos', 'metric-depts', '0 activos', 'metric-depts-active', 'orange', 'building') }}
     
   </div>
-
-
-        
-  <!--
-  
-  <div class="dashboard-grid">
-    <div class="card card-panel">
-      <div class="card-panel__header">
-        <div>
-          <p class="eyebrow">Actividad</p>
-          <h3>Estado del talento</h3>
-        </div>
-      </div>
-      <div class="card-panel__body">
-        <div class="mini-stat">
-          <span class="mini-stat__label">Gerencias</span>
-          <strong class="mini-stat__value" id="metric-gerencias">0</strong>
-        </div>
-        
-        <div class="mini-stat">
-          <span class="mini-stat__label">Cargos</span>
-          <strong class="mini-stat__value" id="metric-cargos">0</strong>
-        </div>
-        <div class="activity-panel">
-          <div class="activity-panel__heading">Último registro</div>
-          <div class="activity-timeline" id="latest-activity" aria-live="polite">
-            <div class="activity-empty">No hay actividad reciente</div>
-          </div>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat__label">Vacaciones</span>
-          <strong class="mini-stat__value" id="metric-vacaciones">0</strong>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat__label">Suspendidos</span>
-          <strong class="mini-stat__value" id="metric-suspendidos">0</strong>
-        </div>
-        <div class="mini-stat">
-          <span class="mini-stat__label">Retirados</span>
-          <strong class="mini-stat__value" id="metric-retirados">0</strong>
-        </div>
-      </div>
-    </div>
-
-    -->
 
     <div class="card card-panel">
       <div class="card-panel__header">
@@ -98,8 +41,7 @@
     <div class="card card-panel">
       <div class="card-panel__header">
         <div>
-          <p class="eyebrow">Organización</p>
-          <h3>Departamentos clave</h3>
+          <h3>Departamentos Activos</h3>
         </div>
       </div>
       <div class="card-panel__body card-panel__body--stacked dashboard-list" id="top-departments-list"></div>
@@ -138,7 +80,10 @@
       `).join('');
     };
 
+    const dashboardError = document.getElementById('dashboardError');
+    const loadDashboard = async () => {
     try {
+      dashboardError?.classList.add('d-none');
       const response = await fetch('/api/dashboard/metrics');
       if (!response.ok) throw new Error('No se pudo cargar métricas');
       const data = await response.json();
@@ -182,13 +127,24 @@
       const distributionBar = document.querySelector('#status-distribution-bar');
       if (distributionBar) {
         const totalStates = states.reduce((sum, [, value]) => sum + value, 0);
-        distributionBar.innerHTML = states.map(([state, value]) => `<span class="status-segment status-segment--${state}" style="width: ${totalStates ? (value / totalStates) * 100 : 0}%" title="${state}: ${value}"></span>`).join('');
+        const distributionWidths = states.map(([state, value]) => `.status-segment--${state} { width: ${totalStates ? (value / totalStates) * 100 : 0}%; }`).join('');
+        document.getElementById('distributionWidths')?.remove();
+        const distributionStyle = document.createElement('style');
+        distributionStyle.id = 'distributionWidths';
+        distributionStyle.nonce = '{{ csp_nonce }}';
+        distributionStyle.textContent = distributionWidths;
+        document.head.append(distributionStyle);
+        distributionBar.innerHTML = states.map(([state, value]) => `<span class="status-segment status-segment--${state}" title="${state}: ${value}"></span>`).join('');
       }
 
       renderList('#top-departments-list', data.top_departamentos || []);
     } catch (error) {
       console.error(error);
+      dashboardError?.classList.remove('d-none');
     }
+    };
+    document.getElementById('dashboardRetry')?.addEventListener('click', loadDashboard);
+    await loadDashboard();
   });
 </script>
 {% endblock %}

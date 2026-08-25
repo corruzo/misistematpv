@@ -35,6 +35,17 @@ class EmployeePageTemplateTest(unittest.TestCase):
         for state in ['Activo', 'Vacaciones', 'Retirado', 'Suspendido']:
             self.assertIn(f'value="{state}"', html)
 
+    def test_employee_page_exposes_requested_kpis_and_scoped_filters(self):
+        html = TEMPLATE.read_text(encoding='utf-8')
+        javascript = (ROOT / 'app' / 'static' / 'js' / 'main.js').read_text(encoding='utf-8')
+
+        self.assertIn('Total empleados activos', html)
+        self.assertIn('Total empleados de vacaciones', html)
+        self.assertIn('Total retirados / suspendidos', html)
+        self.assertIn("params.set('gerencia_id', gerenciaFilter.value)", javascript)
+        self.assertIn("params.set('departamento_id', departamentoFilter.value)", javascript)
+        self.assertIn("this.populateFilterSelects();", javascript)
+
 
 if __name__ == '__main__':
     unittest.main()

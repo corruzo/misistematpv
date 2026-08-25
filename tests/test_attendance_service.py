@@ -6,7 +6,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado
 from app.schemas.attendance import AttendanceOrigin, AttendanceType
 from app.schemas.attendance import AttendanceManualBatchRequest
-from app.services.attendance_service import AttendanceError, register_manual, register_scan
+from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, register_manual, register_scan
 
 
 class QueryDouble:
@@ -84,6 +84,7 @@ class AttendanceServiceTest(unittest.TestCase):
         self.assertEqual(len(db.audit_records), 2)
 
     def test_debounce_rejects_duplicate_mark(self):
+        self.assertEqual(DEBOUNCE_SECONDS, 15)
         db = DatabaseDouble(self.make_employee())
         register_manual(db, 1)
 
@@ -98,6 +99,14 @@ class AttendanceServiceTest(unittest.TestCase):
 
         self.assertEqual(result.tipo, AttendanceType.ENTRADA)
         self.assertEqual(db.records[0].fecha_hora, marked_at)
+
+    def test_manual_can_override_suggested_type(self):
+        db = DatabaseDouble(self.make_employee())
+
+        result = register_manual(db, 1, attendance_type=AttendanceType.SALIDA)
+
+        self.assertEqual(result.tipo, AttendanceType.SALIDA)
+        self.assertEqual(db.records[0].tipo, AttendanceType.SALIDA.value)
 
     def test_manual_rejects_future_time(self):
         db = DatabaseDouble(self.make_employee())

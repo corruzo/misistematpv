@@ -182,7 +182,7 @@ def get_employee_by_id(db: Session, emp_id: int) -> Optional[Empleado]:
     ).filter(Empleado.id == emp_id).first()
 
 
-def build_employee_query(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, tipo_nomina: Optional[str] = None):
+def build_employee_query(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, gerencia_id: Optional[int] = None, departamento_id: Optional[int] = None, tipo_nomina: Optional[str] = None):
     query = db.query(Empleado).options(
         joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
         joinedload(Empleado.cargo_rel)
@@ -198,18 +198,22 @@ def build_employee_query(db: Session, q: Optional[str] = None, estado: Optional[
         query = query.join(Empleado.departamento_rel).join(Departamento.gerencia).filter(Gerencia.nombre.like(f"%{gerencia}%"))
     if departamento:
         query = query.join(Empleado.departamento_rel).filter(Departamento.nombre.like(f"%{departamento}%"))
+    if gerencia_id is not None:
+        query = query.join(Empleado.departamento_rel).filter(Departamento.gerencia_id == gerencia_id)
+    if departamento_id is not None:
+        query = query.filter(Empleado.departamento_id == departamento_id)
     if tipo_nomina:
         query = query.filter(Empleado.tipo_nomina == tipo_nomina)
     return query
 
 
-def search_employees(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, tipo_nomina: Optional[str] = None, limit: int = 100, offset: int = 0) -> List[Empleado]:
-    query = build_employee_query(db, q, estado, gerencia, departamento, tipo_nomina)
+def search_employees(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, gerencia_id: Optional[int] = None, departamento_id: Optional[int] = None, tipo_nomina: Optional[str] = None, limit: int = 100, offset: int = 0) -> List[Empleado]:
+    query = build_employee_query(db, q, estado, gerencia, departamento, gerencia_id, departamento_id, tipo_nomina)
     return query.order_by(Empleado.fecha_creacion.desc()).offset(offset).limit(limit).all()
 
 
-def count_employees(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, tipo_nomina: Optional[str] = None) -> int:
-    return build_employee_query(db, q, estado, gerencia, departamento, tipo_nomina).count()
+def count_employees(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, gerencia_id: Optional[int] = None, departamento_id: Optional[int] = None, tipo_nomina: Optional[str] = None) -> int:
+    return build_employee_query(db, q, estado, gerencia, departamento, gerencia_id, departamento_id, tipo_nomina).count()
 
 
 def soft_delete_employee(db: Session, emp: Empleado, usuario_id: int | None = None) -> Empleado:
@@ -269,6 +273,8 @@ def get_employee_metrics(db: Session):
     return {
         'total': total,
         'active': activos,
+        'vacation': estado_counts['Vacaciones'],
+        'retired_suspended': estado_counts['Retirado'] + estado_counts['Suspendido'],
         'inactive': inactivos,
         'by_estado': estado_counts,
         'depts': unique_departments,

@@ -1,10 +1,11 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import os
 import sys
 import subprocess
 import shutil
+import time
+import urllib.error
+import urllib.request
+import webbrowser
 
 def run_cmd(args, env=None):
     """Ejecuta un comando y devuelve el código de salida."""
@@ -15,26 +16,36 @@ def run_cmd(args, env=None):
         print(f"Error al ejecutar {' '.join(args)}: {e}")
         return 1
 
+def wait_for_server(url, process, timeout=30):
+    """Espera a que Uvicorn acepte conexiones o a que el proceso termine."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            return False
+        try:
+            with urllib.request.urlopen(url, timeout=1) as response:
+                return 200 <= response.status < 500
+        except (urllib.error.URLError, TimeoutError):
+            time.sleep(0.5)
+    return False
+
 def main():
     print("=========================================")
     print("   Gestor de Arranque de MarcajeTPV      ")
     print("=========================================")
     
-    # 1. Ajustar el directorio de trabajo al directorio del script
     base_dir = os.path.dirname(os.path.abspath(__file__))
     if base_dir:
         os.chdir(base_dir)
     else:
         base_dir = os.getcwd()
     
-    # 2. Rutas del entorno virtual
     venv_dir = os.path.join(base_dir, ".venv")
     if os.name == "nt":
         venv_python = os.path.join(venv_dir, "Scripts", "python.exe")
     else:
         venv_python = os.path.join(venv_dir, "bin", "python")
         
-    # 3. Crear entorno virtual si no existe o si se solicita actualización
     force_update = "/update" in sys.argv or "--update" in sys.argv
     if not os.path.exists(venv_dir):
         print("Creando entorno virtual (.venv)...")
@@ -46,15 +57,12 @@ def main():
     else:
         install_deps = force_update
         
-    # Usar el python de .venv si existe, de lo contrario usar el actual
     active_python = venv_python if os.path.exists(venv_python) else sys.executable
     
-    # 4. Comprobar e instalar dependencias si es necesario
     if not install_deps:
-        # Intento rápido de importación para verificar si están las dependencias
         check_code = (
             "import fastapi, uvicorn, sqlalchemy, alembic, pyodbc, dotenv, jinja2, "
-            "multipart, aiofiles, importlib.metadata as metadata; metadata.version('tzdata')"
+            "multipart, aiofiles, serial, importlib.metadata as metadata; metadata.version('tzdata')"
         )
         if run_cmd([active_python, "-c", check_code]) != 0:
             install_deps = True
@@ -68,7 +76,6 @@ def main():
     else:
         print("Dependencias ya instaladas. Se omite la descarga.")
         
-    # 5. Crear archivo .env desde plantilla si no existe
     env_file = os.path.join(base_dir, ".env")
     env_template = os.path.join(base_dir, ".env.template")
     if not os.path.exists(env_file):
@@ -78,19 +85,34 @@ def main():
         else:
             print("WARNING: No se encontró .env.template para inicializar .env.")
             
-    # 6. Aplicar migraciones de la base de datos automáticamente
     print("Aplicando migraciones de base de datos (Alembic)...")
     if run_cmd([active_python, "-m", "alembic", "upgrade", "head"]) != 0:
-        print("\nWARNING: No se pudieron aplicar las migraciones automáticamente.")
+        print("\nERROR: No se pudieron aplicar las migraciones automáticamente.")
         print("Asegúrate de que el servidor de SQL Server esté activo y de que")
         print("las credenciales en el archivo .env sean correctas.")
+        input("Presiona Enter para salir...")
+        sys.exit(1)
         
-    # 7. Ejecutar la aplicación principal
-    print("Iniciando MarcajeTPV...")
+    port = os.getenv('APP_PORT', '8000')
+    app_url = f"http://127.0.0.1:{port}/"
+    print(f"Iniciando MarcajeTPV en {app_url}...")
     try:
-        result = subprocess.run([active_python, "run.py"])
-        if result.returncode != 0:
-            print(f"\nLa aplicación terminó con código de error {result.returncode}.")
+        process = subprocess.Popen([active_python, "run.py"], env=os.environ.copy())
+        if not wait_for_server(app_url, process):
+            return_code = process.poll()
+            if return_code is None:
+                process.terminate()
+                print("\nERROR: El servidor no respondió en 30 segundos.")
+            else:
+                print(f"\nLa aplicación terminó con código de error {return_code}.")
+            input("Presiona Enter para continuar...")
+            return
+        print(f"Sistema listo: {app_url}")
+        if "--no-browser" not in sys.argv:
+            webbrowser.open(app_url)
+        process.wait()
+        if process.returncode != 0:
+            print(f"\nLa aplicación terminó con código de error {process.returncode}.")
             input("Presiona Enter para continuar...")
     except KeyboardInterrupt:
         print("\nAplicación detenida por el usuario.")

@@ -4,55 +4,8 @@
 {% block page_title %}Organización de la Empresa{% endblock %}
 
 {% block content %}
-<style nonce="{{ csp_nonce }}">
-  /* Corrección de layout y scroll del Modal */
-  #sectionForm .modal-content {
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  #sectionForm .org-card-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 1.25rem 1.5rem 0.75rem;
-    background: #ffffff;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  }
-
-  #sectionForm .org-card-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.25rem 1.5rem;
-  }
-
-  /* Grid a dos columnas para los formularios */
-  .org-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-
-  /* Clases de utilidad para ocupar ancho completo dentro de la cuadrícula */
-  .col-span-2 {
-    grid-column: span 2;
-  }
-
-  @media (max-width: 576px) {
-    .org-form-grid {
-      grid-template-columns: 1fr;
-    }
-    .col-span-2 {
-      grid-column: span 1;
-    }
-  }
-</style>
-
 <div class="organization-shell">
   <div class="section-header">
-    <div></div>
     <div class="stack-actions">
       <button type="button" class="btn-ios primary" id="btnViewTree">Ver estructura</button>
       <button type="button" class="btn-ios secondary" id="btnViewForm">Nuevo registro</button>
@@ -102,7 +55,6 @@
             <button type="button" class="btn-ios secondary" id="tabCargoBtn">Cargo</button>
           </div>
 
-          <!-- Formulario Gerencia a 2 Columnas -->
           <form id="gerenciaForm" class="org-form org-form-grid">
             <div>
               <label class="form-label">Nombre</label>
@@ -124,7 +76,6 @@
             </div>
           </form>
 
-          <!-- Formulario Departamento a 2 Columnas -->
           <form id="departamentoForm" class="org-form org-form-grid d-none">
             <div>
               <label class="form-label">Gerencia</label>
@@ -150,7 +101,6 @@
             </div>
           </form>
 
-          <!-- Formulario Cargo a 2 Columnas -->
           <form id="cargoForm" class="org-form org-form-grid d-none">
             <div>
               <label class="form-label">Gerencia</label>
@@ -237,6 +187,34 @@
       btnViewForm.classList.remove('primary');
     }
 
+    function openCreateForm(type, parentId = '') {
+      const tabByType = {
+        gerencia: [gerenciaForm, tabGerenciaBtn],
+        departamento: [departamentoForm, tabDepartamentoBtn],
+        cargo: [cargoForm, tabCargoBtn],
+      };
+      const [form, button] = tabByType[type] || tabByType.gerencia;
+      setActiveTab(form, button);
+      form.reset();
+
+      if (type === 'departamento') {
+        document.getElementById('departamentoGerenciaSelect').value = String(parentId);
+      }
+      if (type === 'cargo') {
+        const gerencia = (window.organizationData || []).find((item) =>
+          (item.departamentos || []).some((departamento) => String(departamento.id) === String(parentId))
+        );
+        const gerenciaSelect = document.getElementById('cargoGerenciaSelect');
+        const departamentoSelect = document.getElementById('cargoDepartamentoSelect');
+        if (gerenciaSelect && departamentoSelect && gerencia) {
+          gerenciaSelect.value = String(gerencia.id);
+          gerenciaSelect.dispatchEvent(new Event('change'));
+          departamentoSelect.value = String(parentId);
+        }
+      }
+      (bootstrap.Modal.getInstance(sectionForm) || new bootstrap.Modal(sectionForm)).show();
+    }
+
     btnViewTree.onclick = switchViewToTree;
 
     btnViewForm.onclick = () => {
@@ -268,6 +246,7 @@
       const res = await fetch('/api/organization');
       if (!res.ok) throw new Error('No se pudo cargar la organización');
       const data = await res.json();
+      window.organizationData = data;
       renderSelects(data);
       renderSummary(data);
       renderTree(data);
@@ -321,6 +300,7 @@
           <div class="org-group-header">
             <div class="org-group-title">${escapeHtml(gerencia.nombre)}</div>
             <div class="org-actions-row">
+                <button type="button" class="btn-ios primary btn-sm org-add-button" data-create-type="departamento" data-parent-id="${gerencia.id}" title="Agregar departamento" aria-label="Agregar departamento">+</button>
               <span class="badge-pill ${getOrgBadgeClass(gerencia.estado)}">${gerencia.estado || 'Activo'}</span>
               <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="gerencia" data-id="${gerencia.id}" data-status="${gerencia.estado || 'Activo'}">
                 ${gerencia.estado === 'Activo' ? 'Inhabilitar' : 'Activar'}
@@ -340,6 +320,7 @@
                   <div class="org-department-main">
                     <span class="org-department-name">${escapeHtml(departamento.nombre)}</span>
                   </div>
+                  <button type="button" class="btn-ios primary btn-sm org-add-button" data-create-type="cargo" data-parent-id="${departamento.id}" title="Agregar cargo" aria-label="Agregar cargo">+</button>
                   <span class="org-mini-badge ${departamentoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(departamento.estado)}">${departamentoCascaded ? cascadeLabel : (departamento.estado || 'Activo')}</span>
                   <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="departamento" data-id="${departamento.id}" data-status="${departamento.estado || 'Activo'}" ${departamentoLocked ? 'disabled' : ''}>
                     ${departamentoCascaded ? 'Padre inactivo' : (departamento.estado === 'Activo' ? 'Inhabilitar' : 'Activar')}
@@ -354,6 +335,7 @@
                         return `
                           <div class="org-cargo-item ${cargoCascaded ? 'is-cascade-locked' : ''}">
                             <span class="org-cargo-name">${escapeHtml(cargo.nombre)}</span>
+                            <button type="button" class="btn-ios ghost btn-sm org-add-button" data-create-type="cargo" data-parent-id="${departamento.id}" title="Agregar cargo al departamento" aria-label="Agregar cargo al departamento">+</button>
                             <span class="org-mini-badge ${cargoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(cargo.estado)}">${cargoCascaded ? cascadeLabel : (cargo.estado || 'Activo')}</span>
                             <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="cargo" data-id="${cargo.id}" data-status="${cargo.estado || 'Activo'}" ${cargoLocked ? 'disabled' : ''}>
                               ${cargoCascaded ? 'Padre inactivo' : (cargo.estado === 'Activo' ? 'Inhabilitar' : 'Activar')}
@@ -388,7 +370,7 @@
             const endpoint = `/api/organization/${type === 'gerencia' ? 'gerencias' : type === 'departamento' ? 'departamentos' : 'cargos'}/${id}/status`;
             const res = await fetch(endpoint, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...window.AppUI.csrfHeaders() },
               body: JSON.stringify({ estado: nextStatus }),
             });
             const result = await res.json().catch(() => ({}));
@@ -402,6 +384,10 @@
             window.AppUI.toast('No se pudo actualizar el estado', 'error');
           }
         });
+      });
+
+      tree.querySelectorAll('[data-create-type]').forEach((button) => {
+        button.addEventListener('click', () => openCreateForm(button.dataset.createType, button.dataset.parentId));
       });
     }
 
@@ -424,7 +410,7 @@
         try {
           const res = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...window.AppUI.csrfHeaders() },
             body: JSON.stringify(payload),
           });
           const result = await res.json().catch(() => ({}));

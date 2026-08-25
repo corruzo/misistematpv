@@ -30,7 +30,7 @@ from app.services.organization_service import (
     Departamento,
     Cargo,
 )
-from app.core.config import STATIC_DIR
+from app.core.config import DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR
 
 router = APIRouter()
 
@@ -149,9 +149,11 @@ def api_get_employees(
     estado: Optional[str] = None,
     gerencia: Optional[str] = None,
     departamento: Optional[str] = None,
+    gerencia_id: Optional[int] = None,
+    departamento_id: Optional[int] = None,
     tipo_nomina: Optional[str] = None,
-    limit: int = Query(100, ge=1, le=100),
-    offset: int = Query(0, ge=0, le=1_000_000),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db), _user=Depends(require_read_access)
 ):
     emps = search_employees(
@@ -160,12 +162,14 @@ def api_get_employees(
         estado=estado,
         gerencia=gerencia,
         departamento=departamento,
+        gerencia_id=gerencia_id,
+        departamento_id=departamento_id,
         tipo_nomina=tipo_nomina,
         limit=limit,
         offset=offset,
     )
     payload = [EmpleadoOut.model_validate(e) for e in emps]
-    total = count_employees(db, q=q, estado=estado, gerencia=gerencia, departamento=departamento, tipo_nomina=tipo_nomina)
+    total = count_employees(db, q=q, estado=estado, gerencia=gerencia, departamento=departamento, gerencia_id=gerencia_id, departamento_id=departamento_id, tipo_nomina=tipo_nomina)
     return {
         'items': payload,
         'total': total,

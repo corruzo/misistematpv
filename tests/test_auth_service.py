@@ -5,14 +5,18 @@ from unittest.mock import MagicMock
 from app.models.auth_session import AuthSession
 from app.models.user import Usuario
 from app.services.auth_service import (
+    INITIAL_SETUP_LOCK,
+    acquire_initial_setup_lock,
     authenticate_user,
     create_session,
     delete_session,
     get_user_by_token,
     hash_session_token,
+    invalidate_user_sessions,
     SESSION_HOURS,
 )
 from app.core.security import hash_password
+from app.services.user_service import set_user_status
 
 
 class QueryDouble:
@@ -27,6 +31,32 @@ class QueryDouble:
 
 
 class AuthServiceTest(unittest.TestCase):
+    def test_password_change_invalidates_all_user_sessions(self):
+        db = MagicMock()
+        db.query.return_value.filter.return_value.delete.return_value = 3
+
+        invalidated = invalidate_user_sessions(db, 7)
+
+        self.assertEqual(invalidated, 3)
+        db.query.return_value.filter.return_value.delete.assert_called_once_with(synchronize_session=False)
+
+    def test_initial_setup_acquires_transactional_sql_server_lock(self):
+        db = MagicMock()
+        db.execute.return_value.scalar.return_value = 0
+
+        acquire_initial_setup_lock(db)
+
+        statement = db.execute.call_args.args[0]
+        self.assertIn('sp_getapplock', statement.text)
+        self.assertEqual(db.execute.call_args.args[1], {'resource': INITIAL_SETUP_LOCK})
+
+    def test_initial_setup_rejects_failed_sql_server_lock(self):
+        db = MagicMock()
+        db.execute.return_value.scalar.return_value = -3
+
+        with self.assertRaisesRegex(RuntimeError, 'bloqueo'):
+            acquire_initial_setup_lock(db)
+
     def test_authenticate_rejects_wrong_password_and_corrupt_hash(self):
         db = MagicMock()
         user = Usuario(username='ana', activo=1, password_hash=hash_password('UnaClaveSegura123'))
@@ -76,6 +106,27 @@ class AuthServiceTest(unittest.TestCase):
 
         self.assertIs(get_user_by_token(db, 'valid'), user)
         db.delete.assert_not_called()
+
+    def test_admin_cannot_disable_own_user(self):
+        db = MagicMock()
+        user = Usuario(id=1, rol='Administrador', activo=1)
+        db.query.return_value.filter.return_value.first.return_value = user
+
+        with self.assertRaisesRegex(ValueError, 'propio usuario'):
+            set_user_status(db, 1, False, actor_id=1)
+
+        db.add.assert_not_called()
+
+    def test_last_active_admin_cannot_be_disabled(self):
+        db = MagicMock()
+        user = Usuario(id=1, rol='Administrador', activo=1)
+        db.query.return_value.filter.return_value.first.return_value = user
+        db.query.return_value.filter.return_value.count.return_value = 1
+
+        with self.assertRaisesRegex(ValueError, 'al menos un administrador activo'):
+            set_user_status(db, 1, False, actor_id=2)
+
+        db.add.assert_not_called()
 
 
 if __name__ == '__main__':

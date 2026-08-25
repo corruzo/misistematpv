@@ -1,8 +1,9 @@
 from typing import Optional, Type
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.models.organization import Gerencia, Departamento, Cargo
 from app.schemas.organization import GerenciaCreate, DepartamentoCreate, CargoCreate
 from app.services.audit_service import add_audit
+from app.core.config import MAX_ORGANIZATION_CHILDREN
 
 
 def normalize_organization_state(value: Optional[str]) -> str:
@@ -19,11 +20,15 @@ def normalize_organization_state(value: Optional[str]) -> str:
 
 
 def get_organization_tree(db: Session):
-    gerencias = db.query(Gerencia).order_by(Gerencia.nombre.asc()).all()
+    gerencias = db.query(Gerencia).options(
+        selectinload(Gerencia.departamentos).selectinload(Departamento.cargos)
+    ).order_by(Gerencia.estado.asc(), Gerencia.nombre.asc()).limit(MAX_ORGANIZATION_CHILDREN).all()
     result = []
     for gerencia in gerencias:
         departamentos = []
-        for departamento in sorted(gerencia.departamentos, key=lambda item: (0 if (item.estado or 'Activo') == 'Activo' else 1, item.nombre.lower())):
+        department_rows = gerencia.departamentos[:MAX_ORGANIZATION_CHILDREN]
+        for departamento in sorted(department_rows, key=lambda item: (0 if (item.estado or 'Activo') == 'Activo' else 1, item.nombre.lower())):
+            cargo_rows = departamento.cargos[:MAX_ORGANIZATION_CHILDREN]
             cargos = [
                 {
                     'id': cargo.id,
@@ -32,7 +37,7 @@ def get_organization_tree(db: Session):
                     'estado': cargo.estado,
                     'fecha_creacion': cargo.fecha_creacion,
                 }
-                for cargo in sorted(departamento.cargos, key=lambda item: (0 if (item.estado or 'Activo') == 'Activo' else 1, item.nombre.lower()))
+                for cargo in sorted(cargo_rows, key=lambda item: (0 if (item.estado or 'Activo') == 'Activo' else 1, item.nombre.lower()))
             ]
             departamentos.append({
                 'id': departamento.id,

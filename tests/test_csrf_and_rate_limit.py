@@ -3,7 +3,7 @@ import unittest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.rate_limit import AUTH_RATE_LIMIT, is_rate_limited
+from app.core.rate_limit import AUTH_IP_RATE_LIMIT, AUTH_RATE_LIMIT, is_rate_limited
 from run import SecurityHeadersMiddleware
 
 
@@ -47,7 +47,10 @@ class CsrfAndRateLimitTest(unittest.TestCase):
         def change():
             return {'ok': True}
 
-        response = TestClient(app).post('/change', headers={'Origin': 'http://localhost:8000'})
+        client = TestClient(app)
+        page_response = client.get('/page')
+        token = page_response.cookies.get('csrftoken')
+        response = client.post('/change', headers={'Origin': 'http://localhost:8000', 'X-CSRFToken': token})
         self.assertEqual(response.status_code, 200)
         self.assertIn('nonce-', response.headers['content-security-policy'])
 
@@ -57,6 +60,12 @@ class CsrfAndRateLimitTest(unittest.TestCase):
             self.assertFalse(is_rate_limited(scope, '192.0.2.10', 'user-a'))
         self.assertTrue(is_rate_limited(scope, '192.0.2.10', 'user-a'))
         self.assertFalse(is_rate_limited(scope, '192.0.2.10', 'user-b'))
+
+    def test_rate_limit_also_blocks_many_usernames_from_one_ip(self):
+        scope = '/test-ip-rate-limit'
+        for index in range(AUTH_IP_RATE_LIMIT):
+            self.assertFalse(is_rate_limited(scope, '192.0.2.11', f'user-{index}'))
+        self.assertTrue(is_rate_limited(scope, '192.0.2.11', 'new-user'))
 
 
 if __name__ == '__main__':

@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Kiosco de marcaje - MarcajeTPV</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.5">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.6">
 </head>
 <body class="kiosk-page">
   <main class="kiosk-shell" aria-live="polite">
-    <header class="kiosk-brand"><span class="kiosk-brand__mark">M</span><strong>MarcajeTPV</strong></header>
+    <header class="kiosk-brand"><span class="kiosk-brand__mark">T</span><strong>Tripoliven</strong><span>Control de asistencia</span></header>
     <div class="kiosk-clock" id="kioskClock" aria-label="Hora actual">00:00:00</div>
     <section class="kiosk-stage" id="kioskStage">
       <div class="kiosk-waiting" id="kioskWaiting">
@@ -37,40 +37,36 @@
     const input = document.getElementById('kioskCardCode');
     const waiting = document.getElementById('kioskWaiting');
     const result = document.getElementById('kioskResult');
+    const clock = document.getElementById('kioskClock');
     const feedback = document.getElementById('kioskFeedback');
     let busy = false;
     let latestEventId = 0;
-    let pollTimer = null;
     let pollingInitialized = false;
-    const eventQueue = [];
-    let displayingEvent = false;
     let lastDisplayedEventId = 0;
+    let resultTimer = null;
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    const csrfHeaders = () => {
+      const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      return token ? { 'X-CSRFToken': token } : {};
+    };
     const keepFocus = () => { if (document.activeElement !== input) input.focus(); };
-    const reset = () => { result.classList.add('d-none'); waiting.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
+    const reset = () => { result.classList.add('d-none'); waiting.classList.remove('d-none'); clock.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
     const showResult = (payload) => {
       if (!payload) return;
-      if (Number(payload.id) === lastDisplayedEventId) return;
-      lastDisplayedEventId = Number(payload.id) || lastDisplayedEventId;
-      latestEventId = Math.max(latestEventId, Number(payload.id) || 0);
+      const eventId = Number(payload.id) || 0;
+      if (!eventId || eventId <= lastDisplayedEventId) return;
+      lastDisplayedEventId = eventId;
+      latestEventId = Math.max(latestEventId, eventId);
       waiting.classList.add('d-none');
       result.classList.remove('d-none');
+      clock.classList.add('d-none');
       document.getElementById('kioskPhoto').src = payload.foto_url ? `/static/${encodeURIComponent(payload.foto_url)}` : '/static/img/default-avatar.svg';
       document.getElementById('kioskEventLabel').textContent = payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada';
       document.getElementById('kioskEmployeeName').textContent = payload.empleado_nombre || 'Empleado';
-      document.getElementById('kioskArea').textContent = `${payload.gerencia || 'Sin gerencia'} · ${payload.departamento || 'Sin departamento'}`;
+      document.getElementById('kioskArea').textContent = payload.gerencia || 'Sin gerencia';
       document.getElementById('kioskTime').textContent = new Date(payload.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      window.setTimeout(reset, 8000);
-    };
-    const displayNextEvent = () => {
-      if (displayingEvent || !eventQueue.length) return;
-      displayingEvent = true;
-      showResult(eventQueue.shift());
-      window.setTimeout(() => {
-        reset();
-        displayingEvent = false;
-        displayNextEvent();
-      }, 8000);
+      if (resultTimer) window.clearTimeout(resultTimer);
+      resultTimer = window.setTimeout(reset, 30000);
     };
     const pollLatestAttendance = async () => {
       try {
@@ -78,19 +74,15 @@
         if (!response.ok) return;
         const payload = await response.json();
         const items = Array.isArray(payload.items) ? payload.items : (payload.item ? [payload.item] : []);
-        if (items.length) {
-          if (pollingInitialized) {
-            items.forEach((item) => eventQueue.push(item));
-            displayNextEvent();
-          } else {
-            latestEventId = Number(items[items.length - 1].id) || 0;
-          }
+        if (items.length && pollingInitialized) {
+          items.forEach(showResult);
+        } else if (items.length) {
+          latestEventId = Math.max(latestEventId, Number(items[items.length - 1].id) || 0);
         }
         pollingInitialized = true;
       } catch (error) {
-        // El kiosco sigue listo para leer aunque el servidor esté temporalmente ocupado.
       }
-      pollTimer = window.setTimeout(pollLatestAttendance, 1500);
+      window.setTimeout(pollLatestAttendance, 250);
     };
     const updateClock = () => {
       document.getElementById('kioskClock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -102,7 +94,7 @@
       busy = true;
       feedback.textContent = 'Validando tarjeta...';
       try {
-        const response = await fetch('/api/attendance/kiosk-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo_tarjeta: code }) });
+        const response = await fetch('/api/attendance/kiosk-scan', { method: 'POST', headers: { 'Content-Type': 'application/json', ...csrfHeaders() }, body: JSON.stringify({ codigo_tarjeta: code }) });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar el marcaje.');
         showResult(payload);

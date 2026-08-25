@@ -4,10 +4,8 @@
 {% block page_title %}Usuarios del Sistema{% endblock %}
 
 {% block content %}
-<!-- Header Principal -->
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
-    <h1 class="h3 font-weight-bold mb-1">Gestión de Usuarios</h1>
     <p class="text-muted small mb-0">Administra los accesos y roles del personal en la plataforma.</p>
   </div>
   <button type="button" class="btn-ios primary" id="newUserButton">
@@ -16,7 +14,6 @@
   </button>
 </div>
 
-<!-- Tarjeta de Contenido Principal -->
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-transparent border-bottom p-3">
     <div class="row g-2 align-items-center justify-content-between">
@@ -33,10 +30,10 @@
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th class="ps-3" style="width: 35%;">Usuario</th>
-            <th style="width: 25%;">Rol</th>
-            <th style="width: 20%;">Estado</th>
-            <th class="text-end pe-3" style="width: 20%;">Acciones</th>
+            <th class="ps-3 user-column user-column--identity">Usuario</th>
+            <th class="user-column user-column--role">Rol</th>
+            <th class="user-column user-column--status">Estado</th>
+            <th class="text-end pe-3 user-column user-column--actions">Acciones</th>
           </tr>
         </thead>
         <tbody id="userList" aria-live="polite">
@@ -46,16 +43,18 @@
         </tbody>
       </table>
     </div>
+    <div class="card-footer bg-white border-top p-0">
+      <div id="usersPagination" class="table-pagination" aria-live="polite"></div>
+    </div>
   </div>
 </div>
 
-<!-- Modal Extraído del Grid para evitar conflictos de Overlay -->
 <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="user-form-title" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered user-modal-dialog">
     <div class="modal-content ios-modal">
       <div class="modal-header">
         <div>
-          <p class="eyebrow mb-1 text-uppercase text-muted fw-bold" style="font-size: 10px; letter-spacing: 0.08em;">Administración</p>
+          <p class="eyebrow mb-1 text-uppercase text-muted fw-bold">Administración</p>
           <h5 class="modal-title h5 mb-0" id="user-form-title">Crear usuario</h5>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -110,6 +109,8 @@
     const roleInput = document.getElementById('userRole');
     const cancelEditButton = document.getElementById('cancelEditButton');
     const userModalEl = document.getElementById('userModal');
+    const usersPagination = document.getElementById('usersPagination');
+    const listState = { page: 1, pageSize: {{ default_page_size }} };
     
     const getModalInstance = () => bootstrap.Modal.getInstance(userModalEl) || new bootstrap.Modal(userModalEl);
     let editingUser = null;
@@ -167,7 +168,6 @@
       users.forEach((user) => {
         const tr = document.createElement('tr');
 
-        // Identidad (Nombre + Username)
         const tdIdentity = document.createElement('td');
         tdIdentity.className = 'ps-3';
         tdIdentity.innerHTML = `
@@ -175,34 +175,22 @@
           <div class="text-muted small">@${escapeHtml(user.username)}</div>
         `;
 
-        // Rol con Badge
         const tdRole = document.createElement('td');
-        const roleBadgeClass = user.rol === 'Administrador' ? 'bg-primary' : (user.rol === 'RRHH' ? 'bg-info text-dark' : 'bg-secondary');
-        tdRole.innerHTML = `<span class="badge ${roleBadgeClass}">${escapeHtml(user.rol)}</span>`;
+        const roleBadgeClass = user.rol === 'Administrador' ? 'user-role-badge--admin' : (user.rol === 'RRHH' ? 'user-role-badge--rrhh' : 'user-role-badge--consulta');
+        tdRole.innerHTML = `<span class="user-role-badge ${roleBadgeClass}">${escapeHtml(user.rol)}</span>`;
 
-        // Estado
         const tdStatus = document.createElement('td');
-        tdStatus.innerHTML = user.activo 
-          ? `<span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>`
-          : `<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>`;
+        tdStatus.innerHTML = user.activo
+          ? '<span class="user-status-badge user-status-badge--active">Activo</span>'
+          : '<span class="user-status-badge user-status-badge--inactive">Inactivo</span>';
 
-        // Acciones
         const tdActions = document.createElement('td');
         tdActions.className = 'text-end pe-3';
 
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'btn-ios ghost btn-sm me-1';
-        editBtn.textContent = 'Editar';
-        editBtn.addEventListener('click', () => startEdit(user));
-
-        const statusBtn = document.createElement('button');
-        statusBtn.type = 'button';
-        statusBtn.className = `btn-ios ${user.activo ? 'secondary' : 'primary'} btn-sm`;
-        statusBtn.textContent = user.activo ? 'Inhabilitar' : 'Activar';
-        statusBtn.addEventListener('click', () => updateStatus(user, statusBtn));
-
-        tdActions.append(editBtn, statusBtn);
+        tdActions.append(window.AppUI.rowActions([
+          { label: 'Editar usuario', icon: 'edit', onClick: () => startEdit(user) },
+          { label: user.activo ? 'Inhabilitar usuario' : 'Activar usuario', icon: user.activo ? 'trash' : 'check', variant: user.activo ? 'danger' : 'primary', onClick: (event) => updateStatus(user, event.currentTarget) },
+        ]));
         tr.append(tdIdentity, tdRole, tdStatus, tdActions);
         list.append(tr);
       });
@@ -211,13 +199,21 @@
     const loadUsers = async () => {
       try {
         const query = searchInput.value.trim();
-        const response = await fetch(`/api/users${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+        const params = new URLSearchParams({ page: String(listState.page), page_size: String(listState.pageSize) });
+        if (query) params.set('q', query);
+        const response = await fetch(`/api/users?${params.toString()}`);
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.detail || 'No se pudieron cargar los usuarios.');
         }
         const payload = await response.json();
-        renderUsers(payload);
+        renderUsers(payload.items || []);
+        window.AppUI.renderPagination(usersPagination, {
+          total: payload.total || 0,
+          page: payload.page || listState.page,
+          pageSize: payload.page_size || listState.pageSize,
+          onPageChange: (nextPage) => { listState.page = nextPage; loadUsers(); },
+        });
       } catch (error) {
         list.replaceChildren();
         const row = document.createElement('tr');
@@ -227,13 +223,14 @@
     };
 
     const updateStatus = async (user, button) => {
+      if (user.activo && !await window.AppUI.confirm(`¿Deseas inhabilitar a ${user.nombre}?`)) return;
       button.disabled = true;
       try {
         const response = await fetch(`/api/users/${user.id}/status`, {
           method: 'PATCH',
           headers: { 
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
+            ...window.AppUI.csrfHeaders()
           },
           body: JSON.stringify({ activo: !user.activo }),
         });
@@ -264,7 +261,7 @@
           method: isEditing ? 'PUT' : 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
+            ...window.AppUI.csrfHeaders()
           },
           body: JSON.stringify(payload),
         });
@@ -288,6 +285,7 @@
       let timeout;
       return () => {
         clearTimeout(timeout);
+        listState.page = 1;
         timeout = setTimeout(loadUsers, 250);
       };
     })());

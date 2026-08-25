@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import STATIC_DIR
 from app.core.config import COOKIE_SECURE
 from app.database.session import get_db
-from app.services.auth_service import SESSION_COOKIE, SESSION_HOURS, authenticate_user, create_session, delete_session
+from app.services.auth_service import SESSION_COOKIE, SESSION_HOURS, acquire_initial_setup_lock, authenticate_user, create_session, delete_session
 from app.services.user_service import create_user
 from app.schemas.user import UsuarioCreate
 from app.models.user import Usuario
@@ -46,15 +46,15 @@ def setup_page(db: Session = Depends(get_db)):
     except SQLAlchemyError:
         db.rollback()
         return HTMLResponse(
-            template.render(error='No se puede acceder a SQL Server. Ejecuta scripts/create_database.sql y revisa el archivo .env.'),
+            template.render(error='No se puede acceder a SQL Server. Ejecuta scripts/create_database.sql y revisa el archivo .env.', form_available=False),
             status_code=503,
         )
     if has_users:
         return HTMLResponse(
-            template.render(error='La configuración inicial ya fue completada. Inicia sesión para administrar los usuarios.'),
+            template.render(error='La configuración inicial ya fue completada. Inicia sesión para administrar los usuarios.', form_available=False),
             status_code=409,
         )
-    return HTMLResponse(template.render(error=None))
+    return HTMLResponse(template.render(error=None, form_available=True))
 
 
 @router.post('/setup')
@@ -70,16 +70,20 @@ def setup_admin(
     if is_rate_limited('/setup', client_host, username):
         return HTMLResponse(template.render(error='Demasiados intentos. Espera un minuto e inténtalo de nuevo.'), status_code=429)
     try:
+        acquire_initial_setup_lock(db)
         has_users = db.query(Usuario).count()
     except SQLAlchemyError:
         db.rollback()
         return HTMLResponse(
-            template.render(error='No se puede acceder a SQL Server. Ejecuta scripts/create_database.sql y revisa el archivo .env.'),
+            template.render(error='No se puede acceder a SQL Server. Ejecuta scripts/create_database.sql y revisa el archivo .env.', form_available=False),
             status_code=503,
         )
+    except RuntimeError:
+        db.rollback()
+        return HTMLResponse(template.render(error='No se pudo bloquear la configuración inicial. Inténtalo nuevamente.'), status_code=503)
     if has_users:
         return HTMLResponse(
-            template.render(error='La configuración inicial ya fue completada. Inicia sesión para administrar los usuarios.'),
+            template.render(error='La configuración inicial ya fue completada. Inicia sesión para administrar los usuarios.', form_available=False),
             status_code=409,
         )
     try:

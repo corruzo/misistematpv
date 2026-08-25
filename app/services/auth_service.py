@@ -2,6 +2,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, password_needs_rehash, verify_password
@@ -12,6 +13,21 @@ from app.services.audit_service import add_audit
 
 SESSION_COOKIE = 'marcajetpv_session'
 SESSION_HOURS = 12
+INITIAL_SETUP_LOCK = 'MarcajeTPV.InitialAdminSetup'
+
+
+def acquire_initial_setup_lock(db: Session) -> None:
+    result = db.execute(text("""
+        DECLARE @lock_result INT;
+        EXEC @lock_result = sp_getapplock
+            @Resource = :resource,
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 5000;
+        SELECT @lock_result;
+    """), {'resource': INITIAL_SETUP_LOCK}).scalar()
+    if result is None or result < 0:
+        raise RuntimeError('No se pudo adquirir el bloqueo de configuración inicial.')
 
 
 def cleanup_expired_sessions(db: Session) -> int:
@@ -81,6 +97,10 @@ def delete_session(db: Session, raw_token: str | None) -> None:
         db.commit()
 
 
+def invalidate_user_sessions(db: Session, user_id: int) -> int:
+    return db.query(AuthSession).filter(AuthSession.user_id == user_id).delete(synchronize_session=False)
+
+
 def update_own_profile(db: Session, user: Usuario, username: str, nombre: str, password: str | None = None) -> Usuario:
     from app.core.security import hash_password
 
@@ -96,6 +116,7 @@ def update_own_profile(db: Session, user: Usuario, username: str, nombre: str, p
     user.nombre = display_name
     if password:
         user.password_hash = hash_password(password)
+        invalidate_user_sessions(db, user.id)
     db.add(user)
     add_audit(db, user.id, 'actualizacion', 'usuarios', user.id, antes, {'username': user.username, 'nombre': user.nombre})
     db.commit()
