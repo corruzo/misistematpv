@@ -4,18 +4,19 @@
 {% block page_title %}Usuarios del Sistema{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <div>
-    <p class="text-muted small mb-0">Administra los accesos y roles del personal en la plataforma.</p>
-  </div>
+<div class="section-header users-page-header">
+  <div class="stack-actions">
   <button type="button" class="btn-ios primary" id="newUserButton">
-    <svg class="me-1" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    <svg class="me-1" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
     Nuevo usuario
   </button>
+  </div>
 </div>
 
-<div class="card border-0 shadow-sm">
-  <div class="card-header bg-transparent border-bottom p-3">
+<div class="card card-table border-0 shadow-sm rounded-4 overflow-hidden">
+  <div class="card-header-toolbar p-3 border-bottom bg-white">
     <div class="row g-2 align-items-center justify-content-between">
       <div class="col-12 col-md-4">
         <div class="position-relative">
@@ -25,7 +26,7 @@
     </div>
   </div>
 
-  <div class="card-body p-0">
+  <div class="card-body p-0 position-relative">
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
@@ -78,10 +79,9 @@
           <div class="mb-3">
             <label class="form-label fw-semibold" for="userRole">Rol asignado</label>
             <select class="form-select" id="userRole" name="rol" required>
-              <option value="Administrador">Administrador</option>
               <option value="RRHH">RRHH</option>
-              <option value="Consulta" selected>Consulta</option>
-              <option value="Sistemas">Sistemas</option>
+              <option value="Desarrollador">Desarrollador</option>
+              <option value="Inspector" selected>Inspector</option>
             </select>
           </div>
           <p id="userFormMessage" class="form-feedback mb-0" role="status" aria-live="polite"></p>
@@ -111,7 +111,7 @@
     const cancelEditButton = document.getElementById('cancelEditButton');
     const userModalEl = document.getElementById('userModal');
     const usersPagination = document.getElementById('usersPagination');
-    const listState = { page: 1, pageSize: {{ default_page_size }} };
+    const listState = { page: 1, pageSize: {{ default_page_size | default(10) }} };
     
     const getModalInstance = () => bootstrap.Modal.getInstance(userModalEl) || new bootstrap.Modal(userModalEl);
     let editingUser = null;
@@ -121,7 +121,17 @@
         .find(row => row.startsWith('csrftoken='))
         ?.split('=')[1] || '';
     };
-      const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+
+    const getAuthHeaders = () => {
+      if (window.AppUI && typeof window.AppUI.csrfHeaders === 'function') {
+        return window.AppUI.csrfHeaders();
+      }
+      return { 'X-CSRFToken': getCsrfToken() };
+    };
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[character]));
 
     const showMessage = (text, error = false) => {
       message.textContent = text;
@@ -137,7 +147,7 @@
       cancelEditButton.classList.add('d-none');
       passwordInput.required = true;
       passwordInput.value = '';
-      roleInput.value = 'Consulta';
+      roleInput.value = 'Inspector';
       passwordHint.textContent = 'Mínimo 10 caracteres. Almacenada con hashing seguro.';
     };
 
@@ -177,7 +187,7 @@
         `;
 
         const tdRole = document.createElement('td');
-        const roleBadgeClass = user.rol === 'Administrador' ? 'user-role-badge--admin' : (user.rol === 'RRHH' ? 'user-role-badge--rrhh' : (user.rol === 'Sistemas' ? 'user-role-badge--systems' : 'user-role-badge--consulta'));
+        const roleBadgeClass = user.rol === 'Desarrollador' ? 'user-role-badge--admin' : (user.rol === 'RRHH' ? 'user-role-badge--rrhh' : 'user-role-badge--inspector');
         tdRole.innerHTML = `<span class="user-role-badge ${roleBadgeClass}">${escapeHtml(user.rol)}</span>`;
 
         const tdStatus = document.createElement('td');
@@ -188,10 +198,12 @@
         const tdActions = document.createElement('td');
         tdActions.className = 'text-end pe-3';
 
-        tdActions.append(window.AppUI.rowActions([
+        const actionButtons = window.AppUI.rowActions([
           { label: 'Editar usuario', icon: 'edit', onClick: () => startEdit(user) },
           { label: user.activo ? 'Inhabilitar usuario' : 'Activar usuario', icon: user.activo ? 'trash' : 'check', variant: user.activo ? 'danger' : 'primary', onClick: (event) => updateStatus(user, event.currentTarget) },
-        ]));
+        ]);
+        actionButtons.querySelectorAll('button').forEach((button) => button.classList.add('user-action-button'));
+        tdActions.append(actionButtons);
         tr.append(tdIdentity, tdRole, tdStatus, tdActions);
         list.append(tr);
       });
@@ -209,12 +221,14 @@
         }
         const payload = await response.json();
         renderUsers(payload.items || []);
-        window.AppUI.renderPagination(usersPagination, {
-          total: payload.total || 0,
-          page: payload.page || listState.page,
-          pageSize: payload.page_size || listState.pageSize,
-          onPageChange: (nextPage) => { listState.page = nextPage; loadUsers(); },
-        });
+        if (window.AppUI && typeof window.AppUI.renderPagination === 'function') {
+          window.AppUI.renderPagination(usersPagination, {
+            total: payload.total || 0,
+            page: payload.page || listState.page,
+            pageSize: payload.page_size || listState.pageSize,
+            onPageChange: (nextPage) => { listState.page = nextPage; loadUsers(); },
+          });
+        }
       } catch (error) {
         list.replaceChildren();
         const row = document.createElement('tr');
@@ -231,7 +245,7 @@
           method: 'PATCH',
           headers: { 
             'Content-Type': 'application/json',
-            ...window.AppUI.csrfHeaders()
+            ...getAuthHeaders()
           },
           body: JSON.stringify({ activo: !user.activo }),
         });
@@ -246,7 +260,12 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!form.reportValidity()) {
+        const invalidField = form.querySelector(':invalid');
+        showMessage(invalidField?.validationMessage || 'Revisa los datos del formulario.', true);
+        invalidField?.focus();
+        return;
+      }
       
       saveButton.disabled = true;
       const isEditing = Boolean(editingUser);
@@ -262,7 +281,7 @@
           method: isEditing ? 'PUT' : 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            ...window.AppUI.csrfHeaders()
+            ...getAuthHeaders()
           },
           body: JSON.stringify(payload),
         });

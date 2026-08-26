@@ -121,7 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   search.addEventListener('input', render);
   load();
-  window.setInterval(load, 15000);
+  window.addEventListener('app:attendance', load);
+  window.addEventListener('app:access_denied', load);
+  window.setInterval(load, 30000);
 });
 </script>
 {% endblock %}

@@ -7,8 +7,8 @@
 <div class="organization-shell">
   <div class="section-header">
     <div class="stack-actions">
-      <button type="button" class="btn-ios primary" id="btnViewTree">Ver estructura</button>
-      <button type="button" class="btn-ios secondary" id="btnViewForm">Nuevo registro</button>
+      <button type="button" class="btn-ios primary" id="btnViewTree"><svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#activity"></use></svg>Ver estructura</button>
+      <button type="button" class="btn-ios secondary" id="btnViewForm"><svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#plus"></use></svg>Nuevo registro</button>
     </div>
   </div>
 
@@ -43,7 +43,7 @@
       <div class="org-form-card modal-content">
         <div class="org-card-header">
           <div>
-            <span class="eyebrow">Configuración</span>
+            <span class="eyebrow" id="organizationFormMode">Nuevo registro</span>
             <h3 id="organizationFormTitle" class="m-0">Registrar elemento</h3>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -156,6 +156,7 @@
     const tabGerenciaBtn = document.getElementById('tabGerenciaBtn');
     const tabDepartamentoBtn = document.getElementById('tabDepartamentoBtn');
     const tabCargoBtn = document.getElementById('tabCargoBtn');
+    const formMode = document.getElementById('organizationFormMode');
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
       '&': '&amp;',
@@ -196,6 +197,11 @@
       const [form, button] = tabByType[type] || tabByType.gerencia;
       setActiveTab(form, button);
       form.reset();
+      delete form.dataset.editId;
+      delete form.dataset.editType;
+      document.getElementById('organizationFormTitle').textContent = 'Registrar elemento';
+      formMode.textContent = 'Nuevo registro';
+      form.querySelector('button[type="submit"]').textContent = `Guardar ${type}`;
 
       if (type === 'departamento') {
         document.getElementById('departamentoGerenciaSelect').value = String(parentId);
@@ -298,13 +304,17 @@
         return `
         <div class="org-group ${gerenciaInactive ? 'is-inactive' : ''}">
           <div class="org-group-header">
-            <div class="org-group-title">${escapeHtml(gerencia.nombre)}</div>
-            <div class="org-actions-row">
-                <button type="button" class="btn-ios primary btn-sm org-add-button" data-create-type="departamento" data-parent-id="${gerencia.id}" title="Agregar departamento" aria-label="Agregar departamento">+</button>
-              <span class="badge-pill ${getOrgBadgeClass(gerencia.estado)}">${gerencia.estado || 'Activo'}</span>
-              <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="gerencia" data-id="${gerencia.id}" data-status="${gerencia.estado || 'Activo'}">
-                ${gerencia.estado === 'Activo' ? 'Inhabilitar' : 'Activar'}
-              </button>
+            <div class="org-entity-heading">
+              <span class="org-entity-icon"><svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#building"></use></svg></span>
+              <div class="org-entity-copy"><span class="org-entity-kicker">Gerencia</span><div class="org-group-title">${escapeHtml(gerencia.nombre)}</div></div>
+              <span class="org-status-badge ${getOrgBadgeClass(gerencia.estado)}">${gerencia.estado || 'Activo'}</span>
+              <details class="org-action-menu"><summary class="btn-ios secondary btn-sm org-action-menu__trigger" aria-label="Abrir acciones" title="Abrir acciones"><span class="org-menu-dots" aria-hidden="true">...</span></summary><div class="org-action-menu__panel">
+                <button type="button" data-create-type="departamento" data-parent-id="${gerencia.id}"><span>+</span>Añadir departamento</button>
+                <button type="button" data-info-type="gerencia" data-id="${gerencia.id}"><span>i</span>Información</button>
+                <button type="button" data-edit-type="gerencia" data-id="${gerencia.id}"><span>✎</span>Editar</button>
+                <button type="button" data-toggle-status="gerencia" data-id="${gerencia.id}" data-status="${gerencia.estado || 'Activo'}"><span>↕</span>${gerencia.estado === 'Activo' ? 'Inhabilitar' : 'Habilitar'}</button>
+                <button type="button" class="is-danger" data-delete-type="gerencia" data-id="${gerencia.id}"><span>×</span>Eliminar</button>
+              </div></details>
             </div>
           </div>
 
@@ -317,14 +327,18 @@
               return `
               <div class="org-department ${departamentoInactive ? 'is-inactive' : ''} ${departamentoCascaded ? 'is-cascade-locked' : ''}">
                 <div class="org-department-header">
-                  <div class="org-department-main">
-                    <span class="org-department-name">${escapeHtml(departamento.nombre)}</span>
+                  <div class="org-entity-heading">
+                    <span class="org-entity-icon org-entity-icon--department"><svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#building"></use></svg></span>
+                    <div class="org-entity-copy"><span class="org-entity-kicker">Departamento</span><span class="org-department-name">${escapeHtml(departamento.nombre)}</span></div>
+                    <span class="org-status-badge ${departamentoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(departamento.estado)}">${departamentoCascaded ? cascadeLabel : (departamento.estado || 'Activo')}</span>
+                    <details class="org-action-menu"><summary class="btn-ios secondary btn-sm org-action-menu__trigger" aria-label="Abrir acciones" title="Abrir acciones"><span class="org-menu-dots" aria-hidden="true">...</span></summary><div class="org-action-menu__panel">
+                      <button type="button" data-create-type="cargo" data-parent-id="${departamento.id}"><span>+</span>Añadir cargo</button>
+                      <button type="button" data-info-type="departamento" data-id="${departamento.id}"><span>i</span>Información</button>
+                      <button type="button" data-edit-type="departamento" data-id="${departamento.id}"><span>✎</span>Editar</button>
+                      <button type="button" data-toggle-status="departamento" data-id="${departamento.id}" data-status="${departamento.estado || 'Activo'}" ${departamentoLocked ? 'disabled' : ''}><span>↕</span>${departamentoCascaded ? 'Padre inactivo' : (departamento.estado === 'Activo' ? 'Inhabilitar' : 'Habilitar')}</button>
+                      <button type="button" class="is-danger" data-delete-type="departamento" data-id="${departamento.id}"><span>×</span>Eliminar</button>
+                    </div></details>
                   </div>
-                  <button type="button" class="btn-ios primary btn-sm org-add-button" data-create-type="cargo" data-parent-id="${departamento.id}" title="Agregar cargo" aria-label="Agregar cargo">+</button>
-                  <span class="org-mini-badge ${departamentoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(departamento.estado)}">${departamentoCascaded ? cascadeLabel : (departamento.estado || 'Activo')}</span>
-                  <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="departamento" data-id="${departamento.id}" data-status="${departamento.estado || 'Activo'}" ${departamentoLocked ? 'disabled' : ''}>
-                    ${departamentoCascaded ? 'Padre inactivo' : (departamento.estado === 'Activo' ? 'Inhabilitar' : 'Activar')}
-                  </button>
                 </div>
 
                 <div class="org-cargos">
@@ -334,12 +348,15 @@
                         const cargoLocked = cargoCascaded;
                         return `
                           <div class="org-cargo-item ${cargoCascaded ? 'is-cascade-locked' : ''}">
-                            <span class="org-cargo-name">${escapeHtml(cargo.nombre)}</span>
-                            <button type="button" class="btn-ios ghost btn-sm org-add-button" data-create-type="cargo" data-parent-id="${departamento.id}" title="Agregar cargo al departamento" aria-label="Agregar cargo al departamento">+</button>
-                            <span class="org-mini-badge ${cargoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(cargo.estado)}">${cargoCascaded ? cascadeLabel : (cargo.estado || 'Activo')}</span>
-                            <button type="button" class="btn-ios secondary btn-sm" data-toggle-status="cargo" data-id="${cargo.id}" data-status="${cargo.estado || 'Activo'}" ${cargoLocked ? 'disabled' : ''}>
-                              ${cargoCascaded ? 'Padre inactivo' : (cargo.estado === 'Activo' ? 'Inhabilitar' : 'Activar')}
-                            </button>
+                            <span class="org-entity-icon org-entity-icon--cargo"><svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#users"></use></svg></span>
+                            <div class="org-entity-copy"><span class="org-entity-kicker">Cargo</span><span class="org-cargo-name">${escapeHtml(cargo.nombre)}</span></div>
+                            <span class="org-status-badge ${cargoCascaded ? 'org-mini-badge--cascade' : getOrgBadgeClass(cargo.estado)}">${cargoCascaded ? cascadeLabel : (cargo.estado || 'Activo')}</span>
+                            <details class="org-action-menu"><summary class="btn-ios secondary btn-sm org-action-menu__trigger" aria-label="Abrir acciones" title="Abrir acciones"><span class="org-menu-dots" aria-hidden="true">...</span></summary><div class="org-action-menu__panel">
+                              <button type="button" data-info-type="cargo" data-id="${cargo.id}"><span>i</span>Información</button>
+                              <button type="button" data-edit-type="cargo" data-id="${cargo.id}"><span>✎</span>Editar</button>
+                              <button type="button" data-toggle-status="cargo" data-id="${cargo.id}" data-status="${cargo.estado || 'Activo'}" ${cargoLocked ? 'disabled' : ''}><span>↕</span>${cargoCascaded ? 'Padre inactivo' : (cargo.estado === 'Activo' ? 'Inhabilitar' : 'Habilitar')}</button>
+                              <button type="button" class="is-danger" data-delete-type="cargo" data-id="${cargo.id}"><span>×</span>Eliminar</button>
+                            </div></details>
                           </div>
                         `;
                       }).join('')
@@ -355,6 +372,7 @@
 
       tree.querySelectorAll('[data-toggle-status]').forEach((button) => {
         button.addEventListener('click', async () => {
+          button.closest('details')?.removeAttribute('open');
           const type = button.dataset.toggleStatus;
           const id = button.dataset.id;
           const currentStatus = button.dataset.status === 'Activo' ? 'Activo' : 'Inactivo';
@@ -389,6 +407,88 @@
       tree.querySelectorAll('[data-create-type]').forEach((button) => {
         button.addEventListener('click', () => openCreateForm(button.dataset.createType, button.dataset.parentId));
       });
+
+      tree.querySelectorAll('[data-info-type]').forEach((button) => {
+        button.addEventListener('click', () => {
+          button.closest('details')?.removeAttribute('open');
+          const item = findOrganizationItem(button.dataset.infoType, button.dataset.id);
+          window.AppUI.toast(item?.descripcion || 'Este elemento no tiene descripción.', 'info');
+        });
+      });
+
+      tree.querySelectorAll('[data-edit-type]').forEach((button) => {
+        button.addEventListener('click', () => openEditForm(button.dataset.editType, button.dataset.id));
+      });
+
+      tree.querySelectorAll('[data-delete-type]').forEach((button) => {
+        button.addEventListener('click', () => deleteOrganizationItem(button.dataset.deleteType, button.dataset.id));
+      });
+
+      tree.querySelectorAll('.org-action-menu').forEach((menu) => {
+        menu.addEventListener('toggle', () => {
+          if (!menu.open) return;
+          tree.querySelectorAll('.org-action-menu[open]').forEach((otherMenu) => {
+            if (otherMenu !== menu) otherMenu.removeAttribute('open');
+          });
+        });
+      });
+    }
+
+    function findOrganizationItem(type, id) {
+      for (const gerencia of window.organizationData || []) {
+        if (type === 'gerencia' && String(gerencia.id) === String(id)) return gerencia;
+        for (const departamento of gerencia.departamentos || []) {
+          if (type === 'departamento' && String(departamento.id) === String(id)) return departamento;
+          for (const cargo of departamento.cargos || []) {
+            if (type === 'cargo' && String(cargo.id) === String(id)) return cargo;
+          }
+        }
+      }
+      return null;
+    }
+
+    function openEditForm(type, id) {
+      const item = findOrganizationItem(type, id);
+      if (!item) return;
+      openCreateForm(type);
+      const form = { gerencia: gerenciaForm, departamento: departamentoForm, cargo: cargoForm }[type];
+      form.dataset.editId = id;
+      form.dataset.editType = type;
+      form.querySelector('[name="nombre"]').value = item.nombre || '';
+      form.querySelector('[name="descripcion"]').value = item.descripcion || '';
+      form.querySelector('[name="estado"]').value = item.estado || 'Activo';
+      if (type === 'departamento') {
+        const gerencia = (window.organizationData || []).find((candidate) =>
+          (candidate.departamentos || []).some((department) => String(department.id) === String(id))
+        );
+        document.getElementById('departamentoGerenciaSelect').value = String(gerencia?.id || '');
+      }
+      if (type === 'cargo') {
+        const department = (window.organizationData || []).flatMap((g) => g.departamentos || []).find((d) => (d.cargos || []).some((c) => String(c.id) === String(id)));
+        const gerencia = (window.organizationData || []).find((g) => (g.departamentos || []).some((d) => d.id === department?.id));
+        const gerenciaSelect = document.getElementById('cargoGerenciaSelect');
+        gerenciaSelect.value = String(gerencia?.id || '');
+        gerenciaSelect.dispatchEvent(new Event('change'));
+        document.getElementById('cargoDepartamentoSelect').value = String(department?.id || '');
+      }
+      document.getElementById('organizationFormTitle').textContent = `Editar ${type}`;
+      formMode.textContent = 'Editar registro';
+      form.querySelector('button[type="submit"]').textContent = `Guardar ${type}`;
+    }
+
+    async function deleteOrganizationItem(type, id) {
+      const item = findOrganizationItem(type, id);
+      const label = { gerencia: 'gerencia', departamento: 'departamento', cargo: 'cargo' }[type];
+      if (!item || !await window.AppUI.confirm(`¿Deseas eliminar esta ${label}? Si tiene empleados vinculados, se inhabilitará en lugar de eliminarse.`)) return;
+      try {
+        const res = await fetch(`/api/organization/${type}/${id}`, { method: 'DELETE', headers: window.AppUI.csrfHeaders() });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(result.detail || 'No se pudo procesar la eliminación.');
+        window.AppUI.toast(result.detail, result.action === 'deleted' ? 'success' : 'info');
+        await loadOrganization();
+      } catch (error) {
+        window.AppUI.toast(error.message, 'error');
+      }
     }
 
     async function submitForm(formId, endpoint, successMessage) {
@@ -398,28 +498,44 @@
         event.preventDefault();
         const submitButton = form.querySelector('button[type="submit"]');
         if (submitButton?.disabled) return;
-        if (!form.reportValidity()) return;
-        if (submitButton) submitButton.disabled = true;
 
         const formData = new FormData(form);
         const payload = Object.fromEntries(formData.entries());
+
+        payload.nombre = String(payload.nombre || '').trim();
+        payload.descripcion = String(payload.descripcion || '').trim() || null;
+        if (payload.nombre.length < 2) {
+          window.AppUI.toast('Escribe un nombre válido de al menos 2 caracteres.', 'error');
+          form.querySelector('[name="nombre"]')?.focus();
+          return;
+        }
+        if (!form.reportValidity()) return;
+        if (submitButton) submitButton.disabled = true;
 
         if (payload.gerencia_id) payload.gerencia_id = Number(payload.gerencia_id);
         if (payload.departamento_id) payload.departamento_id = Number(payload.departamento_id);
 
         try {
-          const res = await fetch(endpoint, {
-            method: 'POST',
+          const editId = form.dataset.editId;
+          const editType = form.dataset.editType;
+          const requestEndpoint = editId ? `/api/organization/${editType}/${editId}` : endpoint;
+          const res = await fetch(requestEndpoint, {
+            method: editId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json', ...window.AppUI.csrfHeaders() },
             body: JSON.stringify(payload),
           });
           const result = await res.json().catch(() => ({}));
           if (!res.ok) {
-            window.AppUI.toast(result.detail || 'No se pudo guardar la información.', 'error');
+            const message = res.status === 409
+              ? 'Ya existe otro elemento con ese nombre en esta estructura.'
+              : (result.detail || 'No se pudo guardar la información.');
+            window.AppUI.toast(message, 'error');
             return;
           }
-          window.AppUI.toast(successMessage, 'success');
+          window.AppUI.toast(editId ? 'Cambios guardados correctamente.' : successMessage, 'success');
           form.reset();
+          delete form.dataset.editId;
+          delete form.dataset.editType;
           await loadOrganization();
           switchViewToTree();
         } catch (error) {

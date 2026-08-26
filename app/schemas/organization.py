@@ -50,3 +50,14 @@ class OrganizationTreeItem(BaseModel):
 
 class OrganizationStatusUpdate(BaseModel):
     estado: str = Field(..., min_length=2, max_length=20)
+
+
+class OrganizationUpdate(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=150)
+    descripcion: Optional[str] = None
+    estado: str = Field(default='Activo', min_length=2, max_length=20)
+
+
+class OrganizationDeleteResult(BaseModel):
+    action: str
+    detail: str

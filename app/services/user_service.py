@@ -1,13 +1,11 @@
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
+from app.core.auth import ROLE_DEVELOPER
 from app.models.user import Usuario
 from app.services.auth_service import invalidate_user_sessions
 from app.schemas.user import UsuarioCreate, UsuarioUpdate
 from app.services.audit_service import add_audit
-
-
-ROLE_ADMIN = 'Administrador'
 
 
 class UserNotFoundError(ValueError):
@@ -24,7 +22,7 @@ def create_user(db: Session, payload: UsuarioCreate, actor_id: int | None = None
     if not username or not nombre:
         raise ValueError('El usuario y el nombre son obligatorios.')
     if db.query(Usuario).filter(Usuario.username == username).first():
-        raise ValueError('Ya existe un usuario con ese nombre.')
+        raise ValueError(f'Ya existe el nombre de usuario "{username}".')
 
     usuario = Usuario(
         username=username,
@@ -69,10 +67,10 @@ def update_user(db: Session, user_id: int, payload: UsuarioUpdate, actor_id: int
         raise ValueError('Ya existe otro usuario con ese nombre.')
     if not username or not nombre:
         raise ValueError('El usuario y el nombre son obligatorios.')
-    if actor_id == usuario.id and payload.rol != ROLE_ADMIN:
-        raise ValueError('No puedes quitarte el rol de administrador.')
-    if usuario.rol == ROLE_ADMIN and payload.rol != ROLE_ADMIN and db.query(Usuario).filter(Usuario.rol == ROLE_ADMIN, Usuario.activo == 1).count() <= 1:
-        raise ValueError('Debe existir al menos un administrador activo.')
+    if actor_id == usuario.id and payload.rol != ROLE_DEVELOPER:
+        raise ValueError('No puedes quitarte el rol de Desarrollador.')
+    if usuario.rol == ROLE_DEVELOPER and payload.rol != ROLE_DEVELOPER and db.query(Usuario).filter(Usuario.rol == ROLE_DEVELOPER, Usuario.activo == 1).count() <= 1:
+        raise ValueError('Debe existir al menos un Desarrollador activo.')
 
     antes = {'username': usuario.username, 'nombre': usuario.nombre, 'rol': usuario.rol, 'activo': bool(usuario.activo)}
     usuario.username = username
@@ -94,8 +92,8 @@ def set_user_status(db: Session, user_id: int, active: bool, actor_id: int | Non
         raise UserNotFoundError('El usuario no existe.')
     if not active and actor_id == usuario.id:
         raise ValueError('No puedes inhabilitar tu propio usuario.')
-    if not active and usuario.rol == ROLE_ADMIN and db.query(Usuario).filter(Usuario.rol == ROLE_ADMIN, Usuario.activo == 1).count() <= 1:
-        raise ValueError('Debe existir al menos un administrador activo.')
+    if not active and usuario.rol == ROLE_DEVELOPER and db.query(Usuario).filter(Usuario.rol == ROLE_DEVELOPER, Usuario.activo == 1).count() <= 1:
+        raise ValueError('Debe existir al menos un Desarrollador activo.')
     antes = {'activo': bool(usuario.activo)}
     usuario.activo = 1 if active else 0
     db.add(usuario)

@@ -7,10 +7,12 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_systems
+from app.core.auth import require_developer
 from app.core.config import BACKUP_INTERVAL_SECONDS, DEFAULT_PAGE_SIZE, STATIC_DIR
 from app.database.session import get_db
 from app.services.backup_service import backup_path, create_backup, list_backups
+from app.services.notification_service import publish_technical
+from app.services.live_bus import notify_live_change
 
 
 logger = logging.getLogger(__name__)
@@ -22,28 +24,34 @@ templates_env = Environment(
 
 
 @router.get('/system/backups', response_class=HTMLResponse)
-def backups_page(request: Request, user=Depends(require_systems)):
+def backups_page(request: Request, user=Depends(require_developer)):
     template = templates_env.get_template('system_backups.html')
     return HTMLResponse(template.render(active_page='system', user=user, csp_nonce=request.state.csp_nonce, default_page_size=DEFAULT_PAGE_SIZE))
 
 
 @router.get('/api/system/backups')
-def api_list_backups(_user=Depends(require_systems)):
+def api_list_backups(_user=Depends(require_developer)):
     return {'items': list_backups()}
 
 
 @router.post('/api/system/backups')
-def api_create_backup(db: Session = Depends(get_db), _user=Depends(require_systems)):
+def api_create_backup(db: Session = Depends(get_db), _user=Depends(require_developer)):
     try:
         return create_backup(db)
-    except (OSError, SQLAlchemyError) as exc:
+    except (OSError, SQLAlchemyError, RuntimeError) as exc:
         db.rollback()
+        try:
+            publish_technical(db, 'Falla de backup', 'No se pudo crear la copia de seguridad. Revise los logs del sistema.')
+            db.commit()
+            notify_live_change()
+        except SQLAlchemyError:
+            db.rollback()
         logger.exception('No se pudo crear el backup manual.')
         raise HTTPException(status_code=503, detail='No se pudo crear la copia de seguridad.') from exc
 
 
 @router.get('/api/system/backups/{filename}/download')
-def api_download_backup(filename: str, _user=Depends(require_systems)):
+def api_download_backup(filename: str, _user=Depends(require_developer)):
     try:
         path = backup_path(filename)
     except ValueError as exc:
@@ -62,6 +70,12 @@ def run_scheduled_backup() -> None:
         logger.info('Copia de seguridad automática creada correctamente.')
     except Exception:
         db.rollback()
+        try:
+            publish_technical(db, 'Falla de backup automático', 'Falló la creación automática de la copia de seguridad. Revise los logs del sistema.')
+            db.commit()
+            notify_live_change()
+        except SQLAlchemyError:
+            db.rollback()
         logger.exception('Falló la copia de seguridad automática.')
     finally:
         db.close()

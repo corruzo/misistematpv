@@ -37,22 +37,24 @@ Este archivo es el mapa de avance funcional, no un manual de uso. Marca una casi
 
 ## Prioridad 4: Modo contingencia
 
-- [ ] Activar modo contingencia cuando falle el lector, la red o SQL Server.
-- [ ] Guardar marcajes pendientes en una cola local segura.
-- [ ] Mostrar el estado pendiente de sincronización.
-- [ ] Sincronizar automáticamente al recuperar la conexión.
-- [ ] Evitar registros duplicados durante la sincronización.
-- [ ] Mostrar errores de sincronización para revisión.
+- [x] Activar modo contingencia cuando falle la red o SQL Server para marcajes manuales y lecturas RFID.
+- [x] Guardar marcajes manuales pendientes en una cola local acotada por usuario.
+- [x] Mostrar el estado pendiente de sincronización.
+- [x] Sincronizar automáticamente al recuperar la conexión.
+- [x] Evitar registros duplicados durante la sincronización mediante identidad de operación.
+- [x] Mostrar errores de sincronización para revisión.
+
+Nota: la cola manual vive en el navegador y la cola RFID vive en SQLite local, ambas acotadas y con sincronización automática. La cola RFID no está cifrada; si la política de seguridad exige cifrado local, debe añadirse como trabajo separado.
 
 ## Prioridad 5: Alertas de inconsistencias
 
-- [ ] Detectar dos entradas consecutivas.
-- [ ] Detectar dos salidas consecutivas.
-- [ ] Detectar marcajes demasiado cercanos.
-- [ ] Detectar empleados retirados o suspendidos.
+- [x] Detectar dos entradas consecutivas.
+- [x] Detectar dos salidas consecutivas.
+- [x] Detectar marcajes demasiado cercanos.
+- [x] Detectar empleados retirados o suspendidos.
 - [ ] Detectar marcajes fuera del horario permitido.
-- [ ] Detectar salidas sin entrada previa.
-- [ ] Detectar personas dentro desde el día anterior.
+- [x] Detectar salidas sin entrada previa.
+- [x] Detectar personas dentro desde el día anterior.
 
 ## Prioridad 6: Entrega de turno
 
@@ -85,7 +87,7 @@ Este archivo es el mapa de avance funcional, no un manual de uso. Marca una casi
 
 ## Prioridad 9: Alertas de permanencia prolongada
 
-- [ ] Detectar permanencia superior al umbral configurado.
+- [x] Detectar permanencia superior al umbral configurado.
 - [ ] Detectar entradas sin salida al finalizar la jornada.
 - [ ] Mostrar duración dentro de la empresa.
 - [ ] Permitir configurar umbrales desde Sistemas.
@@ -93,12 +95,12 @@ Este archivo es el mapa de avance funcional, no un manual de uso. Marca una casi
 
 ## Prioridad 10: Exportación operativa
 
-- [ ] Exportar marcajes del turno.
+- [x] Exportar marcajes del turno.
 - [ ] Exportar personas presentes.
 - [ ] Exportar incidencias del día.
 - [ ] Exportar resumen por empleado.
-- [ ] Comenzar con formato CSV.
-- [ ] Restringir la exportación a información operativa necesaria.
+- [x] Comenzar con formato CSV.
+- [x] Restringir la exportación a información operativa necesaria.
 
 ## Permisos del rol Inspector
 
@@ -122,3 +124,6 @@ Este archivo es el mapa de avance funcional, no un manual de uso. Marca una casi
 - [ ] Cambiar la configuración del lector.
 - [ ] Eliminar registros.
 - [ ] Cambiar políticas del sistema.
+
+
+El inspector

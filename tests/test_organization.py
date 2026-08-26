@@ -14,8 +14,10 @@ from app.services.organization_service import (
     create_cargo,
     set_organization_state,
     get_organization_tree,
+    update_organization,
+    delete_or_disable_organization,
 )
-from app.schemas.organization import GerenciaCreate, DepartamentoCreate, CargoCreate
+from app.schemas.organization import GerenciaCreate, DepartamentoCreate, CargoCreate, OrganizationUpdate
 from app.models.base import Base
 
 
@@ -134,6 +136,43 @@ class OrganizationModelTest(unittest.TestCase):
             names = [item['nombre'] for item in tree]
 
             self.assertLess(names.index(active_gerencia['nombre']), names.index(inactive_gerencia['nombre']))
+        finally:
+            db.close()
+
+    def test_unlinked_hierarchy_is_deleted_permanently(self):
+        db = self.new_session()
+        try:
+            gerencia = create_gerencia(db, GerenciaCreate(nombre='Gerencia Eliminable', descripcion='Temporal'))
+            departamento = create_departamento(db, DepartamentoCreate(nombre='Departamento Eliminable', descripcion='Temporal', gerencia_id=gerencia['id']))
+            cargo = create_cargo(db, CargoCreate(nombre='Cargo Eliminable', descripcion='Temporal', departamento_id=departamento['id']))
+
+            result = delete_or_disable_organization(db, Gerencia, gerencia['id'])
+
+            self.assertEqual(result['action'], 'deleted')
+            self.assertIsNone(db.query(Gerencia).filter_by(id=gerencia['id']).first())
+            self.assertIsNone(db.query(Departamento).filter_by(id=departamento['id']).first())
+            self.assertIsNone(db.query(Cargo).filter_by(id=cargo['id']).first())
+        finally:
+            db.close()
+
+    def test_linked_hierarchy_is_disabled_and_can_be_updated(self):
+        db = self.new_session()
+        try:
+            gerencia = create_gerencia(db, GerenciaCreate(nombre='Gerencia Vinculada'))
+            departamento = create_departamento(db, DepartamentoCreate(nombre='Departamento Vinculado', gerencia_id=gerencia['id']))
+            cargo = create_cargo(db, CargoCreate(nombre='Cargo Vinculado', departamento_id=departamento['id']))
+            employee = Empleado(nombre_apellido='Empleado Vinculado', cedula='linked-1', departamento_id=departamento['id'], cargo_id=cargo['id'])
+            db.add(employee)
+            db.commit()
+
+            result = delete_or_disable_organization(db, Gerencia, gerencia['id'])
+            persisted_gerencia = db.query(Gerencia).filter_by(id=gerencia['id']).first()
+
+            self.assertEqual(result['action'], 'disabled')
+            self.assertEqual(persisted_gerencia.estado, 'Inactivo')
+            updated = update_organization(db, Gerencia, gerencia['id'], OrganizationUpdate(nombre='Gerencia Reactivada', descripcion='Actualizada', estado='Activo'))
+            self.assertEqual(updated.nombre, 'Gerencia Reactivada')
+            self.assertEqual(updated.estado, 'Activo')
         finally:
             db.close()
 

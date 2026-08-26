@@ -1,6 +1,15 @@
 (() => {
   const modalInstances = new WeakMap();
 
+  // Función de utilidad para limitar la frecuencia de ejecución (Debounce)
+  function debounce(fn, delay = 300) {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn(...args), delay);
+    };
+  }
+
   class LocalModal {
     constructor(element) {
       this.element = element;
@@ -35,7 +44,7 @@
     }
   }
 
-  window.bootstrap = { Modal: LocalModal };
+  window.bootstrap = window.bootstrap || { Modal: LocalModal };
   window.AppUI = {
     csrfHeaders() {
       const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
@@ -111,7 +120,8 @@
         button.title = label;
         button.setAttribute('aria-label', label);
         button.disabled = disabled;
-        if (icon) button.innerHTML = `<svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#${icon}"></use></svg>`;
+        if (icon === 'id-card') button.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="10" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 16c.7-1.5 1.5-2.2 2.5-2.2s1.8.7 2.5 2.2M13 9h5M13 13h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+        else if (icon) button.innerHTML = `<svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#${icon}"></use></svg>`;
         else button.textContent = label;
         button.addEventListener('click', onClick);
         container.append(button);
@@ -120,9 +130,114 @@
     },
   };
 
+  const NotificationApp = {
+    items: [],
+    lastId: 0,
+    unread: 0,
+    initialized: false,
+    init() {
+      this.trigger = document.getElementById('notificationTrigger');
+      this.panel = document.getElementById('notificationPanel');
+      this.list = document.getElementById('notificationList');
+      this.badge = document.getElementById('notificationBadge');
+      this.readAll = document.getElementById('notificationReadAll');
+      if (!this.trigger || !this.panel) return;
+      this.trigger.addEventListener('click', () => this.toggle());
+      this.readAll?.addEventListener('click', () => this.markRead());
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('.notification-menu')) this.close();
+      });
+      this.poll();
+    },
+    toggle() {
+      const open = this.panel.classList.toggle('d-none') === false;
+      this.trigger.setAttribute('aria-expanded', String(open));
+    },
+    close() {
+      this.panel.classList.add('d-none');
+      this.trigger.setAttribute('aria-expanded', 'false');
+    },
+    async poll() {
+      try {
+        const response = await fetch(`/api/notifications?after_id=${this.lastId}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const fresh = Array.isArray(payload.items) ? payload.items : [];
+        if (this.initialized && fresh.length) {
+          fresh.forEach((item) => {
+            window.AppUI.toast(`${item.titulo}: ${item.mensaje}`, item.prioridad === 'critica' ? 'error' : item.prioridad === 'advertencia' ? 'warning' : 'info');
+          });
+        }
+        this.items = [...this.items, ...fresh].slice(-100);
+        if (fresh.length) this.lastId = Math.max(this.lastId, ...fresh.map((item) => Number(item.id) || 0));
+        if (payload.unread !== null && payload.unread !== undefined) this.unread = Number(payload.unread) || 0;
+        else this.unread += fresh.filter((item) => !item.leida).length;
+        this.render();
+        this.initialized = true;
+      } catch (error) {
+        // The next poll retries transient connection failures.
+      } finally {
+        window.setTimeout(() => this.poll(), 60000);
+      }
+    },
+    receive(item) {
+      if (!item || Number(item.id) <= this.lastId) return;
+      this.items = [...this.items, item].slice(-100);
+      this.lastId = Number(item.id);
+      if (!item.leida) this.unread += 1;
+      window.AppUI.toast(`${item.titulo}: ${item.mensaje}`, item.prioridad === 'critica' ? 'error' : item.prioridad === 'advertencia' ? 'warning' : 'info');
+      this.render();
+    },
+    render() {
+      const unread = this.unread;
+      this.badge.textContent = unread > 99 ? '99+' : String(unread);
+      this.badge.classList.toggle('d-none', !unread);
+      this.list.replaceChildren();
+      if (!this.items.length) {
+        this.list.innerHTML = '<p class="notification-empty">No hay notificaciones.</p>';
+        return;
+      }
+      [...this.items].reverse().forEach((item) => {
+        const article = document.createElement('article');
+        article.className = `notification-item notification-item--${item.prioridad}${item.leida ? '' : ' is-unread'}`;
+        article.innerHTML = `<div class="notification-item__top"><span class="notification-priority">${item.prioridad}</span><time>${new Date(item.creada_en).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><button type="button" class="notification-dismiss" aria-label="Descartar notificación">x</button></div><strong></strong><p></p>`;
+        article.querySelector('strong').textContent = item.titulo;
+        article.querySelector('p').textContent = item.mensaje;
+        article.querySelector('.notification-dismiss').addEventListener('click', () => this.discard(item.id));
+        this.list.append(article);
+      });
+    },
+    async markRead() {
+      await fetch('/api/notifications/read', { method: 'PATCH', headers: window.AppUI.csrfHeaders() });
+      this.items.forEach((item) => { item.leida = true; });
+      this.unread = 0;
+      this.render();
+    },
+    async discard(id) {
+      await fetch(`/api/notifications/${id}`, { method: 'DELETE', headers: window.AppUI.csrfHeaders() });
+      const discarded = this.items.find((item) => item.id === id);
+      this.items = this.items.filter((item) => item.id !== id);
+      if (discarded && !discarded.leida) this.unread = Math.max(0, this.unread - 1);
+      this.render();
+    },
+  };
+
+  const LiveUpdates = {
+    start() {
+      if (!window.EventSource) return;
+      const source = new EventSource('/api/live');
+      ['attendance', 'access_denied', 'notification'].forEach((eventType) => {
+        source.addEventListener(eventType, (event) => {
+          try { window.dispatchEvent(new CustomEvent(`app:${eventType}`, { detail: JSON.parse(event.data) })); } catch (error) {}
+        });
+      });
+      source.onerror = () => {};
+    },
+  };
+
   document.addEventListener('click', (event) => {
     const dismiss = event.target.closest('[data-bs-dismiss="modal"]');
-    if (dismiss) dismiss.closest('.modal') && LocalModal.getInstance(dismiss.closest('.modal'))?.hide();
+    if (dismiss) dismiss.closest('.modal') && window.bootstrap.Modal.getInstance(dismiss.closest('.modal'))?.hide();
     const toggle = event.target.closest('[data-bs-toggle="collapse"]');
     if (toggle) {
       const target = document.querySelector(toggle.dataset.bsTarget);
@@ -141,6 +256,11 @@
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') sidebar?.classList.remove('sidebar-open');
     });
+
+    EmployeeApp.init();
+    NotificationApp.init();
+    LiveUpdates.start();
+    window.addEventListener('app:notification', (event) => NotificationApp.receive(event.detail));
   });
 
   const state = {
@@ -174,10 +294,9 @@
       this.pagination = document.getElementById('pagination');
       this.paginationInfo = document.getElementById('paginationInfo');
       this.loader = document.getElementById('employeesLoader');
+      this.canManage = document.getElementById('employeesTable')?.dataset.canManage === 'true';
 
-      if (!this.form || !this.list) {
-        return;
-      }
+      if (!this.form || !this.list) return;
 
       this.bindEvents();
       this.ensureOrganizationCatalog().finally(() => {
@@ -223,9 +342,10 @@
       const gerenciaFilter = document.getElementById('gerenciaFilter');
       const departamentoFilter = document.getElementById('departamentoFilter');
       const estadoFilter = document.getElementById('estadoFilter');
+      const tipoNominaFilter = document.getElementById('tipoNominaFilter');
       const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 
-      [gerenciaFilter, departamentoFilter, estadoFilter].forEach((select) => {
+      [gerenciaFilter, departamentoFilter, estadoFilter, tipoNominaFilter].forEach((select) => {
         select?.addEventListener('change', () => {
           if (select === gerenciaFilter) {
             this.populateFilterSelects();
@@ -241,48 +361,25 @@
         if (gerenciaFilter) gerenciaFilter.value = '';
         if (departamentoFilter) departamentoFilter.value = '';
         if (estadoFilter) estadoFilter.value = '';
+        if (tipoNominaFilter) tipoNominaFilter.value = '';
         state.page = 1;
         this.fetchEmployees();
       });
     },
 
     getModalInstance() {
-      if (!this.modal || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
-        return null;
-      }
-
-      try {
-        return bootstrap.Modal.getInstance(this.modal) || new bootstrap.Modal(this.modal);
-      } catch (err) {
-        console.warn('Bootstrap Modal aún no está listo:', err);
-        return null;
-      }
+      if (!this.modal || !window.bootstrap?.Modal) return null;
+      return window.bootstrap.Modal.getInstance(this.modal) || new window.bootstrap.Modal(this.modal);
     },
 
     openModal() {
       const modal = this.getModalInstance();
-      if (modal) {
-        modal.show();
-        return;
-      }
-
-      setTimeout(() => {
-        const retryModal = this.getModalInstance();
-        if (retryModal) retryModal.show();
-      }, 150);
+      if (modal) modal.show();
     },
 
     closeModal() {
       const modal = this.getModalInstance();
-      if (modal) {
-        modal.hide();
-        return;
-      }
-
-      setTimeout(() => {
-        const retryModal = this.getModalInstance();
-        if (retryModal) retryModal.hide();
-      }, 150);
+      if (modal) modal.hide();
     },
 
     setLoading(on) {
@@ -297,7 +394,7 @@
     },
 
     escapeHtml(value) {
-      return String(value).replace(/[&<>"']/g, (character) => ({
+      return String(value ?? '').replace(/[&<>"']/g, (character) => ({
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
@@ -339,6 +436,8 @@
       const formData = new FormData(this.form);
       const id = this.form.querySelector('[name="id"]')?.value;
       const saveBtn = document.getElementById('saveBtn');
+      const removePhoto = this.form.querySelector('[name="eliminar_foto"]');
+      formData.set('eliminar_foto', removePhoto?.checked ? 'true' : 'false');
 
       try {
         if (saveBtn) saveBtn.disabled = true;
@@ -357,7 +456,7 @@
         this.fetchEmployees();
       } catch (error) {
         console.error(error);
-        this.showError(error.message || 'Error guardando empleado.');
+        this.showError(error.message || 'No se pudo guardar el empleado. Revisa los datos e inténtalo de nuevo.');
       } finally {
         if (saveBtn) saveBtn.disabled = false;
       }
@@ -371,32 +470,24 @@
         const gerenciaFilter = document.getElementById('gerenciaFilter');
         const departamentoFilter = document.getElementById('departamentoFilter');
         const estadoFilter = document.getElementById('estadoFilter');
+        const tipoNominaFilter = document.getElementById('tipoNominaFilter');
 
         if (state.q) params.set('q', state.q);
-        if (estadoFilter && estadoFilter.value) {
-          params.set('estado', estadoFilter.value);
-        }
-        if (gerenciaFilter && gerenciaFilter.value) {
-          params.set('gerencia_id', gerenciaFilter.value);
-        }
-        if (departamentoFilter && departamentoFilter.value) {
-          params.set('departamento_id', departamentoFilter.value);
-        }
+        if (estadoFilter?.value) params.set('estado', estadoFilter.value);
+        if (tipoNominaFilter?.value) params.set('tipo_nomina', tipoNominaFilter.value);
+        if (gerenciaFilter?.value) params.set('gerencia_id', gerenciaFilter.value);
+        if (departamentoFilter?.value) params.set('departamento_id', departamentoFilter.value);
         params.set('limit', String(state.pageSize));
         params.set('offset', String(offset));
 
         const response = await fetch(`/api/employees?${params.toString()}`);
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Error ${response.status}`);
 
         const payload = await response.json();
         const items = Array.isArray(payload) ? payload : (payload.items || []);
         state.total = Array.isArray(payload) ? payload.length : Number(payload.total) || items.length;
 
-        if (payload.metrics) {
-          this.updateMetrics(payload.metrics);
-        }
+        if (payload.metrics) this.updateMetrics(payload.metrics);
 
         this.renderList(items);
         this.renderPagination();
@@ -410,7 +501,6 @@
 
     updateMetrics(metrics) {
       if (!metrics) return;
-
       const map = {
         active: '#metric-active',
         vacation: '#metric-vacation',
@@ -423,6 +513,14 @@
           if (element) element.textContent = metrics[key];
         }
       });
+
+      const payrollFilter = document.getElementById('tipoNominaFilter');
+      if (payrollFilter && Array.isArray(metrics.payroll_breakdown)) {
+        const selected = payrollFilter.value;
+        const payrolls = metrics.payroll_breakdown.map((item) => item.nombre).filter(Boolean);
+        payrollFilter.innerHTML = '<option value="">Tipo de nómina</option>' + payrolls.map((payroll) => `<option value="${this.escapeHtml(payroll)}">${this.escapeHtml(payroll)}</option>`).join('');
+        payrollFilter.value = payrolls.includes(selected) ? selected : '';
+      }
     },
 
     getStatusBadgeClass(status) {
@@ -439,7 +537,6 @@
 
     renderList(items) {
       if (!this.list) return;
-
       this.list.innerHTML = '';
 
       if (!items || items.length === 0) {
@@ -462,27 +559,29 @@
           <td>
             <div class="d-flex align-items-center gap-2">
               <img class="employee-avatar" src="${fotoSrc}" alt="avatar" />
-              <span class="fw-medium">${this.escapeHtml(employee.nombre_apellido || '')}</span>
+              <span class="fw-medium">${this.escapeHtml(employee.nombre_apellido)}</span>
             </div>
           </td>
-          <td>${this.escapeHtml(employee.cedula || '')}</td>
+          <td>${this.escapeHtml(employee.cedula)}</td>
           <td>
-            <div>${this.escapeHtml(employee.gerencia || '')}</div>
-            <small class="text-muted">${this.escapeHtml(employee.departamento || '')}</small>
+            <div>${this.escapeHtml(employee.gerencia)}</div>
+            <small class="text-muted">${this.escapeHtml(employee.departamento)}</small>
           </td>
-          <td>${this.escapeHtml(employee.cargo || '')}</td>
+          <td>${this.escapeHtml(employee.cargo)}</td>
           <td>
             <span class="badge-pill ${statusClass}">
-              ${this.escapeHtml(employee.estado || '')}
+              ${this.escapeHtml(employee.estado)}
             </span>
           </td>
           <td class="text-end"><div data-row-actions></div></td>
         `;
 
-        row.querySelector('[data-row-actions]').replaceWith(window.AppUI.rowActions([
-          { label: 'Editar empleado', icon: 'edit', variant: 'ghost', onClick: () => this.editEmployee(employee.id) },
-          { label: 'Inhabilitar empleado', icon: 'trash', variant: 'danger', onClick: () => this.disableEmployee(employee.id) },
-        ]));
+        const actions = [{ label: 'Ver ficha del empleado', icon: 'id-card', variant: 'ghost', onClick: () => this.viewProfile(employee.id) }];
+        if (this.canManage) {
+          actions.push({ label: 'Editar empleado', icon: 'edit', variant: 'ghost', onClick: () => this.editEmployee(employee.id) });
+          actions.push({ label: 'Inhabilitar empleado', icon: 'trash', variant: 'danger', onClick: () => this.disableEmployee(employee.id) });
+        }
+        row.querySelector('[data-row-actions]').replaceWith(window.AppUI.rowActions(actions));
         row.querySelector('.employee-avatar')?.addEventListener('error', (event) => {
           event.currentTarget.src = defaultAvatar;
         }, { once: true });
@@ -492,7 +591,6 @@
 
     renderPagination() {
       if (!this.pagination) return;
-
       window.AppUI.renderPagination(this.pagination, {
         total: state.total,
         page: state.page,
@@ -505,13 +603,8 @@
     },
 
     async ensureOrganizationCatalog(force = false) {
-      if (!force && this.organizationCatalog.length) {
-        return this.organizationCatalog;
-      }
-
-      if (!force && this.organizationCatalogPromise) {
-        return this.organizationCatalogPromise;
-      }
+      if (!force && this.organizationCatalog.length) return this.organizationCatalog;
+      if (!force && this.organizationCatalogPromise) return this.organizationCatalogPromise;
 
       this.organizationCatalogPromise = fetch('/api/organization')
         .then(async (response) => {
@@ -542,30 +635,17 @@
       const selectedGerencia = gerenciaFilter.value;
       const selectedDepartamento = departamentoFilter.value;
 
-      const gerencias = (this.organizationCatalog || []).filter((gerencia) => (gerencia.estado || 'Activo') === 'Activo');
-      gerenciaFilter.innerHTML = '<option value="">Gerencia</option>' + gerencias.map((gerencia) => `<option value="${gerencia.id}">${this.escapeHtml(gerencia.nombre)}</option>`).join('');
+      const gerencias = (this.organizationCatalog || []).filter((g) => (g.estado || 'Activo') === 'Activo');
+      gerenciaFilter.innerHTML = '<option value="">Gerencia</option>' + gerencias.map((g) => `<option value="${g.id}">${this.escapeHtml(g.nombre)}</option>`).join('');
 
-      if (selectedGerencia && gerencias.some((gerencia) => String(gerencia.id) === selectedGerencia)) {
-        gerenciaFilter.value = selectedGerencia;
-      } else {
-        gerenciaFilter.value = '';
-      }
+      gerenciaFilter.value = gerencias.some((g) => String(g.id) === selectedGerencia) ? selectedGerencia : '';
 
-      const departments = selectedGerencia && gerencias.some((gerencia) => String(gerencia.id) === selectedGerencia)
-        ? (gerencias.find((gerencia) => String(gerencia.id) === selectedGerencia)?.departamentos || []).filter((departamento) => (departamento.estado || 'Activo') === 'Activo')
-        : gerencias.flatMap((gerencia) => (gerencia.departamentos || []).filter((departamento) => (departamento.estado || 'Activo') === 'Activo'));
+      const departments = selectedGerencia && gerencias.some((g) => String(g.id) === selectedGerencia)
+        ? (gerencias.find((g) => String(g.id) === selectedGerencia)?.departamentos || []).filter((d) => (d.estado || 'Activo') === 'Activo')
+        : gerencias.flatMap((g) => (g.departamentos || []).filter((d) => (d.estado || 'Activo') === 'Activo'));
 
-      departamentoFilter.innerHTML = '<option value="">Departamento</option>' + departments.map((departamento) => `<option value="${departamento.id}">${this.escapeHtml(departamento.nombre)}</option>`).join('');
-
-      if (selectedDepartamento && departments.some((departamento) => String(departamento.id) === selectedDepartamento)) {
-        departamentoFilter.value = selectedDepartamento;
-      } else {
-        departamentoFilter.value = '';
-      }
-
-      if (!selectedGerencia && !selectedDepartamento) {
-        departamentoFilter.value = '';
-      }
+      departamentoFilter.innerHTML = '<option value="">Departamento</option>' + departments.map((d) => `<option value="${d.id}">${this.escapeHtml(d.nombre)}</option>`).join('');
+      departamentoFilter.value = departments.some((d) => String(d.id) === selectedDepartamento) ? selectedDepartamento : '';
     },
 
     setFormSelectsFromCatalog(catalog) {
@@ -577,7 +657,7 @@
 
       if (!gerenciaSelect || !departamentoSelect || !cargoSelect) return;
 
-      const activeCatalog = (catalog || []).filter((gerencia) => (gerencia.estado || 'Activo') === 'Activo');
+      const activeCatalog = catalog.filter((g) => (g.estado || 'Activo') === 'Activo');
       const buildOptions = (items, placeholder) => [
         `<option value="">${placeholder}</option>`,
         ...items.map((item) => `<option value="${item.nombre}">${item.nombre}</option>`),
@@ -591,53 +671,45 @@
       cargoSelect.disabled = true;
 
       gerenciaSelect.onchange = () => {
-        const selectedName = gerenciaSelect.value;
-        const selectedGerencia = activeCatalog.find((item) => item.nombre === selectedName);
-        const departamentos = selectedGerencia ? (selectedGerencia.departamentos || []).filter((departamento) => (departamento.estado || 'Activo') === 'Activo') : [];
-        const gerenciaIdInput = this.form.querySelector('[name="gerencia_id"]');
-        const departamentoIdInput = this.form.querySelector('[name="departamento_id"]');
-        const cargoIdInput = this.form.querySelector('[name="cargo_id"]');
+        const selectedGerencia = activeCatalog.find((item) => item.nombre === gerenciaSelect.value);
+        const departamentos = selectedGerencia ? (selectedGerencia.departamentos || []).filter((d) => (d.estado || 'Activo') === 'Activo') : [];
+        
+        const gId = this.form.querySelector('[name="gerencia_id"]');
+        const dId = this.form.querySelector('[name="departamento_id"]');
+        const cId = this.form.querySelector('[name="cargo_id"]');
 
-        if (gerenciaIdInput) gerenciaIdInput.value = selectedGerencia ? selectedGerencia.id : '';
-        if (departamentoIdInput) departamentoIdInput.value = '';
-        if (cargoIdInput) cargoIdInput.value = '';
+        if (gId) gId.value = selectedGerencia?.id || '';
+        if (dId) dId.value = '';
+        if (cId) cId.value = '';
 
-        departamentoSelect.innerHTML = [
-          '<option value="">Seleccione un departamento</option>',
-          ...(departamentos || []).map((departamento) => `<option value="${departamento.nombre}">${departamento.nombre}</option>`),
-        ].join('');
-        departamentoSelect.disabled = !(departamentos && departamentos.length);
+        departamentoSelect.innerHTML = buildOptions(departamentos, 'Seleccione un departamento');
+        departamentoSelect.disabled = !departamentos.length;
         cargoSelect.innerHTML = '<option value="">Seleccione un cargo</option>';
         cargoSelect.disabled = true;
       };
 
       departamentoSelect.onchange = () => {
-        const selectedGerenciaName = gerenciaSelect.value;
-        const selectedGerencia = activeCatalog.find((item) => item.nombre === selectedGerenciaName) || { departamentos: [] };
-        const selectedNombre = departamentoSelect.value;
-        const selectedDepartamento = (selectedGerencia.departamentos || []).find((item) => item.nombre === selectedNombre);
-        const cargos = selectedDepartamento ? (selectedDepartamento.cargos || []).filter((cargo) => (cargo.estado || 'Activo') === 'Activo') : [];
-        const departamentoIdInput = this.form.querySelector('[name="departamento_id"]');
-        const cargoIdInput = this.form.querySelector('[name="cargo_id"]');
+        const selectedGerencia = activeCatalog.find((item) => item.nombre === gerenciaSelect.value);
+        const selectedDepartamento = (selectedGerencia?.departamentos || []).find((d) => d.nombre === departamentoSelect.value);
+        const cargos = selectedDepartamento ? (selectedDepartamento.cargos || []).filter((c) => (c.estado || 'Activo') === 'Activo') : [];
+        
+        const dId = this.form.querySelector('[name="departamento_id"]');
+        const cId = this.form.querySelector('[name="cargo_id"]');
 
-        if (departamentoIdInput) departamentoIdInput.value = selectedDepartamento ? selectedDepartamento.id : '';
-        if (cargoIdInput) cargoIdInput.value = '';
+        if (dId) dId.value = selectedDepartamento?.id || '';
+        if (cId) cId.value = '';
 
-        cargoSelect.innerHTML = [
-          '<option value="">Seleccione un cargo</option>',
-          ...(cargos || []).map((cargo) => `<option value="${cargo.nombre}">${cargo.nombre}</option>`),
-        ].join('');
-        cargoSelect.disabled = !(cargos && cargos.length);
+        cargoSelect.innerHTML = buildOptions(cargos, 'Seleccione un cargo');
+        cargoSelect.disabled = !cargos.length;
       };
 
       cargoSelect.onchange = () => {
-        const selectedGerenciaName = gerenciaSelect.value;
-        const selectedGerencia = activeCatalog.find((item) => item.nombre === selectedGerenciaName) || { departamentos: [] };
-        const selectedDepartamentoName = departamentoSelect.value;
-        const selectedDepartamento = (selectedGerencia.departamentos || []).find((item) => item.nombre === selectedDepartamentoName) || { cargos: [] };
-        const selectedCargo = ((selectedDepartamento.cargos || []).filter((cargo) => (cargo.estado || 'Activo') === 'Activo')).find((item) => item.nombre === cargoSelect.value);
-        const cargoIdInput = this.form.querySelector('[name="cargo_id"]');
-        if (cargoIdInput) cargoIdInput.value = selectedCargo ? selectedCargo.id : '';
+        const selectedGerencia = activeCatalog.find((item) => item.nombre === gerenciaSelect.value);
+        const selectedDepartamento = (selectedGerencia?.departamentos || []).find((d) => d.nombre === departamentoSelect.value);
+        const selectedCargo = (selectedDepartamento?.cargos || []).find((c) => c.nombre === cargoSelect.value);
+        
+        const cId = this.form.querySelector('[name="cargo_id"]');
+        if (cId) cId.value = selectedCargo?.id || '';
       };
     },
 
@@ -663,74 +735,28 @@
         const departamentoSelect = this.form.querySelector('[name="departamento"]');
         const cargoSelect = this.form.querySelector('[name="cargo"]');
 
-        const activeCatalog = (catalog || []).filter((gerencia) => (gerencia.estado || 'Activo') === 'Activo');
-        const matchedGerencia = activeCatalog.find((item) => item.nombre === employee.gerencia || Number(item.id) === Number(employee.gerencia_id));
-        const gerenciaIdInput = this.form.querySelector('[name="gerencia_id"]');
+        const activeCatalog = catalog.filter((g) => (g.estado || 'Activo') === 'Activo');
+        const matchedGerencia = activeCatalog.find((g) => g.nombre === employee.gerencia || Number(g.id) === Number(employee.gerencia_id));
+        
         if (matchedGerencia && gerenciaSelect) {
           gerenciaSelect.value = matchedGerencia.nombre;
-          if (gerenciaIdInput) gerenciaIdInput.value = matchedGerencia.id;
-        } else if (gerenciaSelect && (employee.gerencia || employee.gerencia_id)) {
-          const legacyGerenciaName = employee.gerencia || `Gerencia ${employee.gerencia_id || ''}`;
-          gerenciaSelect.innerHTML = [
-            '<option value="">Seleccione una gerencia</option>',
-            `<option value="${legacyGerenciaName}" selected>${legacyGerenciaName} (inactivo)</option>`,
-          ].join('');
-          gerenciaSelect.disabled = true;
-          if (gerenciaIdInput) gerenciaIdInput.value = employee.gerencia_id || '';
+          gerenciaSelect.dispatchEvent(new Event('change'));
         }
 
-        const departamentos = matchedGerencia ? (matchedGerencia.departamentos || []).filter((item) => (item.estado || 'Activo') === 'Activo') : [];
-        if (departamentoSelect) {
-          if (matchedGerencia) {
-            departamentoSelect.innerHTML = [
-              '<option value="">Seleccione un departamento</option>',
-              ...departamentos.map((item) => `<option value="${item.nombre}">${item.nombre}</option>`),
-            ].join('');
-            departamentoSelect.disabled = !departamentos.length;
-          } else if (employee.departamento || employee.departamento_id) {
-            const legacyDepartamentoName = employee.departamento || `Departamento ${employee.departamento_id || ''}`;
-            departamentoSelect.innerHTML = [
-              '<option value="">Seleccione un departamento</option>',
-              `<option value="${legacyDepartamentoName}" selected>${legacyDepartamentoName} (inactivo)</option>`,
-            ].join('');
-            departamentoSelect.disabled = true;
-          }
-        }
-
-        const matchedDepartamento = departamentos.find((item) => item.nombre === employee.departamento || Number(item.id) === Number(employee.departamento_id));
-        const departamentoIdInput = this.form.querySelector('[name="departamento_id"]');
+        const departamentos = matchedGerencia ? (matchedGerencia.departamentos || []).filter((d) => (d.estado || 'Activo') === 'Activo') : [];
+        const matchedDepartamento = departamentos.find((d) => d.nombre === employee.departamento || Number(d.id) === Number(employee.departamento_id));
+        
         if (matchedDepartamento && departamentoSelect) {
           departamentoSelect.value = matchedDepartamento.nombre;
-          if (departamentoIdInput) departamentoIdInput.value = matchedDepartamento.id;
-        } else if (employee.departamento_id && departamentoIdInput) {
-          departamentoIdInput.value = employee.departamento_id;
+          departamentoSelect.dispatchEvent(new Event('change'));
         }
 
-        const cargos = matchedDepartamento ? (matchedDepartamento.cargos || []).filter((item) => (item.estado || 'Activo') === 'Activo') : [];
-        if (cargoSelect) {
-          if (matchedDepartamento) {
-            cargoSelect.innerHTML = [
-              '<option value="">Seleccione un cargo</option>',
-              ...cargos.map((item) => `<option value="${item.nombre}">${item.nombre}</option>`),
-            ].join('');
-            cargoSelect.disabled = !cargos.length;
-          } else if (employee.cargo || employee.cargo_id) {
-            const legacyCargoName = employee.cargo || `Cargo ${employee.cargo_id || ''}`;
-            cargoSelect.innerHTML = [
-              '<option value="">Seleccione un cargo</option>',
-              `<option value="${legacyCargoName}" selected>${legacyCargoName} (inactivo)</option>`,
-            ].join('');
-            cargoSelect.disabled = true;
-          }
-        }
-
-        const matchedCargo = cargos.find((item) => item.nombre === employee.cargo || Number(item.id) === Number(employee.cargo_id));
-        const cargoIdInput = this.form.querySelector('[name="cargo_id"]');
+        const cargos = matchedDepartamento ? (matchedDepartamento.cargos || []).filter((c) => (c.estado || 'Activo') === 'Activo') : [];
+        const matchedCargo = cargos.find((c) => c.nombre === employee.cargo || Number(c.id) === Number(employee.cargo_id));
+        
         if (matchedCargo && cargoSelect) {
           cargoSelect.value = matchedCargo.nombre;
-          if (cargoIdInput) cargoIdInput.value = matchedCargo.id;
-        } else if (employee.cargo_id && cargoIdInput) {
-          cargoIdInput.value = employee.cargo_id;
+          cargoSelect.dispatchEvent(new Event('change'));
         }
 
         const modalTitle = document.getElementById('employeeModalLabel');
@@ -743,35 +769,72 @@
     },
 
     async disableEmployee(employeeId) {
-      if (!await window.AppUI.confirm('¿Confirma inhabilitar este empleado?')) {
-        return;
-      }
+      const ok = await window.AppUI.confirm('¿Está seguro de que desea inhabilitar a este empleado?');
+      if (!ok) return;
 
-      this.setLoading(true);
       try {
-        const response = await fetch(`/api/employees/${employeeId}/disable`, { method: 'PATCH', headers: window.AppUI.csrfHeaders() });
-        if (!response.ok) throw new Error('Error');
+        const response = await fetch(`/api/employees/${employeeId}`, {
+          method: 'DELETE',
+          headers: window.AppUI.csrfHeaders(),
+        });
+        if (!response.ok) throw new Error('No se pudo inhabilitar al empleado');
+        window.AppUI.toast('Empleado inhabilitado con éxito', 'success');
         this.fetchEmployees();
       } catch (error) {
         console.error(error);
-        this.showError('No se pudo inhabilitar.');
-      } finally {
-        this.setLoading(false);
+        this.showError(error.message);
       }
     },
-  };
 
-  function debounce(callback, delay = 300) {
-    let timer = null;
-    return (...args) => {
-      clearTimeout(timer);
-      timer = setTimeout(() => callback(...args), delay);
-    };
-  }
+    async viewProfile(employeeId) {
+      const modal = document.getElementById('employeeProfileModal');
+      const errorElement = document.getElementById('employeeProfileError');
+      const loadProfile = async () => {
+      try {
+        const days = document.getElementById('profileDays')?.value || '30';
+        const pageSize = document.getElementById('profilePageSize')?.value || '25';
+        const page = 1;
+        const profileQuery = `/profile?days=${days}&page=${page}&page_size=${pageSize}`;
+        const response = await fetch(`/api/employees/${employeeId}`);
+        if (!response.ok) throw new Error('No se pudo cargar la información del empleado.');
+        const employee = await response.json();
+        const profile = { attendance: { items: [] }, audit: [] };
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('employeesList')) {
-      EmployeeApp.init();
+        document.getElementById('profileEmployeeName').textContent = employee.nombre_apellido || '--';
+        document.getElementById('profileEmployeeOrg').textContent = [employee.gerencia, employee.departamento, employee.cargo].filter(Boolean).join(' / ') || '--';
+        document.getElementById('profileEmployeePhoto').src = employee.foto_url || '/static/img/default-avatar.svg';
+        document.getElementById('profilePersonalData').innerHTML = [
+          ['Cédula', employee.cedula],
+          ['Código RFID', employee.codigo_tarjeta],
+          ['Estado', employee.estado],
+          ['Tipo de nómina', employee.tipo_nomina],
+          ['Fecha de nacimiento', employee.fecha_nacimiento],
+        ].map(([label, value]) => `<div><span>${label}</span><strong>${this.escapeHtml(value || '--')}</strong></div>`).join('');
+        document.getElementById('profileAttendanceList').innerHTML = profile.attendance.items.length
+          ? profile.attendance.items.map((item) => `<div class="employee-profile-event"><strong>${this.escapeHtml(item.tipo)}</strong><span>${this.escapeHtml(item.fecha_hora)}</span></div>`).join('')
+          : '<p class="text-muted">No hay marcajes en el período seleccionado.</p>';
+        document.getElementById('profileAuditList').innerHTML = profile.audit.length
+          ? profile.audit.map((item) => `<div class="employee-profile-event"><strong>${this.escapeHtml(item.accion)}</strong><span>${this.escapeHtml(item.fecha)}</span></div>`).join('')
+          : '<p class="text-muted">No hay cambios registrados en el período seleccionado.</p>';
+        errorElement?.classList.add('d-none');
+        return profile;
+      } catch (error) {
+        console.error(error);
+        if (errorElement) {
+          errorElement.textContent = error.message;
+          errorElement.classList.remove('d-none');
+        }
+      }
+      };
+
+      document.getElementById('profileApplyFilters')?.replaceWith(
+        Object.assign(document.getElementById('profileApplyFilters').cloneNode(true), { onclick: loadProfile })
+      );
+      await loadProfile();
+      if (modal && window.bootstrap?.Modal) {
+        const profileModal = window.bootstrap.Modal.getInstance(modal) || new window.bootstrap.Modal(modal);
+        profileModal.show();
+      }
     }
-  });
+  };
 })();

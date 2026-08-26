@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from unittest.mock import patch
 
 from app.services.serial_reader import (
@@ -42,6 +43,27 @@ class SerialReaderTest(unittest.TestCase):
             reader._read_connection(connection)
 
         register.assert_called_once_with('CARD-001')
+
+    def test_failed_read_is_persisted_with_operation_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch('app.services.serial_reader.RFID_OFFLINE_QUEUE_PATH', __import__('pathlib').Path(temp_dir) / 'queue.sqlite3'):
+            reader = SerialAttendanceReader()
+            with patch('app.services.serial_reader.SessionLocal', side_effect=RuntimeError('SQL Server fuera de servicio')):
+                reader._register('CARD-002')
+
+            pending = reader._pending_scans()
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0][2], 'CARD-002')
+            self.assertTrue(pending[0][1])
+
+    def test_pending_read_is_removed_after_successful_sync(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch('app.services.serial_reader.RFID_OFFLINE_QUEUE_PATH', __import__('pathlib').Path(temp_dir) / 'queue.sqlite3'):
+            reader = SerialAttendanceReader()
+            reader._queue_scan('CARD-003', 'operation-003', '2026-08-26T12:00:00+00:00')
+            with patch('app.services.serial_reader.register_scan') as register:
+                reader._sync_pending()
+
+            self.assertEqual(reader._pending_scans(), [])
+            self.assertEqual(register.call_args.kwargs['operation_id'], 'operation-003')
 
 
 if __name__ == '__main__':

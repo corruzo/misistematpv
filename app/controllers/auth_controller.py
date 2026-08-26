@@ -25,8 +25,7 @@ templates_env = Environment(
 def root_page(request: Request, user=Depends(current_user_optional)):
     if not user:
         return RedirectResponse('/login', status_code=303)
-    template = templates_env.get_template('index.html')
-    return HTMLResponse(template.render(active_page='dashboard', user=user, csp_nonce=request.state.csp_nonce))
+    return RedirectResponse('/attendance/summary', status_code=303)
 
 
 @router.get('/login', response_class=HTMLResponse)
@@ -87,7 +86,7 @@ def setup_admin(
             status_code=409,
         )
     try:
-        create_user(db, UsuarioCreate(username=username, nombre=nombre, password=password, rol='Administrador'))
+        create_user(db, UsuarioCreate(username=username, nombre=nombre, password=password, rol='Desarrollador'))
     except Exception:
         db.rollback()
         return HTMLResponse(template.render(error='No se pudo crear el administrador.'), status_code=400)

@@ -20,19 +20,22 @@ class BackupServiceTest(unittest.TestCase):
 
     def test_create_backup_uses_server_side_sql_and_selected_slot(self):
         db = MagicMock()
-        db.execute.return_value = None
         with tempfile.TemporaryDirectory() as directory:
             backup_dir = Path(directory)
-            with patch.object(backup_service, 'BACKUP_DIR', backup_dir), patch.object(backup_service, 'BACKUP_SLOT_COUNT', 3), patch.object(
+            with patch.object(backup_service, 'engine') as engine, patch.object(backup_service, 'BACKUP_DIR', backup_dir), patch.object(backup_service, 'BACKUP_SLOT_COUNT', 3), patch.object(
                 backup_service,
                 'list_backups',
                 side_effect=[[{'filename': 'backup_1.bak', 'slot': 1}], [{'filename': 'backup_2.bak', 'slot': 2}]],
             ):
+                connection = engine.raw_connection.return_value
+                cursor = connection.cursor.return_value
+                cursor.description = [('lock_result',)]
+                cursor.fetchone.return_value = (0,)
                 backup = backup_service.create_backup(db)
 
-        self.assertIn('BACKUP DATABASE', db.execute.call_args.args[0].text)
+            self.assertIn('BACKUP DATABASE', cursor.execute.call_args_list[-1].args[0])
+            connection.close.assert_called_once()
         self.assertEqual(backup['filename'], 'backup_2.bak')
-        db.commit.assert_called_once()
 
 
 if __name__ == '__main__':

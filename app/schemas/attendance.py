@@ -22,6 +22,7 @@ class AttendanceManualRequest(BaseModel):
     empleado_id: int = Field(..., gt=0)
     fecha_hora: datetime | None = None
     tipo: AttendanceType | None = None
+    operacion_id: str | None = Field(None, min_length=16, max_length=64)
 
 
 class AttendanceManualBatchRequest(BaseModel):
@@ -33,6 +34,11 @@ class AttendanceManualBatchRequest(BaseModel):
         if len(employee_ids) != len(set(employee_ids)):
             raise ValueError('Un empleado no puede repetirse dentro del mismo lote.')
         return self
+
+
+class ManualFrequentEmployeeRequest(BaseModel):
+    empleado_id: int = Field(..., gt=0)
+    posicion: int = Field(0, ge=0, le=1000)
 
 
 class AttendanceCorrectionRequest(BaseModel):
@@ -55,6 +61,7 @@ class AttendanceRecordOut(BaseModel):
     gerencia: str | None = None
     cargo: str | None = None
     foto_url: str | None = None
+    estado: str
 
 
 class AttendanceHistoryPage(BaseModel):

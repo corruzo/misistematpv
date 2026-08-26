@@ -54,6 +54,27 @@ class CsrfAndRateLimitTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('nonce-', response.headers['content-security-policy'])
 
+    def test_same_lan_host_origin_is_accepted_in_development(self):
+        app = FastAPI()
+        app.add_middleware(SecurityHeadersMiddleware)
+
+        @app.post('/change')
+        def change():
+            return {'ok': True}
+
+        client = TestClient(app)
+        page_response = client.get('/page')
+        token = page_response.cookies.get('csrftoken')
+        response = client.post(
+            '/change',
+            headers={
+                'Host': '192.168.1.20:8000',
+                'Origin': 'http://192.168.1.20:8000',
+                'X-CSRFToken': token,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_rate_limit_blocks_after_configured_attempts_per_identity(self):
         scope = '/test-rate-limit'
         for _ in range(AUTH_RATE_LIMIT):

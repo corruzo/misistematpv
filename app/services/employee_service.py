@@ -1,6 +1,7 @@
 import uuid
 from pathlib import Path
 from typing import List, Optional
+from datetime import timedelta
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
 from sqlalchemy import func
@@ -9,6 +10,10 @@ from app.models.employee import Empleado, EstadoEnum
 from app.models.organization import Departamento, Cargo, Gerencia
 from app.core.config import ALLOWED_IMAGE_EXT, UPLOADS_DIR
 from app.services.audit_service import add_audit
+from app.models.attendance import AttendanceRecord
+from app.models.audit import AuditRecord
+from app.schemas.employee import EmpleadoOut
+from app.core.datetime_utils import utc_now
 
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
 IMAGE_SIGNATURES = {
@@ -180,6 +185,46 @@ def get_employee_by_id(db: Session, emp_id: int) -> Optional[Empleado]:
         joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
         joinedload(Empleado.cargo_rel)
     ).filter(Empleado.id == emp_id).first()
+
+
+def get_employee_profile(db: Session, emp_id: int, days: int = 30, page: int = 1, page_size: int = 25):
+    employee = get_employee_by_id(db, emp_id)
+    if not employee:
+        return None
+    days = max(1, min(days, 365))
+    page_size = max(1, min(page_size, 100))
+    start = utc_now() - timedelta(days=days)
+    attendance_query = db.query(AttendanceRecord).filter(
+        AttendanceRecord.empleado_id == emp_id,
+        AttendanceRecord.fecha_hora >= start,
+    )
+    total_attendance = attendance_query.count()
+    attendance = attendance_query.order_by(
+        AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()
+    ).offset((page - 1) * page_size).limit(page_size).all()
+    audit_query = db.query(AuditRecord).filter(
+        AuditRecord.entidad == 'empleados',
+        AuditRecord.entidad_id == emp_id,
+        AuditRecord.fecha >= start,
+    )
+    audits = audit_query.order_by(AuditRecord.fecha.desc(), AuditRecord.id.desc()).limit(100).all()
+    return {
+        'employee': EmpleadoOut.model_validate(employee).model_dump(mode='json'),
+        'filters': {'days': days, 'page': page, 'page_size': page_size},
+        'attendance': {
+            'items': [_attendance_profile_item(record) for record in attendance],
+            'total': total_attendance,
+        },
+        'audit': [_audit_profile_item(record) for record in audits],
+    }
+
+
+def _attendance_profile_item(record: AttendanceRecord) -> dict:
+    return {'id': record.id, 'tipo': record.tipo, 'fecha_hora': record.fecha_hora.isoformat(), 'origen': record.origen}
+
+
+def _audit_profile_item(record: AuditRecord) -> dict:
+    return {'id': record.id, 'accion': record.accion, 'fecha': record.fecha.isoformat(), 'datos_antes': record.datos_antes, 'datos_despues': record.datos_despues}
 
 
 def build_employee_query(db: Session, q: Optional[str] = None, estado: Optional[str] = None, gerencia: Optional[str] = None, departamento: Optional[str] = None, gerencia_id: Optional[int] = None, departamento_id: Optional[int] = None, tipo_nomina: Optional[str] = None):

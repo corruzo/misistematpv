@@ -19,7 +19,7 @@ El archivo [prioridades_inspector_garita.md](prioridades_inspector_garita.md) co
 Si vas a llevar la carpeta raíz a otra PC:
 
 1. Copia toda la carpeta del proyecto.
-2. Abre SSMS y ejecuta el script SQL de creación/actualización de la base de datos.
+2. Abre SSMS y ejecuta el script SQL de creación/actualización de la base de datos, incluida la tabla de alertas de acceso denegado.
 3. En la raíz del proyecto, ejecuta el archivo:
    - `start_app.bat`
 
@@ -78,6 +78,14 @@ El rol `Sistemas` (y `Administrador` como respaldo) puede abrir `/system/backups
 
 La carpeta debe existir en el servidor y la cuenta del servicio de SQL Server debe tener permisos de escritura allí. El archivo `.bak` se genera en el servidor; el navegador solo recibe una descarga autorizada de un slot válido. Configura `BACKUP_DIR` con una ruta absoluta en producción si la aplicación y SQL Server usan directorios de trabajo distintos.
 
+En Windows, concede a la cuenta del servicio de SQL Server permisos de modificación sobre `BACKUP_DIR`. Por ejemplo, para SQL Express:
+
+```powershell
+icacls C:\ruta\del\proyecto\app\backups /grant "NT Service\MSSQL`$SQLEXPRESS:(OI)(CI)(M)"
+```
+
+La aplicación ejecuta el backup con `autocommit`; no debe envolverse `BACKUP DATABASE` en una transacción SQL normal.
+
 En desarrollo existe temporalmente `/attendance/simulator`, una pantalla protegida para probar el flujo del kiosco escribiendo un código de tarjeta. Esta ruta no se registra cuando `APP_ENV=production`.
 
 ## Arranque manual
@@ -95,7 +103,7 @@ Para aplicar cambios de esquema en una instalación existente, ejecuta:
 python -m alembic upgrade head
 ```
 
-La migración crea `alembic_version`, ajusta la unicidad de departamentos y cargos al ámbito de su padre y crea `auditoria`. El script `scripts/create_database.sql` sigue siendo útil para instalaciones nuevas; los cambios posteriores deben quedar en una revisión Alembic.
+La migración crea `alembic_version`, ajusta la unicidad de departamentos y cargos al ámbito de su padre y crea `auditoria` y el registro persistente de alertas de acceso denegado. El script `scripts/create_database.sql` también incluye esas estructuras para instalaciones nuevas; los cambios posteriores deben quedar en una revisión Alembic.
 
 Las pruebas portables se ejecutan localmente con:
 
@@ -105,15 +113,17 @@ python -m pytest --cov=app --cov-report=term-missing
 
 GitHub Actions ejecuta automáticamente esta suite en cada push y pull request. Las pruebas que requieren SQL Server se mantienen separadas para ejecutarse contra una base configurada.
 
-La app quedará disponible en:
+La app quedará disponible en la red local. El lanzador muestra la IP exacta del equipo al iniciar; el valor por defecto es:
 
 ```text
-http://127.0.0.1:8000/
+http://<IP-LOCAL-DEL-EQUIPO>:8000/
 ```
+
+El servidor escucha en `0.0.0.0:8000`. Para iniciarlo en Windows ejecuta `start_app.bat` (o `python start_app.py`); desde otra PC abre la URL con la IP local mostrada en consola. En desarrollo, las solicitudes del mismo host permiten el flujo CSRF; en producción deben declararse explícitamente en `CSRF_ALLOWED_ORIGINS`.
 
 ## Módulo de usuarios
 
-El sistema incluye tres roles: `Administrador` (gestión total), `RRHH` (empleados y reportes) y `Consulta` (solo lectura). Antes de usar la pantalla de usuarios, ejecuta nuevamente `scripts/create_database.sql` en SSMS para crear o actualizar las tablas de forma idempotente.
+El sistema incluye cuatro roles: `Administrador` (gestión total), `RRHH` (empleados y reportes), `Consulta` (solo lectura) y `Sistemas` (herramientas de sistema y backups). Antes de usar la pantalla de usuarios, ejecuta nuevamente `scripts/create_database.sql` en SSMS para crear o actualizar las tablas de forma idempotente.
 
 Después, abre:
 
@@ -127,8 +137,8 @@ Las contraseñas no se guardan en texto plano: se almacenan usando `scrypt` con 
 
 La aplicación ahora requiere autenticación para el dashboard, empleados, estructura y administración de usuarios. Ejecuta nuevamente `scripts/create_database.sql` para crear también `sesiones_usuario`; esta tabla guarda únicamente hashes de sesiones, nunca las cookies en texto plano.
 
-- Login: `http://127.0.0.1:8000/login`
-- Configuración inicial: `http://127.0.0.1:8000/setup` mientras no exista ningún usuario.
+- Login: `http://<IP-LOCAL-DEL-EQUIPO>:8000/login`
+- Configuración inicial: `http://<IP-LOCAL-DEL-EQUIPO>:8000/setup` mientras no exista ningún usuario.
 - Perfil propio: disponible desde el nombre del usuario en el header o en `/profile`.
 - Cierre de sesión: botón `Cerrar sesión` en el header.
 

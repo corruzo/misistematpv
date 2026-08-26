@@ -151,11 +151,11 @@ BEGIN
         username NVARCHAR(50) NOT NULL UNIQUE,
         nombre NVARCHAR(150) NOT NULL,
         password_hash NVARCHAR(500) NOT NULL,
-        rol NVARCHAR(30) NOT NULL DEFAULT 'Administrador',
+        rol NVARCHAR(30) NOT NULL DEFAULT 'Desarrollador',
         activo BIT NOT NULL DEFAULT 1,
         fecha_creacion DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
         ultimo_acceso DATETIME2 NULL,
-        CONSTRAINT CK_usuarios_rol CHECK (rol IN ('Administrador', 'RRHH', 'Consulta'))
+        CONSTRAINT CK_usuarios_rol CHECK (rol IN ('Desarrollador', 'RRHH', 'Inspector'))
     );
 END
 GO
@@ -166,10 +166,16 @@ BEGIN
 END
 GO
 
-UPDATE dbo.usuarios SET rol = 'Administrador' WHERE rol IS NULL OR rol NOT IN ('Administrador', 'RRHH', 'Consulta');
+UPDATE dbo.usuarios SET rol = CASE
+    WHEN rol IN ('Administrador', 'Sistemas') THEN 'Desarrollador'
+    WHEN rol = 'Consulta' THEN 'Inspector'
+    WHEN rol = 'RRHH' THEN 'RRHH'
+    ELSE 'Inspector'
+END
+WHERE rol IS NULL OR rol NOT IN ('Desarrollador', 'RRHH', 'Inspector');
 GO
 
-ALTER TABLE dbo.usuarios ADD CONSTRAINT CK_usuarios_rol CHECK (rol IN ('Administrador', 'RRHH', 'Consulta'));
+ALTER TABLE dbo.usuarios ADD CONSTRAINT CK_usuarios_rol CHECK (rol IN ('Desarrollador', 'RRHH', 'Inspector'));
 GO
 
 -- 5) Sesiones de inicio de sesión; solo se guarda el hash del token
@@ -203,5 +209,41 @@ BEGIN
     );
     CREATE INDEX IX_auditoria_usuario_fecha ON dbo.auditoria(usuario_id, fecha DESC);
     CREATE INDEX IX_auditoria_entidad_fecha ON dbo.auditoria(entidad, entidad_id, fecha DESC);
+END
+GO
+
+IF OBJECT_ID('dbo.eventos_acceso_denegado', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.eventos_acceso_denegado (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        empleado_id INT NULL,
+        empleado_nombre NVARCHAR(200) NOT NULL,
+        estado NVARCHAR(20) NOT NULL,
+        fecha_hora DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_eventos_acceso_denegado_empleado FOREIGN KEY (empleado_id) REFERENCES dbo.empleados(id) ON DELETE NO ACTION,
+        CONSTRAINT CK_eventos_acceso_denegado_estado CHECK (estado IN ('Retirado', 'Suspendido'))
+    );
+    CREATE INDEX IX_eventos_acceso_denegado_fecha_id ON dbo.eventos_acceso_denegado(fecha_hora, id);
+END
+GO
+
+IF OBJECT_ID('dbo.notificaciones', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.notificaciones (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        tipo NVARCHAR(40) NOT NULL,
+        prioridad NVARCHAR(15) NOT NULL,
+        titulo NVARCHAR(150) NOT NULL,
+        mensaje NVARCHAR(MAX) NOT NULL,
+        creada_en DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        leida_en DATETIME2 NULL,
+        descartada_en DATETIME2 NULL,
+        CONSTRAINT FK_notificaciones_usuario FOREIGN KEY (usuario_id) REFERENCES dbo.usuarios(id) ON DELETE CASCADE,
+        CONSTRAINT CK_notificaciones_prioridad CHECK (prioridad IN ('critica', 'advertencia', 'informativa')),
+        CONSTRAINT CK_notificaciones_tipo CHECK (tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica'))
+    );
+    CREATE INDEX IX_notificaciones_usuario_id ON dbo.notificaciones(usuario_id, id);
+    CREATE INDEX IX_notificaciones_usuario_estado ON dbo.notificaciones(usuario_id, leida_en, descartada_en, id);
 END
 GO

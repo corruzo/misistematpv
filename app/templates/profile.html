@@ -10,12 +10,11 @@
     <h3>{{ user.nombre }}</h3>
     <p>@{{ user.username }}</p>
     <span class="profile-role-badge">{{ user.rol }}</span>
-    <a class="btn-ios secondary btn-sm" href="/">Volver al panel</a>
+    <a class="btn-ios secondary btn-sm" href="/attendance/summary">Volver a asistencia</a>
   </div>
   <div class="card profile-card">
     <div class="card-panel__header">
-      <h3>Datos del perfil</h3>
-      <p class="profile-section-copy">Mantén actualizados tus datos de acceso.</p>
+      <h3>Datos del perfil</h3><br>
     </div>
   <form id="profileForm" class="profile-form">
     <div>
@@ -27,7 +26,6 @@
       <input class="form-control" id="profileName" name="nombre" value="{{ user.nombre }}" minlength="2" maxlength="150" required>
     </div>
     <div class="profile-password-section">
-      <p class="profile-subheading">Seguridad</p>
       <label class="form-label" for="profilePassword">Nueva contraseña</label>
       <input class="form-control" id="profilePassword" name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password">
       <small class="form-hint">Déjala vacía para conservar la actual.</small>

@@ -1,0 +1,84 @@
+LOGICA DE VALIDACION DE MARCAJES
+=================================
+
+Objetivo
+--------
+Impedir que un empleado termine con dos ENTRADAS consecutivas o dos SALIDAS
+consecutivas. La regla se aplica al registro manual, al lector RFID y a las
+correcciones administrativas.
+
+Regla principal
+---------------
+Cada nuevo marcaje debe alternar el tipo respecto a sus vecinos cronologicos:
+
+    ENTRADA -> SALIDA -> ENTRADA -> SALIDA
+
+Para el instante elegido se buscan dos registros del mismo empleado:
+
+1. Registro anterior: el ultimo registro con fecha_hora menor al nuevo instante.
+2. Registro posterior: el primer registro con fecha_hora mayor al nuevo instante.
+
+El registro se rechaza si el nuevo tipo coincide con el tipo del registro
+anterior o con el tipo del registro posterior.
+
+Ejemplos de registro normal
+---------------------------
+- Sin historial: solo se permite ENTRADA. Si no se envia tipo, se propone ENTRADA.
+- Ultimo registro ENTRADA: se propone SALIDA y se rechaza una ENTRADA explicita.
+- Ultimo registro SALIDA: se propone ENTRADA y se rechaza una SALIDA explicita.
+
+Ejemplos de registro historico
+------------------------------
+Si se quiere agregar un evento antiguo, no se mira solamente el ultimo registro
+actual. Se revisan los dos vecinos de la fecha elegida.
+
+Historial existente:
+
+    08:00 ENTRADA
+    17:00 SALIDA
+
+- Insertar 12:00 ENTRADA: rechazado, porque el registro anterior es ENTRADA.
+- Insertar 12:00 SALIDA: rechazado, porque el registro posterior es SALIDA.
+- Para corregir el historial se deben usar los registros y tipos correctos, o
+  la correccion administrativa auditada cuando corresponda.
+
+Fecha y duplicados
+------------------
+- No se aceptan fechas futuras.
+- Un marcaje dentro de los 15 segundos del registro anterior se rechaza como
+  lectura duplicada.
+- La identidad operation_id evita insertar dos veces la misma operacion cuando
+  el lector RFID sincroniza una lectura offline.
+- La cola RFID conserva la hora original y el operation_id durante los reintentos.
+
+Correcciones administrativas
+----------------------------
+Una correccion exige un motivo de al menos cinco caracteres y debe cambiar al
+menos un valor. Si cambia el empleado, la fecha o el tipo, tambien se valida la
+secuencia contra los vecinos del nuevo empleado e instante. El cambio se
+registra en auditoria; no se elimina el marcaje original.
+
+Orden de validacion
+-------------------
+1. Se identifica el empleado.
+2. Se rechazan empleados retirados o suspendidos.
+3. Se comprueba idempotencia mediante operation_id.
+4. Se normaliza la fecha y se rechazan fechas futuras.
+5. Se obtienen los vecinos cronologicos.
+6. Se aplica el debounce de 15 segundos al registro anterior.
+7. Se determina el tipo automatico si no fue indicado.
+8. Se rechaza cualquier tipo igual al vecino anterior o posterior.
+9. Se guarda el registro y su auditoria dentro de la transaccion.
+
+Responsabilidad del sistema
+---------------------------
+El backend es la autoridad final. La interfaz puede sugerir Entrada o Salida,
+pero nunca sustituye la validacion del servicio. Esto protege tambien las
+lecturas RFID y las peticiones simultaneas o manipuladas desde el navegador.
+
+Archivos relacionados
+--------------------
+- app/services/attendance_service.py: reglas centrales.
+- app/services/serial_reader.py: cola y sincronizacion RFID offline.
+- app/templates/attendance.html: registro manual y sugerencia visual.
+- tests/test_attendance_service.py: pruebas de secuencia y fechas historicas.

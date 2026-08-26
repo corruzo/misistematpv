@@ -1,7 +1,7 @@
 from pathlib import Path
 from dotenv import load_dotenv
 import os
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from datetime import timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -26,6 +26,15 @@ CSRF_ALLOWED_ORIGINS = tuple(
     for origin in os.getenv('CSRF_ALLOWED_ORIGINS', '' if APP_ENV == 'production' else 'http://127.0.0.1:8000,http://localhost:8000').split(',')
     if origin.strip()
 )
+CSRF_ALLOW_SAME_HOST = APP_ENV != 'production'
+
+def is_allowed_csrf_origin(origin: str, request_host: str) -> bool:
+    if origin.rstrip('/') in CSRF_ALLOWED_ORIGINS:
+        return True
+    if not CSRF_ALLOW_SAME_HOST:
+        return False
+    parsed_origin = urlparse(origin)
+    return parsed_origin.scheme in {'http', 'https'} and parsed_origin.netloc == request_host
 
 # Database settings (SQL Server)
 DB_DRIVER = os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server')
@@ -43,6 +52,9 @@ SERIAL_PARITY = os.getenv('SERIAL_PARITY', 'N').strip().upper()
 SERIAL_STOPBITS = float(os.getenv('SERIAL_STOPBITS', '1'))
 SERIAL_TIMEOUT = float(os.getenv('SERIAL_TIMEOUT', '1'))
 SERIAL_ENCODING = os.getenv('SERIAL_ENCODING', 'ascii').strip() or 'ascii'
+RFID_OFFLINE_QUEUE_PATH = Path(os.getenv('RFID_OFFLINE_QUEUE_PATH', str(BASE_DIR / 'backups' / 'rfid_offline_queue.sqlite3'))).resolve()
+RFID_OFFLINE_QUEUE_LIMIT = int(os.getenv('RFID_OFFLINE_QUEUE_LIMIT', '1000'))
+PROLONGED_STAY_HOURS = float(os.getenv('PROLONGED_STAY_HOURS', '12'))
 
 # Query safety defaults. Keep list endpoints bounded even when clients omit parameters.
 ATTENDANCE_HISTORY_DEFAULT_DAYS = int(os.getenv('ATTENDANCE_HISTORY_DEFAULT_DAYS', '15'))

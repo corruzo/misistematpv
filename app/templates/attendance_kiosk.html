@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Kiosco de marcaje - MarcajeTPV</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.6">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.7">
 </head>
 <body class="kiosk-page">
   <main class="kiosk-shell" aria-live="polite">
@@ -19,10 +19,20 @@
       </div>
       <div class="kiosk-result d-none" id="kioskResult">
         <img id="kioskPhoto" class="kiosk-photo" src="/static/img/default-avatar.svg" alt="">
-        <p class="eyebrow" id="kioskEventLabel">Marcaje registrado</p>
-        <h1 id="kioskEmployeeName">Empleado</h1>
-        <p class="kiosk-area" id="kioskArea">Área</p>
-        <time id="kioskTime" class="kiosk-time">00:00:00</time>
+        <div class="kiosk-result__info">
+          <p class="eyebrow" id="kioskEventLabel">Marcaje registrado</p>
+          <h1 id="kioskEmployeeName">Empleado</h1>
+          <p class="kiosk-area" id="kioskArea">Área</p>
+          <time id="kioskTime" class="kiosk-time">00:00:00</time>
+          <div class="kiosk-vacation-alert d-none" id="kioskVacationAlert" role="status">Atención: empleado de vacaciones</div>
+        </div>
+      </div>
+      <div class="kiosk-access-alert d-none" id="kioskAccessAlert" role="alert">
+        <div class="kiosk-access-alert__icon" aria-hidden="true">!</div>
+        <p class="eyebrow">Acceso no autorizado</p>
+        <h1 id="kioskAccessName">Empleado</h1>
+        <p id="kioskAccessMessage">Este empleado no tiene acceso para marcar.</p>
+        <strong id="kioskAccessStatus">Estado: Suspendido</strong>
       </div>
       <div class="kiosk-feedback" id="kioskFeedback" role="status"></div>
       <form id="kioskScanForm" class="kiosk-scan-form">
@@ -39,24 +49,53 @@
     const result = document.getElementById('kioskResult');
     const clock = document.getElementById('kioskClock');
     const feedback = document.getElementById('kioskFeedback');
+    const accessAlert = document.getElementById('kioskAccessAlert');
+    const vacationAlert = document.getElementById('kioskVacationAlert');
     let busy = false;
     let latestEventId = 0;
+    let latestDeniedEventId = 0;
     let pollingInitialized = false;
     let lastDisplayedEventId = 0;
+    let lastDisplayedEventTime = 0;
     let resultTimer = null;
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     const csrfHeaders = () => {
       const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
       return token ? { 'X-CSRFToken': token } : {};
     };
+    const kioskChannel = 'BroadcastChannel' in window ? new BroadcastChannel('marcaje-kiosko') : null;
     const keepFocus = () => { if (document.activeElement !== input) input.focus(); };
-    const reset = () => { result.classList.add('d-none'); waiting.classList.remove('d-none'); clock.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
+    const reset = () => { document.body.classList.remove('kiosk-access-denied'); document.body.classList.remove('kiosk-vacation'); accessAlert.classList.add('d-none'); vacationAlert.classList.add('d-none'); result.classList.add('d-none'); waiting.classList.remove('d-none'); clock.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
+    const showAccessDenied = (payload) => {
+      const eventTime = Date.parse(payload.fecha_hora || '') || Date.now();
+      if (eventTime < lastDisplayedEventTime) return;
+      lastDisplayedEventTime = eventTime;
+      document.body.classList.add('kiosk-access-denied');
+      document.body.classList.remove('kiosk-vacation');
+      waiting.classList.add('d-none');
+      result.classList.add('d-none');
+      clock.classList.add('d-none');
+      accessAlert.classList.remove('d-none');
+      vacationAlert.classList.add('d-none');
+      document.getElementById('kioskAccessName').textContent = payload.empleado_nombre || 'Empleado';
+      document.getElementById('kioskAccessStatus').textContent = `Estado: ${payload.estado || 'No activo'}`;
+      if (resultTimer) window.clearTimeout(resultTimer);
+      resultTimer = window.setTimeout(reset, 10000);
+    };
     const showResult = (payload) => {
       if (!payload) return;
       const eventId = Number(payload.id) || 0;
       if (!eventId || eventId <= lastDisplayedEventId) return;
+      const eventTime = Date.parse(payload.fecha_hora || '') || Date.now();
+      if (eventTime < lastDisplayedEventTime) return;
       lastDisplayedEventId = eventId;
       latestEventId = Math.max(latestEventId, eventId);
+      lastDisplayedEventTime = eventTime;
+      document.body.classList.remove('kiosk-access-denied');
+      document.body.classList.remove('kiosk-vacation');
+      accessAlert.classList.add('d-none');
+      vacationAlert.classList.toggle('d-none', payload.estado !== 'Vacaciones');
+      if (payload.estado === 'Vacaciones') document.body.classList.add('kiosk-vacation');
       waiting.classList.add('d-none');
       result.classList.remove('d-none');
       clock.classList.add('d-none');
@@ -68,17 +107,25 @@
       if (resultTimer) window.clearTimeout(resultTimer);
       resultTimer = window.setTimeout(reset, 30000);
     };
+    kioskChannel?.addEventListener('message', (event) => {
+      if (event.data?.code === 'employee_access_denied') showAccessDenied(event.data);
+      else if (event.data?.id) showResult(event.data);
+    });
     const pollLatestAttendance = async () => {
       try {
-        const response = await fetch(`/api/attendance/latest?after_id=${latestEventId}`, { cache: 'no-store' });
+        const response = await fetch(`/api/attendance/latest?after_id=${latestEventId}&denied_after_id=${latestDeniedEventId}`, { cache: 'no-store' });
         if (!response.ok) return;
         const payload = await response.json();
         const items = Array.isArray(payload.items) ? payload.items : (payload.item ? [payload.item] : []);
-        if (items.length && pollingInitialized) {
-          items.forEach(showResult);
+        const denied = Array.isArray(payload.denied) ? payload.denied : [];
+        if (pollingInitialized) {
+          [...items.map((item) => ({ type: 'attendance', payload: item })), ...denied.map((event) => ({ type: 'denied', payload: event }))]
+            .sort((left, right) => (Date.parse(left.payload.fecha_hora || '') || 0) - (Date.parse(right.payload.fecha_hora || '') || 0))
+            .forEach((event) => event.type === 'attendance' ? showResult(event.payload) : showAccessDenied(event.payload));
         } else if (items.length) {
           latestEventId = Math.max(latestEventId, Number(items[items.length - 1].id) || 0);
         }
+        if (denied.length) latestDeniedEventId = Math.max(latestDeniedEventId, Number(denied[denied.length - 1].id) || 0);
         pollingInitialized = true;
       } catch (error) {
       }
@@ -96,6 +143,7 @@
       try {
         const response = await fetch('/api/attendance/kiosk-scan', { method: 'POST', headers: { 'Content-Type': 'application/json', ...csrfHeaders() }, body: JSON.stringify({ codigo_tarjeta: code }) });
         const payload = await response.json().catch(() => ({}));
+        if (payload.code === 'employee_access_denied') { showAccessDenied(payload); return; }
         if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar el marcaje.');
         showResult(payload);
       } catch (error) { feedback.textContent = error.message; window.setTimeout(() => { feedback.textContent = ''; }, 5000); }

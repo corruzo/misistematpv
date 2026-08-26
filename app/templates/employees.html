@@ -9,14 +9,14 @@
 {% block content %}
 {% from 'components.html' import kpi_card %}
 
-<div class="row justify-content-end mb-4 g-3">
+<div class="row employees-actions justify-content-end mb-4 g-3 {% if user.rol == 'Inspector' %}d-none{% endif %}">
   <div class="col-auto d-flex gap-2">
     <button id="viewStructureBtn" type="button" class="btn-ios secondary">Ver estructura</button>
     <button id="newBtn" type="button" class="btn-ios primary" data-bs-toggle="modal" data-bs-target="#employeeModal">Nuevo registro</button>
   </div>
 </div>
 
-<div class="row g-3 mb-4">
+<div class="row employees-kpis g-3 mb-4">
   <div class="col-12 col-sm-6 col-md-4">
     {{ kpi_card('Total empleados activos', 'metric-active', tone='green', icon_name='users') }}
   </div>
@@ -43,14 +43,14 @@
 
       <div class="col-12 col-lg-8">
         <label class="form-label small fw-medium mb-1">Filtrar por</label>
-        <div class="row g-2">
-          <div class="col-12 col-sm-4">
+        <div class="employee-filter-row">
+          <div class="employee-filter-field">
             <select id="gerenciaFilter" class="form-select form-select-sm"><option value="">Gerencia</option></select>
           </div>
-          <div class="col-12 col-sm-4">
+          <div class="employee-filter-field">
             <select id="departamentoFilter" class="form-select form-select-sm"><option value="">Departamento</option></select>
           </div>
-          <div class="col-8 col-sm-3">
+          <div class="employee-filter-field">
             <select id="estadoFilter" class="form-select form-select-sm">
               <option value="">Estatus</option>
               <option value="Activo">Activo</option>
@@ -59,7 +59,12 @@
               <option value="Suspendido">Suspendido</option>
             </select>
           </div>
-          <div class="col-4 col-sm-1">
+          <div class="employee-filter-field">
+            <select id="tipoNominaFilter" class="form-select form-select-sm">
+              <option value="">Tipo de nómina</option>
+            </select>
+          </div>
+          <div class="employee-filter-field employee-filter-field--clear">
             <button type="button" class="btn-ios ghost btn-sm w-100 d-flex justify-content-center align-items-center" id="clearFiltersBtn" title="Limpiar filtros" aria-label="Limpiar filtros">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -77,7 +82,7 @@
     </div>
 
     <div class="table-responsive">
-      <table class="table ios-table align-middle mb-0">
+      <table id="employeesTable" class="table ios-table align-middle mb-0" data-can-manage="{{ 'true' if user.rol in ('Desarrollador', 'RRHH') else 'false' }}">
         <thead class="bg-light">
           <tr>
             <th class="ps-4">Empleado</th>
@@ -129,7 +134,7 @@
         <div class="modal-body p-4">
           <section class="employee-form-section mb-4">
             <div class="employee-form-section__heading mb-3">
-              <span class="badge bg-light text-dark me-2">01</span>
+              <span class="org-status-badge employee-step-badge me-2">01</span>
               <strong class="d-inline-block">Datos personales</strong>
             </div>
             <div class="row g-3">
@@ -157,7 +162,7 @@
 
           <section class="employee-form-section mb-4">
             <div class="employee-form-section__heading mb-3">
-              <span class="badge bg-light text-dark me-2">02</span>
+              <span class="org-status-badge employee-step-badge me-2">02</span>
               <strong class="d-inline-block">Ubicación organizativa</strong>
             </div>
             <div class="row g-3">
@@ -183,7 +188,7 @@
 
           <section class="employee-form-section">
             <div class="employee-form-section__heading mb-3">
-              <span class="badge bg-light text-dark me-2">03</span>
+              <span class="org-status-badge employee-step-badge me-2">03</span>
               <strong class="d-inline-block">Información laboral</strong>
             </div>
             <div class="row g-3">
@@ -207,9 +212,9 @@
               <div class="col-12">
                 <label class="form-label fw-medium" for="foto">Foto</label>
                 <input id="foto" name="foto" type="file" class="form-control" accept="image/*">
-                <div class="form-check mt-2">
-                  <input id="eliminar_foto" name="eliminar_foto" value="true" type="checkbox" class="form-check-input">
-                  <label class="form-check-label small text-muted" for="eliminar_foto">Eliminar foto actual</label>
+                <div class="employee-photo-remove mt-3">
+                  <input id="eliminar_foto" name="eliminar_foto" value="true" type="checkbox">
+                  <label for="eliminar_foto"><span>Eliminar foto actual</span><small>Se quitará la foto guardada al guardar.</small></label>
                 </div>
               </div>
             </div>
@@ -222,6 +227,35 @@
         </div>
       </form>
 
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="employeeProfileModal" tabindex="-1" aria-labelledby="employeeProfileModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content ios-modal border-0 shadow">
+      <div class="modal-header border-bottom p-4">
+        <div>
+          <p class="text-muted small mb-0">Ficha técnica del empleado</p>
+          <h5 class="modal-title h5 mb-0" id="employeeProfileModalLabel">Detalle del empleado</h5>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div id="employeeProfileError" class="auth-error d-none" role="alert"></div>
+        <div class="employee-profile-header">
+          <img id="profileEmployeePhoto" class="employee-profile-photo" src="/static/img/default-avatar.svg" alt="">
+          <div><h2 id="profileEmployeeName" class="h5 mb-1">--</h2><p id="profileEmployeeOrg" class="text-muted mb-0">--</p></div>
+        </div>
+        <div class="employee-profile-filters">
+          <label>Período<select id="profileDays" class="form-select form-select-sm"><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="180">Últimos 180 días</option><option value="365">Último año</option></select></label>
+          <label>Marcajes por página<select id="profilePageSize" class="form-select form-select-sm"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+          <button type="button" id="profileApplyFilters" class="btn-ios secondary btn-sm">Actualizar</button>
+        </div>
+        <section class="employee-profile-section"><h3>Información personal y laboral</h3><div id="profilePersonalData" class="employee-profile-grid"></div></section>
+        <section class="employee-profile-section"><h3>Marcajes</h3><div id="profileAttendanceList" class="employee-profile-events"></div><div id="profileAttendancePagination" class="table-pagination"></div></section>
+        <section class="employee-profile-section"><h3>Auditoría de cambios</h3><div id="profileAuditList" class="employee-profile-events"></div></section>
+      </div>
     </div>
   </div>
 </div>

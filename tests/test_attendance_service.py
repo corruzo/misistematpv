@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 import unittest
+from unittest.mock import patch
 
 from app.core.enums import EstadoEmpleado
 from app.models.attendance import AttendanceRecord
@@ -101,6 +102,14 @@ class AttendanceServiceTest(unittest.TestCase):
         self.assertEqual(result.tipo, AttendanceType.ENTRADA)
         self.assertEqual(db.records[0].fecha_hora, marked_at)
 
+    def test_vacation_employee_can_mark(self):
+        db = DatabaseDouble(self.make_employee(EstadoEmpleado.Vacaciones))
+
+        result = register_manual(db, 1)
+
+        self.assertEqual(result.tipo, AttendanceType.ENTRADA)
+        self.assertEqual(result.estado, EstadoEmpleado.Vacaciones.value)
+
     def test_manual_can_override_suggested_type(self):
         db = DatabaseDouble(self.make_employee())
 
@@ -108,6 +117,22 @@ class AttendanceServiceTest(unittest.TestCase):
 
         self.assertEqual(result.tipo, AttendanceType.SALIDA)
         self.assertEqual(db.records[0].tipo, AttendanceType.SALIDA.value)
+
+    def test_manual_rejects_same_type_as_previous_record(self):
+        db = DatabaseDouble(self.make_employee())
+        previous = AttendanceRecord(id=10, empleado_id=1, tipo=AttendanceType.ENTRADA.value, fecha_hora=datetime.now(timezone.utc) - timedelta(hours=1))
+
+        with patch('app.services.attendance_service._attendance_neighbors', return_value=(previous, None)):
+            with self.assertRaisesRegex(AttendanceError, 'registro anterior ya es una entrada'):
+                register_manual(db, 1, attendance_type=AttendanceType.ENTRADA)
+
+    def test_manual_rejects_same_type_as_next_record_when_backdating(self):
+        db = DatabaseDouble(self.make_employee())
+        next_record = AttendanceRecord(id=11, empleado_id=1, tipo=AttendanceType.SALIDA.value, fecha_hora=datetime.now(timezone.utc) + timedelta(hours=1))
+
+        with patch('app.services.attendance_service._attendance_neighbors', return_value=(None, next_record)):
+            with self.assertRaisesRegex(AttendanceError, 'registro posterior ya es una salida'):
+                register_manual(db, 1, marked_at=datetime.now(timezone.utc) - timedelta(minutes=30), attendance_type=AttendanceType.SALIDA)
 
     def test_correction_updates_values_and_audits_reason(self):
         db = DatabaseDouble(self.make_employee())

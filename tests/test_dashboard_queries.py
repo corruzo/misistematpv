@@ -38,6 +38,5 @@ class DashboardQueryTest(unittest.TestCase):
         finally:
             db.close()
 
-
 if __name__ == '__main__':
     unittest.main()

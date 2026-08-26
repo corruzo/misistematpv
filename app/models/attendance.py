@@ -13,4 +13,5 @@ class AttendanceRecord(Base):
     tipo = Column(String(10), nullable=False)
     fecha_hora = Column(DateTime(timezone=True), nullable=False, index=True, default=utc_now)
     origen = Column(String(20), nullable=False)
+    operacion_id = Column(String(64), nullable=True, unique=True, index=True)
     empleado = relationship('Empleado')

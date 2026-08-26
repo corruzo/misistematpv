@@ -109,7 +109,7 @@ class AuthServiceTest(unittest.TestCase):
 
     def test_admin_cannot_disable_own_user(self):
         db = MagicMock()
-        user = Usuario(id=1, rol='Administrador', activo=1)
+        user = Usuario(id=1, rol='Desarrollador', activo=1)
         db.query.return_value.filter.return_value.first.return_value = user
 
         with self.assertRaisesRegex(ValueError, 'propio usuario'):
@@ -119,11 +119,11 @@ class AuthServiceTest(unittest.TestCase):
 
     def test_last_active_admin_cannot_be_disabled(self):
         db = MagicMock()
-        user = Usuario(id=1, rol='Administrador', activo=1)
+        user = Usuario(id=1, rol='Desarrollador', activo=1)
         db.query.return_value.filter.return_value.first.return_value = user
         db.query.return_value.filter.return_value.count.return_value = 1
 
-        with self.assertRaisesRegex(ValueError, 'al menos un administrador activo'):
+        with self.assertRaisesRegex(ValueError, 'al menos un Desarrollador activo'):
             set_user_status(db, 1, False, actor_id=2)
 
         db.add.assert_not_called()

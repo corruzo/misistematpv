@@ -1,49 +1,136 @@
 {% extends 'base.html' %}
 
-{% block title %}Historial de asistencia - MarcajeTPV{% endblock %}
-{% block page_title %}Historial de asistencia{% endblock %}
+{% block title %}Historial de Marcajes - MarcajeTPV{% endblock %}
+{% block page_title %}Historial de Marcajes{% endblock %}
 
 {% block content %}
 <div class="attendance-page">
   <section class="card attendance-history-card">
     <div class="history-toolbar">
-      <div><p id="historyFilterSummary">Últimos {{ attendance_history_default_days }} días</p></div>
-      <button id="historyFiltersButton" class="btn-ios secondary" type="button">Filtros</button>
+      <div>
+        <p id="historyFilterSummary">Últimos {{ attendance_history_default_days }} días</p>
+      </div>
+      <div class="history-toolbar-actions">
+        <button id="historyExportButton" class="btn-ios secondary" type="button">Exportar CSV</button>
+        <button id="historyFiltersButton" class="btn-ios secondary" type="button">Filtros</button>
+      </div>
     </div>
     <div class="table-responsive">
       <table class="table ios-table mb-0">
-        <thead><tr><th>Fecha y hora</th><th>Empleado</th><th>Área</th><th>Tipo</th><th>Origen</th><th>Acción</th></tr></thead>
-        <tbody id="attendanceHistoryList"><tr><td colspan="6" class="table-state">Cargando historial...</td></tr></tbody>
+        <thead>
+          <tr>
+            <th>Fecha y hora</th>
+            <th>Empleado</th>
+            <th>Área</th>
+            <th>Tipo</th>
+            <th>Origen</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceHistoryList">
+          <tr>
+            <td colspan="6" class="table-state">Cargando historial...</td>
+          </tr>
+        </tbody>
       </table>
     </div>
     <div id="historyPagination" class="table-pagination" aria-live="polite"></div>
+  </section>
+
+  <section class="card attendance-history-card access-denied-history-card">
+    <div class="history-toolbar">
+      <div>
+        <h2>Alertas de acceso</h2>
+        <p>Intentos de marcaje bloqueados por estado del empleado.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table ios-table mb-0">
+        <thead><tr><th>Fecha y hora</th><th>Empleado</th><th>Estado</th><th>Resultado</th></tr></thead>
+        <tbody id="deniedEventsList"><tr><td colspan="4" class="table-state">Cargando alertas...</td></tr></tbody>
+      </table>
+    </div>
   </section>
 </div>
 
 <div class="modal fade" id="historyFiltersModal" tabindex="-1" aria-labelledby="historyFiltersTitle" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content ios-modal history-filters-modal">
-    <div class="modal-header"><div><p class="eyebrow mb-1">Consulta</p><h2 class="modal-title h5 mb-0" id="historyFiltersTitle">Filtrar historial</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar filtros"></button></div>
-    <div class="modal-body history-filters-body">
-      <section class="history-filter-group"><h3>Empleados</h3><input id="historyEmployeeSearch" class="form-control" type="search" placeholder="Buscar por nombre o cédula" autocomplete="off"><div id="historyEmployeeResults" class="history-filter-results" role="listbox" aria-label="Resultados de empleados"></div><div id="historySelectedEmployees" class="history-selected-list" aria-live="polite"></div></section>
-      <section class="history-filter-group"><h3>Departamentos</h3><input id="historyDepartmentSearch" class="form-control" type="search" placeholder="Buscar departamento" autocomplete="off"><div id="historyDepartmentResults" class="history-filter-results" role="listbox" aria-label="Resultados de departamentos"></div><div id="historySelectedDepartments" class="history-selected-list" aria-live="polite"></div></section>
-      <div class="history-filter-row"><label>Desde<input id="historyDateFrom" class="form-control" type="date"></label><label>Hasta<input id="historyDateTo" class="form-control" type="date"></label><label>Tipo<select id="historyTypeFilter" class="form-select"><option value="">Entrada y salida</option><option value="ENTRADA">Entrada</option><option value="SALIDA">Salida</option></select></label></div>
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title h5 mb-0" id="historyFiltersTitle">Filtrar historial</h2>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar filtros"></button>
     </div>
-    <div class="modal-footer"><button id="historyClearFilters" class="btn-ios ghost" type="button">Limpiar</button><button id="historyApplyFilters" class="btn-ios primary" type="button">Aplicar filtros</button></div>
-  </div></div>
+
+    <div class="modal-body history-filters-body">
+      <section class="history-filter-group">
+        <h3>Empleados</h3>
+        <input id="historyEmployeeSearch" class="form-control" type="search" placeholder="Buscar por nombre o cédula" autocomplete="off">
+        <div id="historyEmployeeResults" class="history-filter-results" role="listbox" aria-label="Resultados de empleados"></div>
+        <div id="historySelectedEmployees" class="history-selected-list" aria-live="polite"></div>
+      </section>
+
+      <section class="history-filter-group">
+        <h3>Departamentos</h3>
+        <input id="historyDepartmentSearch" class="form-control" type="search" placeholder="Buscar departamento" autocomplete="off">
+        <div id="historyDepartmentResults" class="history-filter-results" role="listbox" aria-label="Resultados de departamentos"></div>
+        <div id="historySelectedDepartments" class="history-selected-list" aria-live="polite"></div>
+      </section>
+
+      <div class="history-filter-row"><label>Desde<input id="historyDateFrom" class="form-control" type="date"></label><label>Hasta<input id="historyDateTo" class="form-control" type="date"></label><label>Tipo<select id="historyTypeFilter" class="form-select"><option value="">Entrada y salida</option><option value="ENTRADA">Entrada</option><option value="SALIDA">Salida</option></select></label><label>Tipo de nómina<select id="historyPayrollFilter" class="form-select"><option value="">Todos</option></select></label></div>
+    </div>
+    <div class="modal-footer">
+      <button id="historyClearFilters" class="btn-ios ghost" type="button">Limpiar</button>
+      <button id="historyApplyFilters" class="btn-ios primary" type="button">Aplicar filtros</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <div class="modal fade" id="attendanceCorrectionModal" tabindex="-1" aria-labelledby="attendanceCorrectionTitle" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered"><div class="modal-content ios-modal">
-    <div class="modal-header"><div><p class="eyebrow mb-1">Trazabilidad</p><h2 class="modal-title h5 mb-0" id="attendanceCorrectionTitle">Corregir marcaje</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar corrección"></button></div>
-    <form id="attendanceCorrectionForm">
-      <div class="modal-body correction-form-body">
-        <label>Empleado<select id="correctionEmployee" class="form-select" required></select></label>
-        <div class="correction-form-row"><label>Tipo<select id="correctionType" class="form-select" required><option value="ENTRADA">Entrada</option><option value="SALIDA">Salida</option></select></label><label>Fecha y hora<input id="correctionDateTime" class="form-control" type="datetime-local" required></label></div>
-        <label>Motivo obligatorio<textarea id="correctionReason" class="form-control" rows="3" minlength="5" maxlength="500" required placeholder="Explica por qué debe corregirse este marcaje."></textarea></label>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content ios-modal">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow mb-1">Trazabilidad</p>
+          <h2 class="modal-title h5 mb-0" id="attendanceCorrectionTitle">Corregir marcaje</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar corrección"></button>
       </div>
-      <div class="modal-footer"><button type="button" class="btn-ios ghost" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn-ios primary" id="correctionSubmit">Guardar corrección</button></div>
-    </form>
-  </div></div>
+      
+      <form id="attendanceCorrectionForm">
+        <div class="modal-body correction-form-body">
+          <label>
+            Empleado<select id="correctionEmployee" class="form-select" required></select>
+          </label>
+          <div class="correction-form-row">
+            <label>
+              Tipo
+              <select id="correctionType" class="form-select" required>
+                <option value="ENTRADA">Entrada</option>
+                <option value="SALIDA">Salida</option>
+              </select>
+            </label>
+            
+            <label>
+              Fecha y hora
+              <input id="correctionDateTime" class="form-control" type="datetime-local" required>
+            </label>
+          </div>
+
+          <label>
+            Motivo obligatorio
+            <textarea id="correctionReason" class="form-control" rows="3" minlength="5" maxlength="500" required placeholder="Explica por qué debe corregirse este marcaje."></textarea>
+          </label>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-ios ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-ios primary" id="correctionSubmit">Guardar corrección</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -52,6 +139,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const state = { page: 1, pageSize: {{ attendance_default_page_size }}, total: 0 };
   const list = document.getElementById('attendanceHistoryList');
+  const deniedEventsList = document.getElementById('deniedEventsList');
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
   const selectedEmployees = new Map();
   const selectedDepartments = new Map();
@@ -62,29 +150,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const filtersModal = new bootstrap.Modal(document.getElementById('historyFiltersModal'));
   const correctionModal = new bootstrap.Modal(document.getElementById('attendanceCorrectionModal'));
   let correctionRecordId = null;
+  const buildHistoryParams = () => { const params = new URLSearchParams(); selectedEmployees.forEach((_item, id) => params.append('empleado_ids', id)); selectedDepartments.forEach((_item, id) => params.append('departamento_ids', id)); const from = document.getElementById('historyDateFrom').value; const to = document.getElementById('historyDateTo').value; const type = document.getElementById('historyTypeFilter').value; const payroll = document.getElementById('historyPayrollFilter').value; if (from) params.set('date_from', from); if (to) params.set('date_to', to); if (type) params.set('tipo', type); if (payroll) params.set('tipo_nomina', payroll); return params; };
 
   const renderSelected = (containerId, values, remove) => {
     const container = document.getElementById(containerId); container.replaceChildren();
     values.forEach((item, id) => { const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'history-selected-chip'; chip.title = `Quitar ${item.label}`; chip.setAttribute('aria-label', `Quitar ${item.label}`); chip.innerHTML = `<span>${esc(item.label)}</span><span aria-hidden="true">x</span>`; chip.addEventListener('click', () => { remove(id); renderFilters(); }); container.append(chip); });
   };
   const renderResults = (inputId, containerId, values, selected, add) => {
-    const query = document.getElementById(inputId).value.trim().toLowerCase(); const container = document.getElementById(containerId); container.replaceChildren(); if (!query) return;
+    const query = document.getElementById(inputId).value.trim().toLowerCase(); const container = document.getElementById(containerId); container.replaceChildren();
     values.filter((item) => item.label.toLowerCase().includes(query)).slice(0, 8).forEach((item) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'history-filter-result'; button.disabled = selected.has(item.id); button.innerHTML = `<strong>${esc(item.label)}</strong><span>${selected.has(item.id) ? 'Seleccionado' : 'Agregar'}</span>`; button.addEventListener('click', () => { add(item); renderFilters(); }); container.append(button); });
   };
   const renderFilters = () => { renderSelected('historySelectedEmployees', selectedEmployees, (id) => selectedEmployees.delete(id)); renderSelected('historySelectedDepartments', selectedDepartments, (id) => selectedDepartments.delete(id)); renderResults('historyEmployeeSearch', 'historyEmployeeResults', employees, selectedEmployees, (item) => selectedEmployees.set(item.id, item)); renderResults('historyDepartmentSearch', 'historyDepartmentResults', departments, selectedDepartments, (item) => selectedDepartments.set(item.id, item)); };
   const updateSummary = () => { const count = selectedEmployees.size + selectedDepartments.size; const type = document.getElementById('historyTypeFilter').value; document.getElementById('historyFilterSummary').textContent = `${count ? `${count} selección(es)` : defaultHistoryLabel}${type ? ` · ${type === 'ENTRADA' ? 'Entradas' : 'Salidas'}` : ''}`; };
   const load = async () => {
     const params = new URLSearchParams({ page: state.page, page_size: state.pageSize }); selectedEmployees.forEach((_item, id) => params.append('empleado_ids', id)); selectedDepartments.forEach((_item, id) => params.append('departamento_ids', id));
-    const from = document.getElementById('historyDateFrom').value; const to = document.getElementById('historyDateTo').value; const type = document.getElementById('historyTypeFilter').value; if (from) params.set('date_from', from); if (to) params.set('date_to', to); if (type) params.set('tipo', type);
+    const from = document.getElementById('historyDateFrom').value; const to = document.getElementById('historyDateTo').value; const type = document.getElementById('historyTypeFilter').value; const payroll = document.getElementById('historyPayrollFilter').value; if (from) params.set('date_from', from); if (to) params.set('date_to', to); if (type) params.set('tipo', type); if (payroll) params.set('tipo_nomina', payroll);
     try { const response = await fetch(`/api/attendance/history?${params}`); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.detail || 'No se pudo cargar el historial.'); state.total = payload.total || 0; list.replaceChildren(); if (!payload.items?.length) list.innerHTML = '<tr><td colspan="6" class="table-state">No hay marcajes para los filtros seleccionados.</td></tr>'; else payload.items.forEach((item) => { const row = document.createElement('tr'); const time = item.fecha_hora ? new Date(item.fecha_hora).toLocaleString() : '-'; const origin = originLabels[item.origen] || 'Origen no identificado'; const originClass = item.origen === 'PUERTO_COM' ? 'reader' : 'manual'; row.innerHTML = `<td>${esc(time)}</td><td><strong>${esc(item.empleado_nombre)}</strong></td><td><strong>${esc(item.gerencia)}</strong><small>${esc(item.departamento)}</small></td><td><span class="badge-pill ${item.tipo === 'ENTRADA' ? 'badge-status--activo' : 'badge-status--retirado'}">${esc(item.tipo)}</span></td><td><span class="attendance-origin-badge attendance-origin-badge--${originClass}">${esc(origin)}</span></td><td><button type="button" class="btn-ios ghost btn-sm attendance-correction-button" data-record-id="${item.id}" data-employee-id="${item.empleado_id}" data-type="${item.tipo}" data-date="${item.fecha_hora}">Corregir</button></td>`; list.append(row); }); window.AppUI.renderPagination(document.getElementById('historyPagination'), { total: state.total, page: state.page, pageSize: state.pageSize, onPageChange: (nextPage) => { state.page = nextPage; load(); } }); } catch (error) { window.AppUI.toast(error.message, 'error'); }
   };
-  const loadFilters = async () => { const [employeesResponse, optionsResponse] = await Promise.all([fetch('/api/employees?limit=100'), fetch('/api/attendance/filter-options')]); if (!employeesResponse.ok || !optionsResponse.ok) throw new Error('No se pudieron cargar los filtros.'); const employeePayload = await employeesResponse.json(); const options = await optionsResponse.json(); employees = (employeePayload.items || []).map((item) => ({ id: String(item.id), label: `${item.nombre_apellido} · ${item.cedula}` })); departments = (options.departamentos || []).map((item) => ({ id: String(item.id), label: item.nombre })); };
+  const loadFilters = async () => { const [employeesResponse, optionsResponse] = await Promise.all([fetch('/api/employees?limit=100'), fetch('/api/attendance/filter-options')]); if (!employeesResponse.ok || !optionsResponse.ok) throw new Error('No se pudieron cargar los filtros.'); const employeePayload = await employeesResponse.json(); const options = await optionsResponse.json(); employees = (employeePayload.items || []).map((item) => ({ id: String(item.id), label: `${item.nombre_apellido} · ${item.cedula}` })); departments = (options.departamentos || []).map((item) => ({ id: String(item.id), label: item.nombre })); const payrollFilter = document.getElementById('historyPayrollFilter'); const payrolls = options.tipo_nomina || []; payrollFilter.innerHTML = '<option value="">Todos</option>' + payrolls.map((payroll) => `<option value="${esc(payroll)}">${esc(payroll)}</option>`).join(''); };
+  const loadDeniedEvents = async () => { try { const response = await fetch('/api/attendance/denied-events'); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.detail || 'No se pudieron cargar las alertas.'); deniedEventsList.replaceChildren(); if (!payload.items?.length) { deniedEventsList.innerHTML = '<tr><td colspan="4" class="table-state">No hay accesos denegados en el período actual.</td></tr>'; return; } payload.items.forEach((item) => { const row = document.createElement('tr'); row.innerHTML = `<td>${esc(new Date(item.fecha_hora).toLocaleString())}</td><td><strong>${esc(item.empleado_nombre)}</strong></td><td><span class="access-denied-status">${esc(item.estado)}</span></td><td>${esc(item.detalle)}</td>`; deniedEventsList.append(row); }); } catch (error) { deniedEventsList.innerHTML = `<tr><td colspan="4" class="table-state text-danger">${esc(error.message)}</td></tr>`; } };
   const formatDateTimeLocal = (value) => { const date = new Date(value); const pad = (part) => String(part).padStart(2, '0'); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`; };
   const openCorrection = (button) => { correctionRecordId = button.dataset.recordId; const employeeSelect = document.getElementById('correctionEmployee'); employeeSelect.replaceChildren(); employees.forEach((item) => { const option = document.createElement('option'); option.value = item.id; option.textContent = item.label; employeeSelect.append(option); }); employeeSelect.value = button.dataset.employeeId; document.getElementById('correctionType').value = button.dataset.type; document.getElementById('correctionDateTime').value = formatDateTimeLocal(button.dataset.date); document.getElementById('correctionReason').value = ''; correctionModal.show(); };
   list.addEventListener('click', (event) => { const button = event.target.closest('.attendance-correction-button'); if (button) openCorrection(button); });
   document.getElementById('attendanceCorrectionForm').addEventListener('submit', async (event) => { event.preventDefault(); const submit = document.getElementById('correctionSubmit'); submit.disabled = true; try { const response = await fetch(`/api/attendance/${correctionRecordId}/correct`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...window.AppUI.csrfHeaders() }, body: JSON.stringify({ empleado_id: Number(document.getElementById('correctionEmployee').value), tipo: document.getElementById('correctionType').value, fecha_hora: new Date(document.getElementById('correctionDateTime').value).toISOString(), motivo: document.getElementById('correctionReason').value.trim() }) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload.detail || 'No se pudo guardar la corrección.'); correctionModal.hide(); window.AppUI.toast('Corrección guardada y auditada.', 'success'); load(); } catch (error) { window.AppUI.toast(error.message, 'error'); } finally { submit.disabled = false; } });
-  document.getElementById('historyFiltersButton').addEventListener('click', () => { renderFilters(); filtersModal.show(); }); document.getElementById('historyEmployeeSearch').addEventListener('input', renderFilters); document.getElementById('historyDepartmentSearch').addEventListener('input', renderFilters); document.getElementById('historyClearFilters').addEventListener('click', () => { selectedEmployees.clear(); selectedDepartments.clear(); document.getElementById('historyDateFrom').value = ''; document.getElementById('historyDateTo').value = ''; document.getElementById('historyTypeFilter').value = ''; document.getElementById('historyFilterSummary').textContent = defaultHistoryLabel; renderFilters(); updateSummary(); }); document.getElementById('historyApplyFilters').addEventListener('click', () => { state.page = 1; updateSummary(); filtersModal.hide(); load(); }); document.getElementById('historyTypeFilter').addEventListener('change', updateSummary);
-  loadFilters().then(load).catch((error) => window.AppUI.toast(error.message, 'error'));
-});
+  document.getElementById('historyFiltersButton').addEventListener('click', () => { renderFilters(); filtersModal.show(); }); document.getElementById('historyEmployeeSearch').addEventListener('input', renderFilters); document.getElementById('historyDepartmentSearch').addEventListener('input', renderFilters); document.getElementById('historyClearFilters').addEventListener('click', () => { selectedEmployees.clear(); selectedDepartments.clear(); document.getElementById('historyDateFrom').value = ''; document.getElementById('historyDateTo').value = ''; document.getElementById('historyTypeFilter').value = ''; document.getElementById('historyPayrollFilter').value = ''; document.getElementById('historyFilterSummary').textContent = defaultHistoryLabel; renderFilters(); updateSummary(); }); document.getElementById('historyApplyFilters').addEventListener('click', () => { state.page = 1; updateSummary(); filtersModal.hide(); load(); }); document.getElementById('historyTypeFilter').addEventListener('change', updateSummary); document.getElementById('historyPayrollFilter').addEventListener('change', updateSummary);
+  document.getElementById('historyExportButton').addEventListener('click', () => { window.location.href = `/api/attendance/export.csv?${buildHistoryParams()}`; });
+  window.addEventListener('app:attendance', load);
+  window.addEventListener('app:access_denied', loadDeniedEvents);
+  loadFilters().then(load).catch((error) => window.AppUI.toast(error.message, 'error')); loadDeniedEvents();
+  });
 </script>
 {% endblock %}

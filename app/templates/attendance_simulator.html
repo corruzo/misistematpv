@@ -24,6 +24,7 @@
     const input = document.getElementById('simulatorCardCode');
     const button = document.getElementById('simulatorSubmit');
     const message = document.getElementById('simulatorMessage');
+    const kioskChannel = 'BroadcastChannel' in window ? new BroadcastChannel('marcaje-kiosko') : null;
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -38,7 +39,9 @@
           body: JSON.stringify({ codigo_tarjeta: input.value.trim() }),
         });
         const payload = await response.json().catch(() => ({}));
+        if (payload.code === 'employee_access_denied') kioskChannel?.postMessage(payload);
         if (!response.ok) throw new Error(payload.detail || 'No se pudo simular la lectura.');
+        kioskChannel?.postMessage(payload);
         message.className = 'form-feedback form-feedback--success';
         message.textContent = `${payload.tipo} registrada para ${payload.empleado_nombre}.`;
         input.select();

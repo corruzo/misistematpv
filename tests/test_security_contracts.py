@@ -3,7 +3,22 @@ import hashlib
 import secrets
 import unittest
 
-from app.core.auth import ROLE_ADMIN, ROLE_HR, ROLE_SYSTEMS, ROLE_VIEWER, require_roles, require_systems
+from app.core.auth import (
+    PERMISSION_MANAGE_ATTENDANCE,
+    PERMISSION_MANAGE_EMPLOYEES,
+    PERMISSION_MANAGE_ORGANIZATION,
+    PERMISSION_MANAGE_SYSTEM,
+    PERMISSION_MANAGE_USERS,
+    PERMISSION_READ_ATTENDANCE,
+    PERMISSION_READ_MASTER_DATA,
+    ROLE_DEVELOPER,
+    ROLE_HR,
+    ROLE_INSPECTOR,
+    ROLE_PERMISSIONS,
+    has_permission,
+    require_developer,
+    require_roles,
+)
 from app.core.rate_limit import is_rate_limited
 from app.core.security import hash_password, password_needs_rehash, verify_password
 from app.controllers.employee_controller import router
@@ -49,22 +64,38 @@ class SecurityContractTest(unittest.TestCase):
         self.assertTrue(password_needs_rehash(old_encoded))
 
     def test_role_dependencies_accept_only_declared_roles(self):
-        admin = type('User', (), {'rol': ROLE_ADMIN})()
+        developer = type('User', (), {'rol': ROLE_DEVELOPER})()
         hr = type('User', (), {'rol': ROLE_HR})()
-        viewer = type('User', (), {'rol': ROLE_VIEWER})()
+        inspector = type('User', (), {'rol': ROLE_INSPECTOR})()
 
-        self.assertIs(require_roles(ROLE_ADMIN, ROLE_HR)(admin), admin)
-        self.assertIs(require_roles(ROLE_ADMIN, ROLE_HR)(hr), hr)
+        self.assertIs(require_roles(ROLE_DEVELOPER, ROLE_HR)(developer), developer)
+        self.assertIs(require_roles(ROLE_DEVELOPER, ROLE_HR)(hr), hr)
         with self.assertRaises(Exception):
-            require_roles(ROLE_ADMIN, ROLE_HR)(viewer)
+            require_roles(ROLE_DEVELOPER, ROLE_HR)(inspector)
 
-    def test_systems_role_can_access_system_tools(self):
-        systems = type('User', (), {'rol': ROLE_SYSTEMS})()
-        viewer = type('User', (), {'rol': ROLE_VIEWER})()
+    def test_role_permission_matrix_is_explicit(self):
+        developer = type('User', (), {'rol': ROLE_DEVELOPER})()
+        hr = type('User', (), {'rol': ROLE_HR})()
+        inspector = type('User', (), {'rol': ROLE_INSPECTOR})()
 
-        self.assertIs(require_systems(systems), systems)
+        self.assertTrue(has_permission(developer, PERMISSION_MANAGE_SYSTEM))
+        self.assertTrue(has_permission(developer, PERMISSION_MANAGE_ORGANIZATION))
+        self.assertTrue(has_permission(hr, PERMISSION_MANAGE_EMPLOYEES))
+        self.assertTrue(has_permission(hr, PERMISSION_MANAGE_ATTENDANCE))
+        self.assertFalse(has_permission(hr, PERMISSION_MANAGE_USERS))
+        self.assertTrue(has_permission(inspector, PERMISSION_READ_MASTER_DATA))
+        self.assertTrue(has_permission(inspector, PERMISSION_READ_ATTENDANCE))
+        self.assertFalse(has_permission(inspector, PERMISSION_MANAGE_EMPLOYEES))
+        self.assertFalse(has_permission(inspector, PERMISSION_MANAGE_ATTENDANCE))
+        self.assertEqual(set(ROLE_PERMISSIONS), {ROLE_DEVELOPER, ROLE_HR, ROLE_INSPECTOR})
+
+    def test_developer_role_can_access_system_tools(self):
+        developer = type('User', (), {'rol': ROLE_DEVELOPER})()
+        inspector = type('User', (), {'rol': ROLE_INSPECTOR})()
+
+        self.assertIs(require_developer(developer), developer)
         with self.assertRaises(Exception):
-            require_systems(viewer)
+            require_developer(inspector)
 
     def test_rate_limit_is_scoped_by_username(self):
         self.assertFalse(is_rate_limited('/login-test', '127.0.0.1', 'ana'))
@@ -76,7 +107,7 @@ class SecurityContractTest(unittest.TestCase):
         for route in api_routes:
             dependency_names = {dependency.call.__name__ for dependency in route.dependant.dependencies}
             self.assertTrue(
-                {'require_read_access', 'require_employee_manager', 'require_admin'} & dependency_names,
+                {'require_read_access', 'require_employee_manager', 'require_developer'} & dependency_names,
                 route.path,
             )
 

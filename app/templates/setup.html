@@ -1,3 +1,31 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Configuración inicial - MarcajeTPV</title><link rel="stylesheet" href="/static/css/style.css?v=1.0"></head>
-<body class="ios-bg auth-page"><main class="auth-card"><div class="brand-mark">MTPV</div><p class="eyebrow">Configuración inicial</p><h1>Crear administrador</h1><p class="auth-subtitle">Este asistente solo está disponible mientras no exista ningún usuario.</p>{% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}{% if form_available %}<form method="post" action="/setup" class="auth-form"><label class="form-label" for="username">Usuario</label><input class="form-control" id="username" name="username" pattern="[a-zA-Z0-9._-]+" minlength="3" maxlength="50" required><label class="form-label" for="nombre">Nombre visible</label><input class="form-control" id="nombre" name="nombre" minlength="2" maxlength="150" required><label class="form-label" for="password">Contraseña</label><input class="form-control" id="password" name="password" type="password" minlength="10" maxlength="128" required><button class="btn-ios primary" type="submit">Crear administrador</button></form>{% endif %}<a class="auth-link" href="/login">Volver al login</a></main></body></html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Configuración inicial - MarcajeTPV</title>
+        <link rel="stylesheet" href="/static/css/style.css?v=1.0">
+    </head>
+    <body class="ios-bg auth-page">
+        <main class="auth-card">
+            <div class="brand-mark">MARCAJETPV</div>
+            <h1>Crear administrador</h1>
+            <p class="auth-subtitle">Este asistente solo está disponible mientras no exista ningún usuario.</p>
+            
+            {% if error %}
+            <div class="auth-error" role="alert">{{ error }}</div>
+            {% endif %}{% if form_available %}
+            <form method="post" action="/setup" class="auth-form">
+                <label class="form-label" for="username">Usuario</label>
+                    <input class="form-control" id="username" name="username" pattern="[a-zA-Z0-9._-]+" minlength="3" maxlength="50" required>
+                <label class="form-label" for="nombre">Nombre visible</label>
+                    <input class="form-control" id="nombre" name="nombre" minlength="2" maxlength="150" required>
+                <label class="form-label" for="password">Contraseña</label>
+                    <input class="form-control" id="password" name="password" type="password" minlength="10" maxlength="128" required>
+                <button class="btn-ios primary" type="submit">Crear administrador</button>
+            </form>
+            {% endif %}
+            <a class="auth-link" href="/login">Volver al login</a>
+        </main>
+    </body>
+</html>

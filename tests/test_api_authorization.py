@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from app.controllers.attendance_controller import router as attendance_router
 from app.controllers.employee_controller import router as employee_router
+from app.controllers.organization_controller import router as organization_router
+from app.controllers.notification_controller import router as notification_router
 from app.controllers.user_controller import router as user_router
 from app.core.auth import current_user_optional
 from app.database.session import get_db
@@ -15,8 +17,10 @@ class ApiAuthorizationTest(unittest.TestCase):
     def setUpClass(cls):
         app = FastAPI()
         app.include_router(employee_router)
+        app.include_router(organization_router)
         app.include_router(user_router)
         app.include_router(attendance_router)
+        app.include_router(notification_router)
         app.dependency_overrides[current_user_optional] = lambda: None
         app.dependency_overrides[get_db] = lambda: None
         cls.client = TestClient(app)
@@ -26,7 +30,6 @@ class ApiAuthorizationTest(unittest.TestCase):
             ('GET', '/api/organization', None),
             ('GET', '/api/system/status', None),
             ('GET', '/api/employees/1', None),
-            ('GET', '/api/dashboard/metrics', None),
             ('GET', '/api/employees', None),
             ('POST', '/api/employees', {}),
             ('PUT', '/api/employees/1', {}),
@@ -46,10 +49,16 @@ class ApiAuthorizationTest(unittest.TestCase):
             ('POST', '/api/attendance/manual-mark', {}),
             ('PATCH', '/api/attendance/1/correct', {}),
             ('GET', '/api/attendance/history', None),
+            ('GET', '/api/attendance/export.csv', None),
             ('GET', '/api/attendance/summary', None),
             ('GET', '/api/attendance/present', None),
             ('GET', '/api/attendance/filter-options', None),
+            ('GET', '/api/attendance/denied-events', None),
             ('POST', '/api/attendance/kiosk-scan', {}),
+            ('GET', '/api/notifications', None),
+            ('GET', '/api/live', None),
+            ('PATCH', '/api/notifications/read', None),
+            ('DELETE', '/api/notifications/1', None),
         ]
         for method, path, payload in requests:
             response = self.client.request(method, path, json=payload)

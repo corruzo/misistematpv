@@ -2,10 +2,13 @@ import os
 import sys
 import subprocess
 import shutil
+import socket
 import time
 import urllib.error
 import urllib.request
 import webbrowser
+
+from dotenv import load_dotenv
 
 def run_cmd(args, env=None):
     """Ejecuta un comando y devuelve el código de salida."""
@@ -28,6 +31,18 @@ def wait_for_server(url, process, timeout=30):
         except (urllib.error.URLError, TimeoutError):
             time.sleep(0.5)
     return False
+
+def get_local_ip():
+    """Obtiene la IP local usada para salir hacia la red."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
+            connection.connect(('192.0.2.1', 80))
+            return connection.getsockname()[0]
+    except OSError:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except OSError:
+            return '127.0.0.1'
 
 def main():
     print("=========================================")
@@ -58,6 +73,18 @@ def main():
         install_deps = force_update
         
     active_python = venv_python if os.path.exists(venv_python) else sys.executable
+
+    # A copied virtual environment can retain the interpreter path from its source machine.
+    if active_python != sys.executable:
+        if run_cmd([active_python, '-c', 'import sys']) != 0:
+            print('El entorno virtual no es válido en esta máquina; se recreará.')
+            shutil.rmtree(venv_dir, ignore_errors=True)
+            if run_cmd([sys.executable, '-m', 'venv', '.venv']) != 0:
+                print('ERROR: No se pudo recrear el entorno virtual.')
+                input('Presiona Enter para salir...')
+                sys.exit(1)
+            active_python = venv_python
+            install_deps = True
     
     if not install_deps:
         check_code = (
@@ -84,6 +111,8 @@ def main():
             shutil.copyfile(env_template, env_file)
         else:
             print("WARNING: No se encontró .env.template para inicializar .env.")
+
+    load_dotenv(env_file, override=False)
             
     print("Aplicando migraciones de base de datos (Alembic)...")
     if run_cmd([active_python, "-m", "alembic", "upgrade", "head"]) != 0:
@@ -94,11 +123,15 @@ def main():
         sys.exit(1)
         
     port = os.getenv('APP_PORT', '8000')
-    app_url = f"http://127.0.0.1:{port}/"
-    print(f"Iniciando MarcajeTPV en {app_url}...")
+    local_url = f"http://{get_local_ip()}:{port}/"
+    loopback_url = f"http://127.0.0.1:{port}/"
+    print(f"Iniciando MarcajeTPV en 0.0.0.0:{port}...")
+    print(f"Acceso desde esta PC: {loopback_url}")
+    print(f"Acceso desde la red local: {local_url}")
     try:
-        process = subprocess.Popen([active_python, "run.py"], env=os.environ.copy())
-        if not wait_for_server(app_url, process):
+        process_env = os.environ.copy()
+        process = subprocess.Popen([active_python, "run.py"], env=process_env)
+        if not wait_for_server(loopback_url, process):
             return_code = process.poll()
             if return_code is None:
                 process.terminate()
@@ -107,9 +140,9 @@ def main():
                 print(f"\nLa aplicación terminó con código de error {return_code}.")
             input("Presiona Enter para continuar...")
             return
-        print(f"Sistema listo: {app_url}")
+        print(f"Sistema listo: {local_url}")
         if "--no-browser" not in sys.argv:
-            webbrowser.open(app_url)
+            webbrowser.open(loopback_url)
         process.wait()
         if process.returncode != 0:
             print(f"\nLa aplicación terminó con código de error {process.returncode}.")

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.core.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_OFFSET, STATIC_DIR
-from app.core.auth import require_admin, require_page_user, require_user
+from app.core.auth import require_developer, require_page_user, require_user
 from app.database.session import get_db
 from app.schemas.user import UsuarioCreate, UsuarioOut, UsuarioPage, UsuarioStatusUpdate, UsuarioUpdate
 from app.services.user_service import count_users, create_user, list_users, set_user_status, update_user, UserNotFoundError
@@ -26,7 +26,7 @@ def user_error(exc: Exception) -> HTTPException:
 
 
 @router.get('/users', response_class=HTMLResponse)
-def users_page(request: Request, user=Depends(require_admin)):
+def users_page(request: Request, user=Depends(require_developer)):
     template = templates_env.get_template('users.html')
     return HTMLResponse(template.render(active_page='users', user=user, csp_nonce=request.state.csp_nonce, default_page_size=DEFAULT_PAGE_SIZE))
 
@@ -56,7 +56,7 @@ def api_update_me(payload: UsuarioUpdate, user=Depends(require_user), db: Sessio
 def api_list_users(
     q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1), page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-    db: Session = Depends(get_db), _admin=Depends(require_admin),
+    db: Session = Depends(get_db), _admin=Depends(require_developer),
 ):
     try:
         offset = min((page - 1) * page_size, MAX_OFFSET)
@@ -68,7 +68,7 @@ def api_list_users(
 
 
 @router.post('/api/users', response_model=UsuarioOut, status_code=201)
-def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db), _admin=Depends(require_developer)):
     try:
         return UsuarioOut.from_model(create_user(db, payload, _admin.id))
     except (ValueError, IntegrityError, SQLAlchemyError) as exc:
@@ -77,7 +77,7 @@ def api_create_user(payload: UsuarioCreate, db: Session = Depends(get_db), _admi
 
 
 @router.put('/api/users/{user_id}', response_model=UsuarioOut)
-def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(get_db), _admin=Depends(require_developer)):
     try:
         return UsuarioOut.from_model(update_user(db, user_id, payload, _admin.id))
     except UserNotFoundError as exc:
@@ -88,7 +88,7 @@ def api_update_user(user_id: int, payload: UsuarioUpdate, db: Session = Depends(
 
 
 @router.patch('/api/users/{user_id}/status', response_model=UsuarioOut)
-def api_update_user_status(user_id: int, payload: UsuarioStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+def api_update_user_status(user_id: int, payload: UsuarioStatusUpdate, db: Session = Depends(get_db), _admin=Depends(require_developer)):
     try:
         return UsuarioOut.from_model(set_user_status(db, user_id, payload.activo, _admin.id))
     except UserNotFoundError as exc:

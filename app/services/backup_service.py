@@ -1,11 +1,15 @@
 from datetime import datetime
 from pathlib import Path
 import re
+from threading import Lock
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, BACKUP_SLOT_COUNT, DB_NAME
+from app.database.session import engine
+
+
+_backup_lock = Lock()
 
 
 BACKUP_NAME_PATTERN = re.compile(r'^backup_([1-9][0-9]*)\.bak$')
@@ -44,19 +48,25 @@ def list_backups() -> list[dict]:
 
 
 def create_backup(db: Session, slot: int | None = None) -> dict:
-    if slot is None:
-        existing = list_backups()
-        slot = (existing[0]['slot'] % BACKUP_SLOT_COUNT + 1) if existing else 1
-    filename = _slot_name(slot)
-    path = backup_path(filename)
-    sql_database = DB_NAME.replace(']', ']]')
-    sql_path = str(path).replace("'", "''")
-    statement = text(
-        f"BACKUP DATABASE [{sql_database}] TO DISK = N'{sql_path}' "
-        "WITH INIT, CHECKSUM, STATS = 10"
-    )
-    db.execute(statement)
-    db.commit()
+    with _backup_lock:
+        connection = engine.raw_connection()
+        try:
+            connection.connection.autocommit = True
+            cursor = connection.cursor()
+            if slot is None:
+                existing = list_backups()
+                slot = (existing[0]['slot'] % BACKUP_SLOT_COUNT + 1) if existing else 1
+            filename = _slot_name(slot)
+            path = backup_path(filename)
+            sql_database = DB_NAME.replace(']', ']]')
+            sql_path = str(path).replace("'", "''")
+            statement = (
+                f"BACKUP DATABASE [{sql_database}] TO DISK = N'{sql_path}' "
+                "WITH INIT, CHECKSUM"
+            )
+            cursor.execute(statement)
+        finally:
+            connection.close()
     return next(item for item in list_backups() if item['filename'] == filename)
 
 
