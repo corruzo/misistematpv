@@ -267,6 +267,7 @@ def correct_attendance(
     try:
         add_audit(db, usuario_id, 'correccion_marcaje', 'marcajes_asistencia', record.id, antes=old_values, despues=new_values)
         db.commit()
+        notify_live_change()
     except SQLAlchemyError:
         db.rollback()
         raise AttendanceError('No se pudo guardar la corrección.')

@@ -111,6 +111,13 @@
       if (event.data?.code === 'employee_access_denied') showAccessDenied(event.data);
       else if (event.data?.id) showResult(event.data);
     });
+    const liveSource = 'EventSource' in window ? new EventSource('/api/live') : null;
+    liveSource?.addEventListener('attendance', (event) => {
+      try { showResult(JSON.parse(event.data)); } catch (error) {}
+    });
+    liveSource?.addEventListener('access_denied', (event) => {
+      try { showAccessDenied(JSON.parse(event.data)); } catch (error) {}
+    });
     const pollLatestAttendance = async () => {
       try {
         const response = await fetch(`/api/attendance/latest?after_id=${latestEventId}&denied_after_id=${latestDeniedEventId}`, { cache: 'no-store' });
@@ -129,7 +136,7 @@
         pollingInitialized = true;
       } catch (error) {
       }
-      window.setTimeout(pollLatestAttendance, 250);
+      window.setTimeout(pollLatestAttendance, 60000);
     };
     const updateClock = () => {
       document.getElementById('kioskClock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });

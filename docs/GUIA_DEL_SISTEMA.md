@@ -44,6 +44,8 @@ Si SQL Server no está disponible, cada lectura válida del lector se conserva e
 
 El kiosco (`/attendance/kiosk`) muestra el resultado de la lectura y mantiene el foco preparado para la siguiente tarjeta.
 
+Las pantallas operativas reciben marcajes y alertas mediante SSE (`/api/live`). El canal espera sin consultar la base de datos mientras no hay cambios y se reconcilia periódicamente para cubrir reinicios, desconexiones o procesos separados. El kiosco usa el mismo canal y conserva una reconciliación de baja frecuencia como respaldo.
+
 El panel de resumen muestra alertas por secuencias repetidas, marcajes demasiado cercanos, salidas sin entrada, empleados retirados o suspendidos, posibles permanencias desde el día anterior y permanencias superiores a `PROLONGED_STAY_HOURS` (12 horas por defecto). La exportación operativa está disponible como CSV desde `Historial`; respeta los filtros aplicados y requiere permiso de lectura.
 
 ### Marcaje manual
