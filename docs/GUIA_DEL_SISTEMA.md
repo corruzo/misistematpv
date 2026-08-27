@@ -132,6 +132,21 @@ Al terminar cada bloque de trabajo se debe anotar:
 
 ## 7. Pendientes conocidos
 
+### Propuesta futura: resumen de horas para nómina
+
+La ficha de empleados se mantiene enfocada en datos maestros. El cálculo de horas debe vivir en un módulo separado de asistencia y nómina, usando los marcajes como fuente operativa, pero sin convertirlos automáticamente en conceptos salariales hasta definir la política laboral.
+
+Alcance propuesto:
+
+- Horas acumuladas del día actual, de la semana y del mes anterior.
+- Resumen por empleado, departamento, gerencia y período.
+- Separación entre jornada ordinaria, horas extra, ausencias, días no laborados y turnos incompletos.
+- Identificación de entradas sin salida y correcciones pendientes antes de cerrar un período.
+- Reglas configurables para feriados, descansos, tolerancias, turnos nocturnos y sobretiempo.
+- Exportación de un resumen validado para el módulo de nómina.
+
+Decisiones pendientes antes de implementarlo: calendario laboral oficial, definición de semana, tratamiento de medianoche y turnos nocturnos, redondeos, pausas, feriados, permisos, vacaciones, horas extra autorizadas y quién aprueba el cierre mensual. Esta función no debe calcular pagos por sí sola ni modificar los marcajes originales.
+
 Las prioridades 1, 2 y 3 del inspector están implementadas y validadas. La prioridad 4 está implementada parcialmente para la cola de marcajes manuales en el navegador; la cola offline del lector RFID y una cola local cifrada fuera del navegador permanecen pendientes. Las prioridades 5 a 10 permanecen pendientes; no deben marcarse como terminadas solo porque exista una parte visual o un endpoint preliminar.
 
 La siguiente etapa funcional prevista es completar el modo contingencia del lector RFID y decidir si se requiere una cola local cifrada fuera del navegador.

@@ -791,14 +791,9 @@
       const errorElement = document.getElementById('employeeProfileError');
       const loadProfile = async () => {
       try {
-        const days = document.getElementById('profileDays')?.value || '30';
-        const pageSize = document.getElementById('profilePageSize')?.value || '25';
-        const page = 1;
-        const profileQuery = `/profile?days=${days}&page=${page}&page_size=${pageSize}`;
         const response = await fetch(`/api/employees/${employeeId}`);
         if (!response.ok) throw new Error('No se pudo cargar la información del empleado.');
         const employee = await response.json();
-        const profile = { attendance: { items: [] }, audit: [] };
 
         document.getElementById('profileEmployeeName').textContent = employee.nombre_apellido || '--';
         document.getElementById('profileEmployeeOrg').textContent = [employee.gerencia, employee.departamento, employee.cargo].filter(Boolean).join(' / ') || '--';
@@ -810,14 +805,7 @@
           ['Tipo de nómina', employee.tipo_nomina],
           ['Fecha de nacimiento', employee.fecha_nacimiento],
         ].map(([label, value]) => `<div><span>${label}</span><strong>${this.escapeHtml(value || '--')}</strong></div>`).join('');
-        document.getElementById('profileAttendanceList').innerHTML = profile.attendance.items.length
-          ? profile.attendance.items.map((item) => `<div class="employee-profile-event"><strong>${this.escapeHtml(item.tipo)}</strong><span>${this.escapeHtml(item.fecha_hora)}</span></div>`).join('')
-          : '<p class="text-muted">No hay marcajes en el período seleccionado.</p>';
-        document.getElementById('profileAuditList').innerHTML = profile.audit.length
-          ? profile.audit.map((item) => `<div class="employee-profile-event"><strong>${this.escapeHtml(item.accion)}</strong><span>${this.escapeHtml(item.fecha)}</span></div>`).join('')
-          : '<p class="text-muted">No hay cambios registrados en el período seleccionado.</p>';
         errorElement?.classList.add('d-none');
-        return profile;
       } catch (error) {
         console.error(error);
         if (errorElement) {
@@ -827,9 +815,6 @@
       }
       };
 
-      document.getElementById('profileApplyFilters')?.replaceWith(
-        Object.assign(document.getElementById('profileApplyFilters').cloneNode(true), { onclick: loadProfile })
-      );
       await loadProfile();
       if (modal && window.bootstrap?.Modal) {
         const profileModal = window.bootstrap.Modal.getInstance(modal) || new window.bootstrap.Modal(modal);

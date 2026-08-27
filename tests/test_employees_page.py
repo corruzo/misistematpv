@@ -46,14 +46,17 @@ class EmployeePageTemplateTest(unittest.TestCase):
         self.assertIn("params.set('departamento_id', departamentoFilter.value)", javascript)
         self.assertIn("this.populateFilterSelects();", javascript)
 
-    def test_employee_page_exposes_profile_modal_and_bounded_filters(self):
+    def test_employee_profile_is_limited_to_master_data(self):
         html = TEMPLATE.read_text(encoding='utf-8')
         javascript = (ROOT / 'app' / 'static' / 'js' / 'main.js').read_text(encoding='utf-8')
 
         self.assertIn('id="employeeProfileModal"', html)
-        self.assertIn('id="profileDays"', html)
-        self.assertIn('id="profilePageSize"', html)
-        self.assertIn('/profile?days=${days}&page=${page}&page_size=${pageSize}', javascript)
+        self.assertIn('Información personal y laboral', html)
+        self.assertNotIn('profileDays', html)
+        self.assertNotIn('profilePageSize', html)
+        self.assertNotIn('profileAttendanceList', html)
+        self.assertNotIn('profileAuditList', html)
+        self.assertNotIn('profileQuery', javascript)
         self.assertIn('Ver ficha del empleado', javascript)
 
     def test_navigation_separates_master_data_from_attendance_operations(self):
