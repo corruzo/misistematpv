@@ -64,6 +64,12 @@ class ApiAuthorizationTest(unittest.TestCase):
             response = self.client.request(method, path, json=payload)
             self.assertEqual(response.status_code, 401, f'{method} {path}: {response.text}')
 
+    def test_html_pages_redirect_to_login_without_exposing_json(self):
+        for path in ('/users', '/employees', '/organization', '/attendance/summary'):
+            response = self.client.get(path, follow_redirects=False)
+            self.assertEqual(response.status_code, 307, path)
+            self.assertEqual(response.headers['location'], '/login?reason=session_expired')
+
 
 if __name__ == '__main__':
     unittest.main()

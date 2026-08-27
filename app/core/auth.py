@@ -56,8 +56,10 @@ def current_user_optional(
     return get_user_by_token(db, request.cookies.get(SESSION_COOKIE))
 
 
-def require_user(user: Usuario | None = Depends(current_user_optional)) -> Usuario:
+def require_user(request: Request, user: Usuario | None = Depends(current_user_optional)) -> Usuario:
     if not user:
+        if not request.url.path.startswith('/api/'):
+            raise HTTPException(status_code=307, headers={'Location': '/login?reason=session_expired'})
         raise HTTPException(status_code=401, detail='Debes iniciar sesión.')
     return user
 
@@ -102,5 +104,5 @@ def require_read_access(user: Usuario = Depends(require_user)) -> Usuario:
 def require_page_user(request: Request, db: Session = Depends(get_db)) -> Usuario:
     user = get_user_by_token(db, request.cookies.get(SESSION_COOKIE))
     if not user:
-        raise HTTPException(status_code=307, headers={'Location': '/login'})
+        raise HTTPException(status_code=307, headers={'Location': '/login?reason=session_expired'})
     return user

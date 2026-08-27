@@ -34,7 +34,8 @@ def login_page(request: Request, db: Session = Depends(get_db)):
     if get_user_by_token(db, request.cookies.get(SESSION_COOKIE)):
         return RedirectResponse('/', status_code=303)
     template = templates_env.get_template('login.html')
-    return HTMLResponse(template.render(error=None))
+    error = 'Tu sesión expiró. Inicia sesión nuevamente.' if request.query_params.get('reason') == 'session_expired' else None
+    return HTMLResponse(template.render(error=error))
 
 
 @router.get('/setup', response_class=HTMLResponse)

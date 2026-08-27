@@ -30,7 +30,7 @@
                 <h2 id="loginTitle">Bienvenido de nuevo</h2>
                 <p class="auth-subtitle">Ingresa tus credenciales para continuar.</p>
                 
-                <div id="authAlert" class="auth-error d-none" role="alert"></div>
+                <div id="authAlert" class="auth-error{% if not error %} d-none{% endif %}" role="alert">{{ error or '' }}</div>
 
                 <form id="loginForm" class="auth-form" method="post" action="/login">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
