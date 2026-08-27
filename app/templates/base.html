@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="MarcajeTPV - Sistema de Gestión de Empleados y Control de Asistencia">
     <meta name="theme-color" content="#ffffff">
-    
+
     <title>{% block title %}MarcajeTPV - Gestión{% endblock %}</title>
 
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
@@ -60,7 +60,6 @@
             </button>
             <div class="collapse {{ 'show' if active_page in ('attendance_summary', 'attendance', 'attendance_history') else '' }}" id="module-attendance">
             <div class="sidebar-section__body">
-              
               <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary">
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Resumen</span>
               </a>
@@ -99,6 +98,7 @@
           </div>
         </div>
       </aside>
+      <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Cerrar menú de navegación"></button>
 
       <div class="content-area">
         <header class="topbar-wide">
@@ -129,20 +129,34 @@
               </section>
             </div>
             
-            <div class="profile-menu">
-              <a class="profile-chip" href="/profile" aria-label="Abrir mi perfil">
+            <!-- Perfil de usuario con Dropdown -->
+            <div class="dropdown profile-menu">
+              <button class="profile-chip border-0 bg-transparent p-0 d-flex align-items-center gap-2 dropdown-toggle" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 <div class="profile-avatar-placeholder">
                   {{ user.nombre[0]|upper if user and user.nombre else 'U' }}
                 </div>
                 <span class="profile-name">
                   {{ user.nombre if user and user.nombre else 'Usuario' }}
                 </span>
-              </a>
-              <form action="/logout" method="post" id="logoutForm">
-                <button type="submit" class="profile-logout">
-                  <svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#logout"></use></svg>
-                </button>
-              </form>
+              </button>
+
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm rounded-3 border-0 mt-2" aria-labelledby="userMenuDropdown">
+                <li>
+                  <a class="dropdown-menu-item d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-dark" href="/profile">
+                    <svg class="icon icon--sm" width="16" height="16" aria-hidden="true"><use href="/static/img/icons.svg#edit"></use></svg>
+                    <span>Editar Perfil</span>
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li>
+                  <form action="/logout" method="post" id="logoutForm" class="m-0">
+                    <button type="submit" class="dropdown-menu-item w-100 border-0 bg-transparent text-start d-flex align-items-center gap-2 px-3 py-2 text-danger">
+                      <svg class="icon icon--sm" width="16" height="16" aria-hidden="true"><use href="/static/img/icons.svg#logout"></use></svg>
+                      <span>Cerrar sesión</span>
+                    </button>
+                  </form>
+                </li>
+              </ul>
             </div>
           </div>
         </header>
@@ -158,6 +172,8 @@
       </div>
     </div>
 
+    <!-- Carga de JS de Bootstrap necesario para los desplegables -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js?v=2.2"></script>
     <script nonce="{{ csp_nonce }}">
       document.addEventListener('DOMContentLoaded', async () => {
@@ -196,6 +212,10 @@
       });
     </script>
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div class="photo-viewer" id="photoViewer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="photoViewerName">
+      <button type="button" class="photo-viewer__close" aria-label="Cerrar foto ampliada">&times;</button>
+      <figure class="photo-viewer__figure"><img class="photo-viewer__image" src="/static/img/default-avatar.svg" alt=""><figcaption class="photo-viewer__name" id="photoViewerName">Empleado</figcaption></figure>
+    </div>
     {% block scripts %}{% endblock %}
   </body>
 </html>

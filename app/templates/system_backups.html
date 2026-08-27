@@ -5,13 +5,15 @@
 
 {% block content %}
 <div class="system-page">
-  <section class="system-intro">
+  <section class="section-header system-page-header">
     <div>
       <span class="eyebrow">Protección de datos</span>
       <h2>Copias de seguridad</h2>
       <p>Se conservan las tres copias más recientes en el servidor.</p>
     </div>
-    <button id="createBackupButton" class="btn-ios primary" type="button">Crear backup ahora</button>
+    <div class="stack-actions">
+      <button id="createBackupButton" class="btn-ios primary" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#plus"></use></svg>Crear backup ahora</button>
+    </div>
   </section>
 
   <section class="card system-backups-card">

@@ -8,4 +8,3 @@ tzdata==2025.2
 Jinja2==3.1.6
 python-multipart==0.0.22
 aiofiles==25.1.0
-pyserial==3.5

@@ -3,38 +3,59 @@
 {% block title %}Mi perfil - MarcajeTPV{% endblock %}
 {% block page_title %}Mi perfil{% endblock %}
 
+{% block actions %}
+  <a class="btn-ios secondary btn-sm d-flex align-items-center gap-2" href="/attendance/summary">
+    <svg class="icon icon--sm" width="16" height="16" aria-hidden="true"><use href="/static/img/icons.svg#arrow-left"></use></svg>
+    <span>Volver a asistencia</span>
+  </a>
+{% endblock %}
+
 {% block content %}
-<section class="profile-layout">
+<div class="profile-layout">
   <div class="card profile-summary-card">
     <div class="profile-summary-avatar">{{ user.nombre[0]|upper }}</div>
     <h3>{{ user.nombre }}</h3>
-    <p>@{{ user.username }}</p>
-    <span class="profile-role-badge">{{ user.rol }}</span>
-    <a class="btn-ios secondary btn-sm" href="/attendance/summary">Volver a asistencia</a>
+    <p class="text-muted mb-2">@{{ user.username }}</p>
+    {% set role_badge_class = 'user-role-badge--admin' if user.rol == 'Desarrollador' else ('user-role-badge--rrhh' if user.rol == 'RRHH' else 'user-role-badge--inspector') %}
+    <span class="user-role-badge {{ role_badge_class }}">{{ user.rol }}</span>
   </div>
+
   <div class="card profile-card">
-    <div class="card-panel__header">
-      <h3>Datos del perfil</h3><br>
+    <div class="org-card-header">
+      <div>
+        <span class="eyebrow text-uppercase text-muted fw-bold">Configuración</span>
+        <h3 class="m-0">Datos del perfil</h3>
+      </div>
     </div>
-  <form id="profileForm" class="profile-form">
-    <div>
-      <label class="form-label" for="profileUsername">Nombre de usuario</label>
-      <input class="form-control" id="profileUsername" name="username" value="{{ user.username }}" minlength="3" maxlength="50" pattern="[-a-zA-Z0-9._]+" required>
+    
+    <div class="org-card-body">
+      <form id="profileForm" class="org-form org-form-grid">
+        <div>
+          <label class="form-label fw-semibold" for="profileUsername">Nombre de usuario</label>
+          <input class="form-control" id="profileUsername" name="username" value="{{ user.username }}" minlength="3" maxlength="50" pattern="[a-zA-Z0-9._-]+" required>
+          <small class="form-text text-muted">Letras, números, punto, guion o guion bajo.</small>
+        </div>
+
+        <div>
+          <label class="form-label fw-semibold" for="profileName">Nombre visible</label>
+          <input class="form-control" id="profileName" name="nombre" value="{{ user.nombre }}" minlength="2" maxlength="150" required>
+        </div>
+
+        <div class="col-span-2">
+          <label class="form-label fw-semibold" for="profilePassword">Nueva contraseña</label>
+          <input class="form-control" id="profilePassword" name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password">
+          <small class="form-text text-muted">Déjala vacía para conservar la contraseña actual.</small>
+        </div>
+
+        <div class="col-span-2 mt-2">
+          <button class="btn-ios primary w-100" type="submit" id="profileSave">Guardar cambios</button>
+        </div>
+
+        <p id="profileMessage" class="form-feedback col-span-2 mb-0" role="status" aria-live="polite"></p>
+      </form>
     </div>
-    <div>
-      <label class="form-label" for="profileName">Nombre visible</label>
-      <input class="form-control" id="profileName" name="nombre" value="{{ user.nombre }}" minlength="2" maxlength="150" required>
-    </div>
-    <div class="profile-password-section">
-      <label class="form-label" for="profilePassword">Nueva contraseña</label>
-      <input class="form-control" id="profilePassword" name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password">
-      <small class="form-hint">Déjala vacía para conservar la actual.</small>
-    </div>
-    <button class="btn-ios primary" type="submit" id="profileSave">Guardar cambios</button>
-    <p id="profileMessage" class="form-feedback" role="status" aria-live="polite"></p>
-  </form>
   </div>
-</section>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -43,22 +64,69 @@
     const form = document.getElementById('profileForm');
     const button = document.getElementById('profileSave');
     const message = document.getElementById('profileMessage');
+
+    const getCsrfToken = () => {
+      return document.cookie.split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1] || '';
+    };
+
+    const getAuthHeaders = () => {
+      if (window.AppUI && typeof window.AppUI.csrfHeaders === 'function') {
+        return window.AppUI.csrfHeaders();
+      }
+      return { 'X-CSRFToken': getCsrfToken() };
+    };
+
+    const showMessage = (text, isError = false) => {
+      if (!message) return;
+      message.textContent = text;
+      message.className = `form-feedback col-span-2 mb-0 ${isError ? 'text-danger' : 'text-success'}`;
+    };
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      if (!form.reportValidity()) return;
+      if (!form.reportValidity()) {
+        const invalidField = form.querySelector(':invalid');
+        showMessage(invalidField?.validationMessage || 'Revisa los datos ingresados.', true);
+        invalidField?.focus();
+        return;
+      }
+
       button.disabled = true;
-      message.textContent = 'Guardando...';
+      showMessage('Guardando cambios...');
+
       try {
         const payload = Object.fromEntries(new FormData(form).entries());
         if (!payload.password) delete payload.password;
-        const response = await fetch('/api/me', { method: 'PUT', headers: {'Content-Type': 'application/json', ...window.AppUI.csrfHeaders()}, body: JSON.stringify(payload) });
+
+        const response = await fetch('/api/me', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify(payload)
+        });
+
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.detail || 'No se pudieron guardar los cambios.');
-        message.textContent = 'Cambios guardados correctamente.';
-        message.className = 'form-feedback form-feedback--success';
+
+        const successMsg = 'Perfil actualizado correctamente.';
+        showMessage(successMsg, false);
+        if (window.AppUI && typeof window.AppUI.toast === 'function') {
+          window.AppUI.toast(successMsg, 'success');
+        }
+
+        const passwordInput = document.getElementById('profilePassword');
+        if (passwordInput) passwordInput.value = '';
+
       } catch (error) {
-        message.textContent = error.message || 'No se pudieron guardar los cambios.';
-        message.className = 'form-feedback form-feedback--error';
+        const errorMsg = error.message || 'No se pudieron guardar los cambios.';
+        showMessage(errorMsg, true);
+        if (window.AppUI && typeof window.AppUI.toast === 'function') {
+          window.AppUI.toast(errorMsg, 'error');
+        }
       } finally {
         button.disabled = false;
       }

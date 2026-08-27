@@ -106,11 +106,11 @@ Nota: la cola manual vive en el navegador y la cola RFID vive en SQLite local, a
 
 ### Puede hacer
 
-- [ ] Consultar empleados.
-- [ ] Consultar presencia actual.
-- [ ] Registrar marcajes manuales.
+- [x] Consultar directorio operativo de empleados: nombre, gerencia, departamento y estatus.
+- [x] Consultar presencia actual.
+- [x] Registrar marcajes manuales.
 - [ ] Corregir marcajes con motivo.
-- [ ] Consultar el historial necesario para su operación.
+- [x] Consultar el historial necesario para su operación.
 - [ ] Registrar incidencias.
 - [ ] Exportar información operativa.
 

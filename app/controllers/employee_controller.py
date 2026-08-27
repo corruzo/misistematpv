@@ -8,8 +8,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.core.auth import require_employee_manager, require_read_access
-from app.schemas.employee import EmpleadoCreate, EmpleadoOut, EmpleadoUpdate
+from app.core.auth import require_employee_manager, require_manual_attendance, require_read_access
+from app.schemas.employee import EmpleadoCreate, EmpleadoManualOut, EmpleadoOperativoOut, EmpleadoOut, EmpleadoUpdate
 from app.services.employee_service import (
     create_employee,
     search_employees,
@@ -40,6 +40,8 @@ def employees_page(request: Request, user=Depends(require_read_access)):
 
 @router.get('/api/employees/{emp_id}')
 def api_get_employee_by_id_route(emp_id: int, db: Session = Depends(get_db), _user=Depends(require_read_access)):
+    if _user.rol == 'Inspector':
+        raise HTTPException(status_code=403, detail='El Inspector no puede consultar fichas individuales.')
     emp = get_employee_by_id(db, emp_id)
     if not emp:
         raise HTTPException(status_code=404, detail='Empleado no encontrado')
@@ -71,13 +73,26 @@ def api_get_employees(
         limit=limit,
         offset=offset,
     )
-    payload = [EmpleadoOut.model_validate(e) for e in emps]
+    payload = [
+        EmpleadoOperativoOut.model_validate(e) if _user.rol == 'Inspector' else EmpleadoOut.model_validate(e)
+        for e in emps
+    ]
     total = count_employees(db, q=q, estado=estado, gerencia=gerencia, departamento=departamento, gerencia_id=gerencia_id, departamento_id=departamento_id, tipo_nomina=tipo_nomina)
     return {
         'items': payload,
         'total': total,
         'metrics': get_employee_metrics(db),
     }
+
+
+@router.get('/api/attendance/manual-employees')
+def api_get_manual_employees(
+    q: Optional[str] = Query(None, max_length=150),
+    limit: int = Query(100, ge=1, le=100),
+    db: Session = Depends(get_db), _user=Depends(require_manual_attendance),
+):
+    emps = search_employees(db, q=q, limit=limit, offset=0)
+    return {'items': [EmpleadoManualOut.model_validate(employee) for employee in emps]}
 
 
 @router.post('/api/employees')
@@ -205,6 +220,8 @@ def api_get_employee_profile_route(
     page_size: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db), _user=Depends(require_read_access),
 ):
+    if _user.rol == 'Inspector':
+        raise HTTPException(status_code=403, detail='El Inspector no puede consultar fichas individuales.')
     profile = get_employee_profile(db, emp_id, days=days, page=page, page_size=page_size)
     if not profile:
         raise HTTPException(status_code=404, detail='Empleado no encontrado')

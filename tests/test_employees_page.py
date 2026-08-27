@@ -22,8 +22,7 @@ class EmployeePageTemplateTest(unittest.TestCase):
     def test_employees_template_has_visible_action_buttons(self):
         html = TEMPLATE.read_text(encoding='utf-8')
 
-        self.assertIn('Ver estructura', html)
-        self.assertIn('Nuevo registro', html)
+        self.assertIn('Nuevo Empleado', html)
 
     def test_employees_template_has_search_and_filters(self):
         html = TEMPLATE.read_text(encoding='utf-8')

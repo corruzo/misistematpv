@@ -179,6 +179,7 @@ class OrganizationModelTest(unittest.TestCase):
     def test_organization_template_has_contextual_branch_actions(self):
         html = (Path(__file__).resolve().parents[1] / 'app' / 'templates' / 'organization.html').read_text(encoding='utf-8')
 
+        self.assertNotIn('id="btnViewTree"', html)
         self.assertIn('data-create-type="departamento"', html)
         self.assertIn('data-create-type="cargo"', html)
         self.assertIn('function openCreateForm', html)

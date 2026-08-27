@@ -70,11 +70,4 @@ def create_backup(db: Session, slot: int | None = None) -> dict:
     return next(item for item in list_backups() if item['filename'] == filename)
 
 
-def scheduled_backup() -> None:
-    from app.database.session import SessionLocal
 
-    db = SessionLocal()
-    try:
-        create_backup(db)
-    finally:
-        db.close()

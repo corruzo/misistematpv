@@ -1,58 +1,112 @@
 {% extends 'base.html' %}
 {% from 'components.html' import kpi_card %}
 
-{% block title %}Resumen de asistencia - MarcajeTPV{% endblock %}
-{% block page_title %}Resumen de asistencia{% endblock %}
+{% block title %}Control de Asistencia - Garita{% endblock %}
 
 {% block content %}
-<div class="attendance-page inspector-page">
-  <section class="attendance-context-bar" aria-label="Estado de asistencia">
-    <div>
-      <span class="eyebrow">Estado de asistencia</span>
-      <strong>Control operativo del día</strong>
+<div class="attendance-page inspector-page pt-2">
+
+  <!-- 1. ALERTAS Y ESTADO (Fecha/Hora limpia a la derecha) -->
+  <section class="card inspector-panel inspector-panel--alerts alert-priority-zone mb-3">
+    <div class="card-panel__header card-panel__header--warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <h3 class="mb-0 fs-6 fw-bold">Alertas e Incidentes Operativos</h3>
+      </div>
+      
+      <!-- Metadatos con distribución Flex corregida -->
+      <div class="inspector-context-meta d-flex align-items-center gap-2 ms-auto">
+        <span id="readerStatus" class="inspector-live inspector-reader-status is-disconnected">
+          Lector no configurado
+        </span>
+        <div class="d-flex align-items-center gap-1 text-muted small bg-light px-2 py-1 rounded border">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span id="summaryDate"></span>
+          <span>·</span>
+          <strong id="inspectorUpdated" class="text-dark">--:--</strong>
+        </div>
+      </div>
     </div>
-    <div class="attendance-context-meta">
-      <span id="summaryDate"></span>
-      <span class="inspector-live"><span></span><strong id="inspectorUpdated">Actualizando...</strong></span>
-      <span id="readerStatus" class="inspector-live inspector-reader-status is-disconnected">Lector no configurado</span>
+    
+    <div id="inspectorAlertsList" class="inspector-alerts-list">
+      <p class="table-state">Cargando alertas...</p>
     </div>
   </section>
 
-  <div class="kpi-grid kpi-grid--compact inspector-kpis">
-    {{ kpi_card('Personal dentro', 'summaryPresentes', 'Entrada sin salida', 'summaryPresentesMeta', 'green', 'users') }}
-    {{ kpi_card('Entradas de hoy', 'summaryEntradas', 'Registros', 'summaryEntradasMeta', 'blue', 'check') }}
-    {{ kpi_card('Salidas de hoy', 'summarySalidas', 'Registros', 'summarySalidasMeta', 'orange', 'activity') }}
-    {{ kpi_card('Marcajes totales', 'summaryMarcajes', 'Actividad del día', 'summaryMarcajesMeta', 'violet', 'activity') }}
+  <!-- 2. TARJETAS DE MÉTRICAS -->
+  <div class="kpi-grid kpi-grid--compact inspector-kpis mb-3">
+    {{ kpi_card('Personal Dentro', 'summaryPresentes', 'Presentes en planta', 'summaryPresentesMeta', 'green', 'users') }}
+    {{ kpi_card('Entradas Hoy', 'summaryEntradas', 'Accesos autorizados', 'summaryEntradasMeta', 'blue', 'check') }}
+    {{ kpi_card('Salidas Hoy', 'summarySalidas', 'Egresos autorizados', 'summarySalidasMeta', 'orange', 'activity') }}
+    {{ kpi_card('Marcajes Totales', 'summaryMarcajes', 'Flujo acumulado', 'summaryMarcajesMeta', 'violet', 'activity') }}
   </div>
 
-  <div class="inspector-dashboard-grid">
-    <section class="card inspector-panel inspector-panel--recent">
-      <div class="card-panel__header"><h3>Últimos movimientos</h3><p>Entradas y salidas registradas hoy.</p></div>
-      <div id="recentAttendanceList" class="inspector-recent-list"><p class="table-state">Cargando movimientos...</p></div>
-    </section>
-    <section class="card inspector-panel inspector-panel--expected">
-      <div class="card-panel__header"><h3>Sin marcaje hoy</h3><p>Personal activo que aún no registra entrada.</p></div>
-      <div id="expectedEmployeesList" class="inspector-expected-list"><p class="table-state">Cargando personal...</p></div>
-    </section>
-    <section class="card inspector-panel inspector-panel--alerts">
-      <div class="card-panel__header"><h3>Alertas operativas</h3><p>Situaciones que requieren atención.</p></div>
-      <div id="inspectorAlertsList" class="inspector-alerts-list"><p class="table-state">Cargando alertas...</p></div>
-    </section>
-  </div>
-
-  <section class="card inspector-presence-card">
+  <!-- 3. PERSONAL PRESENTE -->
+  <section class="card inspector-presence-card mb-3">
     <div class="card-panel__header inspector-table-header">
-      <div><h3>Personas actualmente dentro</h3></div>
-      <div class="inspector-table-tools"><label class="sr-only" for="presentSearch"></label><input id="presentSearch" class="form-control" type="search" placeholder="Buscar empleado por nombre, cédula o área"></div>
+      <div>
+        <h3 class="mb-1">Personal dentro de las instalaciones</h3>
+        <p class="text-muted small mb-0">Control de ocupación activa en tiempo real para evacuación/seguridad.</p>
+      </div>
+      <div class="inspector-table-tools">
+        <label class="sr-only" for="presentSearch">Buscar persona</label>
+        <div class="input-group">
+          <span class="input-group-text bg-transparent border-end-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </span>
+          <input id="presentSearch" class="form-control border-start-0" type="search" placeholder="Buscar por nombre, cédula o área...">
+        </div>
+      </div>
     </div>
+    
     <div class="table-responsive">
       <table class="table ios-table inspector-table mb-0">
-        <thead><tr><th>Persona</th><th>Identificación</th><th>Ubicación</th><th>Entrada</th></tr></thead>
-        <tbody id="presentEmployeesList"><tr><td colspan="4" class="table-state">Cargando personal presente...</td></tr></tbody>
+        <thead>
+          <tr>
+            <th>Persona</th>
+            <th>Cédula</th>
+            <th>Ubicación</th>
+            <th>Hora Entrada</th>
+          </tr>
+        </thead>
+        <tbody id="presentEmployeesList">
+          <tr><td colspan="4" class="table-state">Cargando personal presente...</td></tr>
+        </tbody>
       </table>
     </div>
-    <div id="presentEmptyState" class="table-state d-none">No hay personal marcado dentro en este momento.</div>
+    <div id="presentEmptyState" class="table-state d-none">No hay personal registrado dentro en este momento.</div>
   </section>
+
+  <!-- 4. PANELES SECUNDARIOS (Formato de movimientos ajustado) -->
+  <div class="inspector-dashboard-grid">
+    <section class="card inspector-panel inspector-panel--recent">
+      <div class="card-panel__header">
+        <h3>Últimos Movimientos</h3>
+        <p>Historial reciente de marcaje en garita.</p>
+      </div>
+      <div id="recentAttendanceList" class="inspector-recent-list">
+        <p class="table-state">Cargando movimientos...</p>
+      </div>
+    </section>
+
+    <section class="card inspector-panel inspector-panel--expected">
+      <div class="card-panel__header">
+        <h3>Pendientes por Ingreso</h3>
+        <p>Personal activo sin registro de entrada.</p>
+      </div>
+      <div id="expectedEmployeesList" class="inspector-expected-list">
+        <p class="table-state">Cargando personal...</p>
+      </div>
+    </section>
+  </div>
+
 </div>
 {% endblock %}
 
@@ -60,70 +114,221 @@
 <script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', () => {
   const state = { items: [] };
+  let loading = false;
+  let reloadQueued = false;
+
   const list = document.getElementById('presentEmployeesList');
   const search = document.getElementById('presentSearch');
-  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-  const formatTime = (value) => value ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+
+  const escapeHtml = (val) => String(val ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const formatTime = (val) => val ? new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+
+  const SVG_CHECK = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="20 6 9 17l-5-5"/></svg>`;
+  const SVG_ALERT = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
 
   function render() {
     const term = search.value.trim().toLowerCase();
-    const items = state.items.filter((item) => [item.nombre_apellido, item.cedula, item.gerencia, item.departamento, item.cargo].join(' ').toLowerCase().includes(term));
+    const items = state.items.filter((item) => 
+      [item.nombre_apellido, item.cedula, item.gerencia, item.departamento, item.cargo].join(' ').toLowerCase().includes(term)
+    );
+
     list.replaceChildren();
     document.getElementById('presentEmptyState').classList.toggle('d-none', items.length > 0);
+    
     if (!items.length) return;
+
+    const fragment = document.createDocumentFragment();
     items.forEach((item) => {
       const row = document.createElement('tr');
-      row.innerHTML = `<td><div class="presence-person"><img src="${item.foto_url ? `/static/${encodeURIComponent(item.foto_url)}` : '/static/img/default-avatar.svg'}" alt=""><strong>${escapeHtml(item.nombre_apellido)}</strong></div></td><td>${escapeHtml(item.cedula)}</td><td><strong>${escapeHtml(item.gerencia)}</strong><small>${escapeHtml(item.departamento)} · ${escapeHtml(item.cargo)}</small></td><td><time class="presence-time">${formatTime(item.entrada)}</time></td>`;
-      list.append(row);
+      const photoSrc = item.foto_url ? `/static/${encodeURIComponent(item.foto_url)}` : '/static/img/default-avatar.svg';
+      
+      row.innerHTML = `
+        <td>
+          <div class="presence-person">
+            <button type="button" class="employee-photo-trigger" data-photo-src="${photoSrc}" data-photo-name="${escapeHtml(item.nombre_apellido)}" aria-label="Ampliar foto de ${escapeHtml(item.nombre_apellido)}">
+              <img src="${photoSrc}" alt="" loading="lazy">
+            </button>
+            <strong>${escapeHtml(item.nombre_apellido)}</strong>
+          </div>
+        </td>
+        <td><code>${escapeHtml(item.cedula)}</code></td>
+        <td>
+          <strong>${escapeHtml(item.gerencia)}</strong>
+          <small class="d-block text-muted">${escapeHtml(item.departamento)} · ${escapeHtml(item.cargo)}</small>
+        </td>
+        <td><time class="presence-time text-primary font-weight-bold">${formatTime(item.entrada)}</time></td>
+      `;
+      fragment.append(row);
     });
+    list.append(fragment);
   }
 
   async function load() {
+    if (loading) { reloadQueued = true; return; }
+    loading = true;
+
     try {
-      const response = await fetch('/api/attendance/inspector-dashboard');
-      if (!response.ok) throw new Error('No se pudo actualizar el panel de garita.');
+      const response = await fetch('/api/attendance/inspector-dashboard', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Error al sincronizar garita.');
+      
       const payload = await response.json();
       const summary = payload.summary || {};
       state.items = payload.present || [];
+
       document.getElementById('summaryPresentes').textContent = summary.presentes ?? 0;
       document.getElementById('summaryEntradas').textContent = summary.entradas_hoy ?? 0;
       document.getElementById('summarySalidas').textContent = summary.salidas_hoy ?? 0;
       document.getElementById('summaryMarcajes').textContent = summary.marcajes_hoy ?? 0;
+
       document.getElementById('summaryPresentesMeta').textContent = `${state.items.length} personas`;
-      document.getElementById('summaryEntradasMeta').textContent = 'Desde medianoche';
-      document.getElementById('summarySalidasMeta').textContent = 'Desde medianoche';
+      document.getElementById('summaryEntradasMeta').textContent = 'Desde 00:00 hrs';
+      document.getElementById('summarySalidasMeta').textContent = 'Desde 00:00 hrs';
       document.getElementById('summaryMarcajesMeta').textContent = 'Entradas + salidas';
-      document.getElementById('summaryDate').textContent = new Date().toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
-      document.getElementById('inspectorUpdated').textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+      // Hora formateada correctamente sin superposiciones
+      document.getElementById('summaryDate').textContent = new Date().toLocaleDateString([], { day: '2-digit', month: 'short' });
+      document.getElementById('inspectorUpdated').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const reader = payload.reader || {};
+      const readerEl = document.getElementById('readerStatus');
+      readerEl.textContent = reader.message || 'Sin estado';
+      readerEl.className = `inspector-live inspector-reader-status ${reader.connected ? 'is-connected' : 'is-disconnected'}`;
+
+      renderAlerts(payload.alerts || []);
       renderRecent(payload.recent || []);
       renderExpected(payload.expected || []);
-      renderAlerts(payload.alerts || []);
-      const reader = payload.reader || {};
-      document.getElementById('readerStatus').textContent = reader.message || 'Estado no disponible';
-      document.getElementById('readerStatus').className = `inspector-live inspector-reader-status ${reader.connected ? 'is-connected' : 'is-disconnected'}`;
       render();
-    } catch (error) { window.AppUI.toast(error.message, 'error'); }
+
+    } catch (error) {
+      if (window.AppUI?.toast) window.AppUI.toast(error.message, 'error');
+    } finally {
+      loading = false;
+      if (reloadQueued) {
+        reloadQueued = false;
+        load();
+      }
+    }
   }
+
+  /* RENDER CORREGIDO PARA ÚLTIMOS MOVIMIENTOS */
   function renderRecent(items) {
-    const container = document.getElementById('recentAttendanceList'); container.replaceChildren();
-    if (!items.length) { container.innerHTML = '<p class="table-state">No hay movimientos registrados hoy.</p>'; return; }
-    items.forEach((item) => { const element = document.createElement('div'); element.className = 'inspector-recent-item'; element.innerHTML = `<div><strong>${escapeHtml(item.empleado_nombre)}</strong><span>${item.tipo === 'ENTRADA' ? 'Entrada' : 'Salida'} · ${escapeHtml(item.origen === 'PUERTO_COM' ? 'Lector RFID' : 'Registro manual')}</span></div><time>${formatTime(item.fecha_hora)}</time>`; container.append(element); });
+    const container = document.getElementById('recentAttendanceList'); 
+    container.replaceChildren();
+    
+    if (!items.length) {
+      container.innerHTML = '<p class="table-state">Sin movimientos recientes.</p>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    items.forEach((item) => {
+      const element = document.createElement('div');
+      element.className = 'inspector-recent-item border-bottom py-2 d-flex justify-content-between align-items-center';
+      const isEntry = item.tipo === 'ENTRADA';
+      
+      element.innerHTML = `
+        <div class="d-flex flex-column gap-1">
+          <strong class="text-dark">${escapeHtml(item.empleado_nombre)}</strong>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge-pill ${isEntry ? 'badge-status--activo' : 'badge-status--retirado'}">
+              ${isEntry ? 'ENTRADA' : 'SALIDA'}
+            </span>
+            <small class="text-muted">${escapeHtml(item.origen === 'PUERTO_COM' ? 'Lector RFID' : 'Manual')}</small>
+          </div>
+        </div>
+        <time class="fw-bold text-secondary small">${formatTime(item.fecha_hora)}</time>
+      `;
+      fragment.append(element);
+    });
+    container.append(fragment);
   }
+
   function renderExpected(items) {
-    const container = document.getElementById('expectedEmployeesList'); container.replaceChildren();
-    if (!items.length) { container.innerHTML = '<p class="table-state">Todo el personal activo tiene marcaje hoy.</p>'; return; }
-    items.forEach((item) => { const element = document.createElement('div'); element.className = 'inspector-expected-item'; element.innerHTML = `<strong>${escapeHtml(item.nombre_apellido)}</strong><span>${escapeHtml(item.gerencia)} · ${escapeHtml(item.departamento)}</span>`; container.append(element); });
+    const container = document.getElementById('expectedEmployeesList'); 
+    container.replaceChildren();
+
+    if (!items.length) {
+      container.innerHTML = '<p class="table-state">Sin personal pendiente por marcar.</p>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    items.forEach((item) => {
+      const element = document.createElement('div');
+      element.className = 'inspector-expected-item border-bottom py-2 d-flex justify-content-between align-items-center';
+      element.innerHTML = `
+        <div class="d-flex flex-column">
+          <strong class="text-dark">${escapeHtml(item.nombre_apellido)}</strong>
+          <small class="text-muted">${escapeHtml(item.gerencia)} · ${escapeHtml(item.departamento)}</small>
+        </div>
+      `;
+      fragment.append(element);
+    });
+    container.append(fragment);
   }
+
   function renderAlerts(items) {
-    const container = document.getElementById('inspectorAlertsList'); container.replaceChildren();
-    if (!items.length) { container.innerHTML = '<p class="table-state">No hay alertas activas.</p>'; return; }
-    items.forEach((item) => { const element = document.createElement('div'); element.className = `inspector-alert inspector-alert--${item.kind === 'reader' ? 'reader' : 'sequence'}`; element.textContent = item.message; container.append(element); });
+    const container = document.getElementById('inspectorAlertsList'); 
+    container.replaceChildren();
+
+    if (!items.length) {
+      container.innerHTML = `
+        <p class="table-state text-success d-flex align-items-center gap-2 mb-0 py-1">
+          ${SVG_CHECK} Sin anomalías ni alertas activas en garita.
+        </p>`;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    items.forEach((item) => {
+      const element = document.createElement('div');
+      element.className = `inspector-alert inspector-alert--${item.kind === 'reader' ? 'reader' : 'sequence'} d-flex justify-content-between align-items-center py-2 px-3 mb-2 rounded border`;
+      
+      const message = document.createElement('span');
+      message.className = 'd-flex align-items-center gap-2 text-danger font-weight-bold';
+      message.innerHTML = `${SVG_ALERT} <span>${escapeHtml(item.message)}</span>`;
+
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.className = 'inspector-alert__dismiss btn btn-sm btn-outline-danger';
+      dismiss.textContent = 'Descartar';
+
+      dismiss.addEventListener('click', async () => {
+        dismiss.disabled = true;
+        try {
+          const response = await fetch(`/api/attendance/alerts/${encodeURIComponent(item.id)}/dismiss`, { 
+            method: 'POST', 
+            headers: window.AppUI?.csrfHeaders() || {} 
+          });
+          if (!response.ok) throw new Error('No se pudo descartar.');
+          element.remove();
+          if (!container.children.length) {
+            container.innerHTML = `
+              <p class="table-state text-success d-flex align-items-center gap-2 mb-0 py-1">
+                ${SVG_CHECK} Sin anomalías ni alertas activas en garita.
+              </p>`;
+          }
+        } catch (error) {
+          dismiss.disabled = false;
+          if (window.AppUI?.toast) window.AppUI.toast(error.message, 'error');
+        }
+      });
+
+      element.append(message, dismiss);
+      fragment.append(element);
+    });
+    container.append(fragment);
   }
+
   search.addEventListener('input', render);
   load();
-  window.addEventListener('app:attendance', load);
-  window.addEventListener('app:access_denied', load);
-  window.setInterval(load, 30000);
+
+  ['app:attendance', 'app:access_denied', 'app:reader_changed', 'app:live-reconnected', 'online', 'pageshow'].forEach(evt => {
+    window.addEventListener(evt, load);
+  });
+
+  const refreshTimer = window.setInterval(load, 30000);
+  window.addEventListener('pagehide', () => window.clearInterval(refreshTimer));
 });
 </script>
 {% endblock %}

@@ -7,8 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.access_event import AccessDeniedEvent
 from app.services.attendance_service import EmployeeAccessDeniedError
 from app.services.notification_service import publish_access_denied
-from app.services.live_bus import notify_live_change
-from app.core.datetime_utils import LOCAL_TIMEZONE, as_utc
+from app.core.datetime_utils import LOCAL_TIMEZONE, as_utc, to_local
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +17,12 @@ def record_denied_event(db: Session, error: EmployeeAccessDeniedError) -> bool:
         empleado_id=error.employee_id,
         empleado_nombre=error.employee_name,
         estado=error.employee_status,
+        fecha_hora=error.marked_at or as_utc(datetime.now(LOCAL_TIMEZONE)),
     )
     try:
         db.add(event)
         publish_access_denied(db, error.employee_name, error.employee_status)
         db.commit()
-        notify_live_change()
         return True
     except SQLAlchemyError:
         db.rollback()
@@ -46,7 +45,7 @@ def get_denied_events(db: Session, after_id: int = 0, limit: int = 50) -> list[d
             'detail': 'El empleado no está activo.',
             'empleado_nombre': event.empleado_nombre,
             'estado': event.estado,
-            'fecha_hora': event.fecha_hora.isoformat(),
+            'fecha_hora': to_local(event.fecha_hora).isoformat(),
         }
         for event in events
     ]
@@ -69,7 +68,7 @@ def list_denied_events(db: Session, date_from: date | None = None, date_to: date
             'id': event.id,
             'empleado_nombre': event.empleado_nombre,
             'estado': event.estado,
-            'fecha_hora': event.fecha_hora.isoformat(),
+            'fecha_hora': to_local(event.fecha_hora).isoformat(),
             'detalle': 'Intento de marcaje bloqueado',
         }
         for event in events

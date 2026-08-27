@@ -55,7 +55,7 @@ DB_USER=
 DB_PASSWORD=
 DB_TRUSTED=true
 APP_TIMEZONE=America/Caracas
-SERIAL_PORT=COM3
+SERIAL_PORT=
 SERIAL_BAUDRATE=9600
 SERIAL_BYTESIZE=8
 SERIAL_PARITY=N
@@ -68,9 +68,9 @@ Si usas autenticación de Windows, deja `DB_TRUSTED=true` y `DB_USER`/`DB_PASSWO
 
 Para el lector serial, configura `SERIAL_PORT` con el COM asignado por Windows. En equipos de desarrollo sin lector, deja `SERIAL_PORT=` vacío: la aplicación funciona normalmente y no intenta abrir ningún puerto. En la PC de producción, conecta el lector, revisa el COM en el Administrador de dispositivos y configura ese valor, por ejemplo `SERIAL_PORT=COM5`. La configuración inicial usa 9600 baudios, 8 bits, sin paridad y 1 bit de parada (8N1); cambia `SERIAL_PARITY` a `E` u `O`, o `SERIAL_STOPBITS`, si el fabricante indica otros valores. El lector debe enviar el código de tarjeta terminado en salto de línea (`CR` o `LF`).
 
-El lector se abre automáticamente al iniciar el servidor. Si el COM no está disponible, la aplicación continúa funcionando y registra el problema en consola mientras intenta reconectar; no se generan marcajes hasta recibir una lectura válida.
+El lector RFID funciona mediante el agente independiente de `rfid_agent`. En la PC de la garita, copia `rfid_agent.env.example` a `rfid_agent.env`, configura `PUERTO_COM`, `URL_SERVIDOR`, `GARITA_ID` y `API_KEY`, y ejecuta `install_rfid_agent.ps1` como administrador. El servicio arranca automáticamente con Windows y conserva lecturas en SQLite si el servidor no está disponible.
 
-La PC del kiosco debe ejecutar la aplicación con un solo worker cuando `SERIAL_PORT` esté configurado. El arranque rechaza explícitamente `WEB_CONCURRENCY` mayor que `1` para evitar lectores seriales duplicados. Si se usan varios workers para otro entorno, deja `SERIAL_PORT=` vacío y utiliza el lector como proceso independiente.
+El servidor web ya no abre puertos COM ni necesita un worker único por lector. `POST /api/v1/asistencia/lectura` usa Bearer API key y `timestamp_lectura`; el navegador solo recibe el resultado mediante SSE para visualización.
 
 ## Backups del sistema
 

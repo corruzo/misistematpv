@@ -10,6 +10,7 @@ from app.models.employee import Empleado, EstadoEnum
 from app.models.organization import Departamento, Cargo, Gerencia
 from app.core.config import ALLOWED_IMAGE_EXT, UPLOADS_DIR
 from app.services.audit_service import add_audit
+from app.services.notification_service import publish_employee_registered, publish_employee_status_changed
 from app.models.attendance import AttendanceRecord
 from app.models.audit import AuditRecord
 from app.schemas.employee import EmpleadoOut
@@ -123,6 +124,7 @@ def create_employee(db: Session, data, foto: Optional[UploadFile] = None, usuari
         'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
         'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
     })
+    publish_employee_registered(db, emp, usuario_id)
     db.commit()
     db.refresh(emp)
     return emp
@@ -148,6 +150,7 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
             old_photo.unlink()
         emp.foto_url = None
 
+    previous_status = emp.estado.value if isinstance(emp.estado, EstadoEnum) else str(emp.estado)
     payload = updates.dict(exclude_unset=True)
     departamento_id = payload.get('departamento_id')
     cargo_id = payload.get('cargo_id')
@@ -186,6 +189,9 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
         'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
         'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
     })
+    current_status = emp.estado.value if isinstance(emp.estado, EstadoEnum) else str(emp.estado)
+    if current_status != previous_status:
+        publish_employee_status_changed(db, emp.nombre_apellido, previous_status, current_status, usuario_id)
     db.commit()
     db.refresh(emp)
     return emp
@@ -274,9 +280,12 @@ def count_employees(db: Session, q: Optional[str] = None, estado: Optional[str] 
 
 def soft_delete_employee(db: Session, emp: Empleado, usuario_id: int | None = None) -> Empleado:
     antes = {'estado': emp.estado}
+    previous_status = emp.estado.value if isinstance(emp.estado, EstadoEnum) else str(emp.estado)
     emp.estado = EstadoEnum.Retirado
     db.add(emp)
     add_audit(db, usuario_id, 'baja', 'empleados', emp.id, antes, {'estado': emp.estado})
+    if previous_status != EstadoEnum.Retirado.value:
+        publish_employee_status_changed(db, emp.nombre_apellido, previous_status, EstadoEnum.Retirado.value, usuario_id)
     db.commit()
     db.refresh(emp)
     return emp

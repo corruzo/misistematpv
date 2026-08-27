@@ -22,7 +22,7 @@ La aplicación usa FastAPI, plantillas Jinja2, JavaScript del navegador y SQL Se
 | Registrar marcaje manual | Marcaje manual rápido | `/attendance` | Administrador o RRHH |
 | Consultar y corregir marcajes | Historial | `/attendance/history` | Usuario con lectura; corrección para Administrador o RRHH |
 | Operar el lector en pantalla completa | Kiosco | `/attendance/kiosk` | Usuario autenticado |
-| Gestionar empleados | Gestión de personal | `/employees` | Administrador o RRHH |
+| Gestionar empleados | Gestión de personal | `/employees` | Desarrollador o RRHH; Inspector solo consulta directorio operativo |
 | Administrar usuarios | Gestión de usuarios | `/users` | Administrador |
 | Organigrama | Organigrama TPV | `/organization` | Administrador |
 | Backups y sistema | Sistema y backups | `/system/backups` | Administrador o Sistemas |
@@ -40,7 +40,11 @@ La aplicación usa FastAPI, plantillas Jinja2, JavaScript del navegador y SQL Se
 
 El lector envía el código de tarjeta al proceso serial. El sistema identifica al empleado activo y alterna entre `ENTRADA` y `SALIDA`. Las lecturas demasiado cercanas se rechazan como duplicadas.
 
-Si SQL Server no está disponible, cada lectura válida del lector se conserva en una cola SQLite local (`app/backups/rfid_offline_queue.sqlite3`) con su hora e identidad de operación. Un proceso de sincronización la reintenta automáticamente cada cinco segundos al recuperar la conexión. La cola sobrevive al reinicio del servidor y está limitada por `RFID_OFFLINE_QUEUE_LIMIT` (1000 por defecto). Las tarjetas desconocidas, empleados suspendidos/retirados y duplicados no se reintentan.
+El lector RFID es atendido por el servicio independiente `rfid_agent` instalado en la PC de la garita. Cada lectura recibe allí su `timestamp_lectura` UTC con offset y se persiste primero en SQLite. Los errores de red, timeout y respuestas `5xx` conservan la cabeza de la cola FIFO con backoff exponencial y jitter; las respuestas `4xx` pasan a `rejected_scans` y no bloquean las siguientes lecturas. La cola no descarta automáticamente registros al llenarse.
+
+El agente envía las lecturas a `POST /api/v1/asistencia/lectura` usando una API key Bearer específica de la garita. El servidor conserva la hora histórica recibida y aplica las reglas centrales de asistencia. `timestamp_envio` permite advertir desfases del reloj sin confundir una lectura acumulada offline con una lectura reciente.
+
+El heartbeat se envía frecuentemente para detectar disponibilidad, pero el servidor solo persiste `last_seen` si cambió el estado o transcurrió `AGENT_HEARTBEAT_PERSIST_SECONDS` (60 segundos por defecto). La UI consulta ese estado remoto y muestra si el agente está en línea, tiene lecturas en cola o tiene el lector desconectado.
 
 El kiosco (`/attendance/kiosk`) muestra el resultado de la lectura y mantiene el foco preparado para la siguiente tarjeta.
 
@@ -81,7 +85,7 @@ La aplicación usa únicamente estos roles canónicos:
 | --- | --- | --- | --- |
 | `Desarrollador` | Lectura y administración de empleados, organización y usuarios | Lectura, registro y corrección | Backups y configuración |
 | `RRHH` | Lectura y administración de empleados | Lectura, registro y corrección | Sin administración |
-| `Inspector` | Solo lectura de empleados y estructura | Lectura, marcaje manual y kiosco | Sin administración |
+| `Inspector` | Directorio operativo: nombre, gerencia, departamento y estatus | Resumen completo, marcaje manual e historial | Sin fichas, edición, eliminación ni administración |
 
 La matriz se define en `app/core/auth.py`. Los módulos deben solicitar permisos por capacidad, no duplicar comparaciones de nombres de rol. Los nombres `Administrador`, `Consulta` y `Sistemas` no son roles implementados actualmente y no deben usarse en nuevas funciones.
 
@@ -111,7 +115,7 @@ node --check .\app\static\js\main.js
 git diff --check
 ```
 
-Cuando `SERIAL_PORT` esté configurado, la aplicación debe ejecutarse con un solo worker para evitar lecturas duplicadas. Las migraciones nuevas deben añadirse en `alembic/versions/`; no se deben corregir instalaciones existentes modificando solo el script inicial de SQL.
+El servidor central no requiere `SERIAL_PORT`; el puerto COM se configura únicamente en `rfid_agent.env`. Las migraciones nuevas deben añadirse en `alembic/versions/`; no se deben corregir instalaciones existentes modificando solo el script inicial de SQL.
 
 ## 6. Cómo documentar cada cambio futuro
 

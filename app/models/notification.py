@@ -8,7 +8,7 @@ class Notification(Base):
     __tablename__ = 'notificaciones'
     __table_args__ = (
         CheckConstraint("prioridad IN ('critica', 'advertencia', 'informativa')", name='CK_notificaciones_prioridad'),
-        CheckConstraint("tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica')", name='CK_notificaciones_tipo'),
+        CheckConstraint("tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica', 'empleado_registrado', 'empleado_estado_cambiado', 'marcaje_corregido', 'lector_estado_cambiado')", name='CK_notificaciones_tipo'),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -3,18 +3,14 @@
 {% block title %}Usuarios - MarcajeTPV{% endblock %}
 {% block page_title %}Usuarios del Sistema{% endblock %}
 
-{% block content %}
-<div class="section-header users-page-header">
-  <div class="stack-actions">
-  <button type="button" class="btn-ios primary" id="newUserButton">
-    <svg class="me-1" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-    </svg>
-    Nuevo usuario
+{% block actions %}
+  <button type="button" class="btn-ios primary btn-sm d-flex align-items-center gap-2" id="newUserButton">
+    <svg class="icon icon--sm" width="16" height="16" aria-hidden="true"><use href="/static/img/icons.svg#plus"></use></svg>
+    <span>Nuevo usuario</span>
   </button>
-  </div>
-</div>
+{% endblock %}
 
+{% block content %}
 <div class="card card-table border-0 shadow-sm rounded-4 overflow-hidden">
   <div class="card-header-toolbar p-3 border-bottom bg-white">
     <div class="row g-2 align-items-center justify-content-between">
@@ -64,7 +60,7 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label fw-semibold" for="username">Nombre de usuario</label>
-            <input class="form-control" id="username" name="username" autocomplete="username" pattern="[-a-zA-Z0-9._]+" minlength="3" maxlength="50" required placeholder="ej. jperez">
+            <input class="form-control" id="username" name="username" autocomplete="username" pattern="[a-zA-Z0-9._-]+" minlength="3" maxlength="50" required placeholder="ej. jperez">
             <small class="form-text text-muted">Letras, números, punto, guion o guion bajo.</small>
           </div>
           <div class="mb-3">
@@ -82,6 +78,13 @@
               <option value="RRHH">RRHH</option>
               <option value="Desarrollador">Desarrollador</option>
               <option value="Inspector" selected>Inspector</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="userStatus">Estado</label>
+            <select class="form-select" id="userStatus" name="activo">
+              <option value="true">Activo</option>
+              <option value="false">Suspendido</option>
             </select>
           </div>
           <p id="userFormMessage" class="form-feedback mb-0" role="status" aria-live="polite"></p>
@@ -108,6 +111,7 @@
     const passwordInput = document.getElementById('userPassword');
     const passwordHint = document.getElementById('passwordHint');
     const roleInput = document.getElementById('userRole');
+    const statusInput = document.getElementById('userStatus');
     const cancelEditButton = document.getElementById('cancelEditButton');
     const userModalEl = document.getElementById('userModal');
     const usersPagination = document.getElementById('usersPagination');
@@ -148,6 +152,7 @@
       passwordInput.required = true;
       passwordInput.value = '';
       roleInput.value = 'Inspector';
+      statusInput.value = 'true';
       passwordHint.textContent = 'Mínimo 10 caracteres. Almacenada con hashing seguro.';
     };
 
@@ -162,6 +167,7 @@
       document.getElementById('username').value = user.username;
       document.getElementById('userName').value = user.nombre;
       roleInput.value = user.rol;
+      statusInput.value = user.activo ? 'true' : 'false';
       
       getModalInstance().show();
       setTimeout(() => document.getElementById('username').focus(), 150);
@@ -193,7 +199,7 @@
         const tdStatus = document.createElement('td');
         tdStatus.innerHTML = user.activo
           ? '<span class="user-status-badge user-status-badge--active">Activo</span>'
-          : '<span class="user-status-badge user-status-badge--inactive">Inactivo</span>';
+          : '<span class="user-status-badge user-status-badge--inactive">Suspendido</span>';
 
         const tdActions = document.createElement('td');
         tdActions.className = 'text-end pe-3';
@@ -275,6 +281,11 @@
         const payload = Object.fromEntries(new FormData(form).entries());
         if (isEditing && !payload.password) {
           delete payload.password;
+        }
+        if (isEditing) {
+          payload.activo = statusInput.value === 'true';
+        } else {
+          delete payload.activo;
         }
 
         const response = await fetch(isEditing ? `/api/users/${editingUser.id}` : '/api/users', {

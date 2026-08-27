@@ -24,6 +24,7 @@ class UsuarioUpdate(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=150)
     password: str | None = Field(None, min_length=10, max_length=128)
     rol: Role = 'Inspector'
+    activo: bool | None = None
 
     @field_validator('username', 'nombre', 'password', mode='before')
     @classmethod

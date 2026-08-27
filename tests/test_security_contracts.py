@@ -107,7 +107,7 @@ class SecurityContractTest(unittest.TestCase):
         for route in api_routes:
             dependency_names = {dependency.call.__name__ for dependency in route.dependant.dependencies}
             self.assertTrue(
-                {'require_read_access', 'require_employee_manager', 'require_developer'} & dependency_names,
+                {'require_read_access', 'require_employee_manager', 'require_developer', 'require_manual_attendance'} & dependency_names,
                 route.path,
             )
 

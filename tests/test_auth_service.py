@@ -128,6 +128,16 @@ class AuthServiceTest(unittest.TestCase):
 
         db.add.assert_not_called()
 
+    def test_disabling_user_invalidates_existing_sessions(self):
+        db = MagicMock()
+        user = Usuario(id=2, rol='Inspector', activo=1)
+        db.query.return_value.filter.return_value.first.return_value = user
+        db.query.return_value.filter.return_value.delete.return_value = 2
+
+        set_user_status(db, 2, False, actor_id=1)
+
+        db.query.return_value.filter.return_value.delete.assert_called_once_with(synchronize_session=False)
+
 
 if __name__ == '__main__':
     unittest.main()

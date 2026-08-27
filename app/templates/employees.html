@@ -4,19 +4,20 @@
 {% block page_title %}Directorio de Empleados{% endblock %}
 
 {% block top_search %}{% endblock %}
-{% block actions %}{% endblock %}
+
+{% block actions %}
+  {% if user.rol != 'Inspector' %}
+    <button id="newBtn" type="button" class="btn-ios primary btn-sm d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#employeeModal">
+      <svg class="icon icon--sm" width="16" height="16" aria-hidden="true"><use href="/static/img/icons.svg#plus"></use></svg>
+      <span>Nuevo Empleado</span>
+    </button>
+  {% endif %}
+{% endblock %}
 
 {% block content %}
 {% from 'components.html' import kpi_card %}
 
-<div class="row employees-actions justify-content-end mb-4 g-3 {% if user.rol == 'Inspector' %}d-none{% endif %}">
-  <div class="col-auto d-flex gap-2">
-    <button id="viewStructureBtn" type="button" class="btn-ios secondary">Ver estructura</button>
-    <button id="newBtn" type="button" class="btn-ios primary" data-bs-toggle="modal" data-bs-target="#employeeModal">Nuevo registro</button>
-  </div>
-</div>
-
-<div class="row employees-kpis g-3 mb-4">
+<div class="row employees-kpis g-3 mb-4{% if user.rol == 'Inspector' %} d-none{% endif %}">
   <div class="col-12 col-sm-6 col-md-4">
     {{ kpi_card('Total empleados activos', 'metric-active', tone='green', icon_name='users') }}
   </div>
@@ -59,11 +60,11 @@
               <option value="Suspendido">Suspendido</option>
             </select>
           </div>
-          <div class="employee-filter-field">
+          {% if user.rol != 'Inspector' %}<div class="employee-filter-field">
             <select id="tipoNominaFilter" class="form-select form-select-sm">
               <option value="">Tipo de nómina</option>
             </select>
-          </div>
+          </div>{% endif %}
           <div class="employee-filter-field employee-filter-field--clear">
             <button type="button" class="btn-ios ghost btn-sm w-100 d-flex justify-content-center align-items-center" id="clearFiltersBtn" title="Limpiar filtros" aria-label="Limpiar filtros">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -82,15 +83,17 @@
     </div>
 
     <div class="table-responsive">
-      <table id="employeesTable" class="table ios-table align-middle mb-0" data-can-manage="{{ 'true' if user.rol in ('Desarrollador', 'RRHH') else 'false' }}">
+      <table id="employeesTable" class="table ios-table align-middle mb-0" data-role="{{ user.rol }}" data-can-manage="{{ 'true' if user.rol in ('Desarrollador', 'RRHH') else 'false' }}">
         <thead class="bg-light">
           <tr>
             <th class="ps-4">Empleado</th>
-            <th>Cédula</th>
+            {% if user.rol == 'Inspector' %}<th>Foto</th>{% endif %}
+            {% if user.rol != 'Inspector' %}<th>Cédula</th>{% endif %}
             <th>Gerencia / Dpto</th>
-            <th>Cargo</th>
+            {% if user.rol != 'Inspector' %}<th>Cargo</th>{% endif %}
+            {% if user.rol == 'Inspector' %}<th>Contacto</th><th>Emergencia</th>{% endif %}
             <th>Estatus</th>
-            <th class="text-end pe-4">Acciones</th>
+            {% if user.rol != 'Inspector' %}<th class="text-end pe-4">Acciones</th>{% endif %}
           </tr>
         </thead>
         <tbody id="employeesList"></tbody>
@@ -144,7 +147,7 @@
               </div>
               <div class="col-md-6">
                 <label class="form-label fw-medium" for="codigo_tarjeta">Código de tarjeta RFID</label>
-                <input id="codigo_tarjeta" name="codigo_tarjeta" type="text"class="form-control" placeholder="Código leído por el lector">
+                <input id="codigo_tarjeta" name="codigo_tarjeta" type="text" class="form-control" placeholder="Código leído por el lector">
                 <div class="form-text">Escríbelo o escanéalo para leerlo automáticamente.</div>
               </div>
               <div class="col-md-6">
@@ -270,7 +273,7 @@
       <div class="modal-body p-4">
         <div id="employeeProfileError" class="auth-error d-none" role="alert"></div>
         <div class="employee-profile-header">
-          <img id="profileEmployeePhoto" class="employee-profile-photo" src="/static/img/default-avatar.svg" alt="">
+          <img id="profileEmployeePhoto" class="employee-profile-photo" src="/static/img/default-avatar.svg" alt="Empleado" data-photo-name="Empleado" tabindex="0">
           <div><h2 id="profileEmployeeName" class="h5 mb-1">--</h2><p id="profileEmployeeOrg" class="text-muted mb-0">--</p></div>
         </div>
         <section class="employee-profile-section"><h3>Información Personal y Laboral</h3><div id="profilePersonalData" class="employee-profile-grid"></div></section>

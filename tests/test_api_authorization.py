@@ -54,15 +54,20 @@ class ApiAuthorizationTest(unittest.TestCase):
             ('GET', '/api/attendance/present', None),
             ('GET', '/api/attendance/filter-options', None),
             ('GET', '/api/attendance/denied-events', None),
+            ('POST', '/api/attendance/alerts/' + ('a' * 64) + '/dismiss', None),
+            ('GET', '/api/attendance/manual-employees', None),
             ('POST', '/api/attendance/kiosk-scan', {}),
             ('GET', '/api/notifications', None),
-            ('GET', '/api/live', None),
             ('PATCH', '/api/notifications/read', None),
             ('DELETE', '/api/notifications/1', None),
         ]
         for method, path, payload in requests:
             response = self.client.request(method, path, json=payload)
             self.assertEqual(response.status_code, 401, f'{method} {path}: {response.text}')
+
+        with self.assertRaises(Exception):
+            with self.client.websocket_connect('/api/ws'):
+                pass
 
     def test_html_pages_redirect_to_login_without_exposing_json(self):
         for path in ('/users', '/employees', '/organization', '/attendance/summary'):

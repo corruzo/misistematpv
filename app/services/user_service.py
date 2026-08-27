@@ -67,15 +67,25 @@ def update_user(db: Session, user_id: int, payload: UsuarioUpdate, actor_id: int
         raise ValueError('Ya existe otro usuario con ese nombre.')
     if not username or not nombre:
         raise ValueError('El usuario y el nombre son obligatorios.')
+    previous_role = usuario.rol
+    previous_active = bool(usuario.activo)
     if actor_id == usuario.id and payload.rol != ROLE_DEVELOPER:
         raise ValueError('No puedes quitarte el rol de Desarrollador.')
-    if usuario.rol == ROLE_DEVELOPER and payload.rol != ROLE_DEVELOPER and db.query(Usuario).filter(Usuario.rol == ROLE_DEVELOPER, Usuario.activo == 1).count() <= 1:
+    if previous_role == ROLE_DEVELOPER and payload.rol != ROLE_DEVELOPER and previous_active and db.query(Usuario).filter(Usuario.rol == ROLE_DEVELOPER, Usuario.activo == 1, Usuario.id != user_id).count() < 1:
+        raise ValueError('Debe existir al menos un Desarrollador activo.')
+    if payload.activo is False and actor_id == usuario.id:
+        raise ValueError('No puedes inhabilitar tu propio usuario.')
+    if payload.activo is False and previous_role == ROLE_DEVELOPER and previous_active and payload.rol == ROLE_DEVELOPER and db.query(Usuario).filter(Usuario.rol == ROLE_DEVELOPER, Usuario.activo == 1, Usuario.id != user_id).count() < 1:
         raise ValueError('Debe existir al menos un Desarrollador activo.')
 
     antes = {'username': usuario.username, 'nombre': usuario.nombre, 'rol': usuario.rol, 'activo': bool(usuario.activo)}
     usuario.username = username
     usuario.nombre = nombre
     usuario.rol = payload.rol
+    if payload.activo is not None:
+        usuario.activo = 1 if payload.activo else 0
+        if not payload.activo:
+            invalidate_user_sessions(db, usuario.id)
     if payload.password:
         usuario.password_hash = hash_password(payload.password)
         invalidate_user_sessions(db, usuario.id)
@@ -96,6 +106,8 @@ def set_user_status(db: Session, user_id: int, active: bool, actor_id: int | Non
         raise ValueError('Debe existir al menos un Desarrollador activo.')
     antes = {'activo': bool(usuario.activo)}
     usuario.activo = 1 if active else 0
+    if not active:
+        invalidate_user_sessions(db, usuario.id)
     db.add(usuario)
     add_audit(db, actor_id, 'cambio_estado', 'usuarios', usuario.id, antes, {'activo': bool(usuario.activo)})
     db.commit()

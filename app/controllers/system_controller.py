@@ -12,7 +12,6 @@ from app.core.config import BACKUP_INTERVAL_SECONDS, DEFAULT_PAGE_SIZE, STATIC_D
 from app.database.session import get_db
 from app.services.backup_service import backup_path, create_backup, list_backups
 from app.services.notification_service import publish_technical
-from app.services.live_bus import notify_live_change
 
 
 logger = logging.getLogger(__name__)
@@ -43,7 +42,6 @@ def api_create_backup(db: Session = Depends(get_db), _user=Depends(require_devel
         try:
             publish_technical(db, 'Falla de backup', 'No se pudo crear la copia de seguridad. Revise los logs del sistema.')
             db.commit()
-            notify_live_change()
         except SQLAlchemyError:
             db.rollback()
         logger.exception('No se pudo crear el backup manual.')
@@ -73,7 +71,6 @@ def run_scheduled_backup() -> None:
         try:
             publish_technical(db, 'Falla de backup automático', 'Falló la creación automática de la copia de seguridad. Revise los logs del sistema.')
             db.commit()
-            notify_live_change()
         except SQLAlchemyError:
             db.rollback()
         logger.exception('Falló la copia de seguridad automática.')

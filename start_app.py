@@ -89,7 +89,7 @@ def main():
     if not install_deps:
         check_code = (
             "import fastapi, uvicorn, sqlalchemy, alembic, pyodbc, dotenv, jinja2, "
-            "multipart, aiofiles, serial, importlib.metadata as metadata; metadata.version('tzdata')"
+            "multipart, aiofiles, importlib.metadata as metadata; metadata.version('tzdata')"
         )
         if run_cmd([active_python, "-c", check_code]) != 0:
             install_deps = True

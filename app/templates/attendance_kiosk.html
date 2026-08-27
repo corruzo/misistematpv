@@ -18,7 +18,7 @@
         <p>El sistema registrará automáticamente tu entrada o salida.</p>
       </div>
       <div class="kiosk-result d-none" id="kioskResult">
-        <img id="kioskPhoto" class="kiosk-photo" src="/static/img/default-avatar.svg" alt="">
+        <img id="kioskPhoto" class="kiosk-photo" src="/static/img/default-avatar.svg" alt="Empleado" data-photo-name="Empleado" tabindex="0">
         <div class="kiosk-result__info">
           <p class="eyebrow" id="kioskEventLabel">Marcaje registrado</p>
           <h1 id="kioskEmployeeName">Empleado</h1>
@@ -58,6 +58,8 @@
     let lastDisplayedEventId = 0;
     let lastDisplayedEventTime = 0;
     let resultTimer = null;
+    let latestPollingTimer = null;
+    let clockTimer = null;
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     const csrfHeaders = () => {
       const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
@@ -111,12 +113,19 @@
       if (event.data?.code === 'employee_access_denied') showAccessDenied(event.data);
       else if (event.data?.id) showResult(event.data);
     });
-    const liveSource = 'EventSource' in window ? new EventSource('/api/live') : null;
-    liveSource?.addEventListener('attendance', (event) => {
-      try { showResult(JSON.parse(event.data)); } catch (error) {}
+    const websocketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const liveSocket = 'WebSocket' in window ? new WebSocket(`${websocketProtocol}//${window.location.host}/api/ws`) : null;
+    liveSocket?.addEventListener('message', (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'attendance') showResult(message.payload);
+        if (message.type === 'access_denied') showAccessDenied(message.payload);
+      } catch (error) {}
     });
-    liveSource?.addEventListener('access_denied', (event) => {
-      try { showAccessDenied(JSON.parse(event.data)); } catch (error) {}
+    window.addEventListener('pagehide', () => {
+      liveSocket?.close();
+      if (latestPollingTimer) window.clearTimeout(latestPollingTimer);
+      if (clockTimer) window.clearInterval(clockTimer);
     });
     const pollLatestAttendance = async () => {
       try {
@@ -136,7 +145,7 @@
         pollingInitialized = true;
       } catch (error) {
       }
-      window.setTimeout(pollLatestAttendance, 60000);
+      latestPollingTimer = window.setTimeout(pollLatestAttendance, 60000);
     };
     const updateClock = () => {
       document.getElementById('kioskClock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -160,7 +169,7 @@
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') event.preventDefault(); });
     keepFocus();
     updateClock();
-    window.setInterval(updateClock, 1000);
+    clockTimer = window.setInterval(updateClock, 1000);
     pollLatestAttendance();
   })();
   </script>

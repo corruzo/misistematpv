@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone, date
+import hashlib
 import uuid
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -8,11 +9,11 @@ from sqlalchemy import and_, func, or_
 from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado, EstadoEnum
 from app.models.manual_frequent_employee import ManualFrequentEmployee
+from app.models.alert_dismissal import AlertDismissal
 from app.models.organization import Departamento
 from app.schemas.attendance import AttendanceHistoryPage, AttendanceOrigin, AttendanceRecordOut, AttendanceSummary, AttendanceType
 from app.services.audit_service import add_audit
-from app.services.live_bus import notify_live_change
-from app.services.notification_service import publish_exception_mark
+from app.services.notification_service import publish_attendance_corrected, publish_exception_mark
 from app.core.datetime_utils import LOCAL_TIMEZONE, as_utc, local_day_start_as_utc, to_local, utc_now
 from app.core.config import ATTENDANCE_HISTORY_DEFAULT_DAYS, PRESENT_EMPLOYEES_LIMIT, PROLONGED_STAY_HOURS
 
@@ -25,11 +26,69 @@ class AttendanceError(ValueError):
 
 
 class EmployeeAccessDeniedError(AttendanceError):
-    def __init__(self, employee: Empleado):
+    def __init__(self, employee: Empleado, marked_at: datetime | None = None):
         self.employee_id = employee.id
         self.employee_name = employee.nombre_apellido
         self.employee_status = employee.estado.value if isinstance(employee.estado, EstadoEnum) else str(employee.estado)
+        self.marked_at = marked_at
         super().__init__('El empleado no está activo.')
+
+
+def attendance_records_are_too_close(previous_time: datetime, current_time: datetime) -> bool:
+    return timedelta(0) <= current_time - previous_time < timedelta(seconds=DEBOUNCE_SECONDS)
+
+
+def build_attendance_alerts(today_records, overnight_records, employee_label, present_records, now):
+    records_by_employee = {}
+    for record in overnight_records:
+        records_by_employee[record.empleado_id] = [record]
+    for record in today_records:
+        records_by_employee.setdefault(record.empleado_id, []).append(record)
+
+    alerts = []
+    today_employee_ids = {record.empleado_id for record in today_records}
+    for employee_id, records in records_by_employee.items():
+        records.sort(key=lambda record: (record.fecha_hora, record.id))
+        previous = records[0]
+        for record in records[1:]:
+            if record.fecha_hora < today_records[0].fecha_hora if today_records else False:
+                previous = record
+                continue
+            interval = (record.fecha_hora - previous.fecha_hora).total_seconds()
+            same_type = previous.tipo == record.tipo
+            if same_type:
+                alerts.append({
+                    'kind': 'sequence',
+                    'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes {record.tipo.lower()} consecutivos. Entre {to_local(previous.fecha_hora).isoformat()} y {to_local(record.fecha_hora).isoformat()}.',
+                })
+            elif 0 <= interval < DEBOUNCE_SECONDS:
+                alerts.append({
+                    'kind': 'sequence',
+                    'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes en {interval:.1f} segundos. Entre {to_local(previous.fecha_hora).isoformat()} y {to_local(record.fecha_hora).isoformat()}.',
+                })
+            if record.tipo == AttendanceType.SALIDA.value and not any(
+                item.tipo == AttendanceType.ENTRADA.value for item in records[:records.index(record)]
+            ):
+                alerts.append({
+                    'kind': 'sequence',
+                    'message': f'El empleado {employee_label(employee_id)} tiene una salida sin entrada previa ({to_local(record.fecha_hora).isoformat()}).',
+                })
+            previous = record
+
+        if employee_id not in today_employee_ids and records[-1].tipo == AttendanceType.ENTRADA.value:
+            alerts.append({
+                'kind': 'sequence',
+                'message': f'El empleado {employee_label(employee_id)} podría permanecer dentro desde el día anterior. Último marcaje: {to_local(records[-1].fecha_hora).isoformat()}.',
+            })
+
+    for record in present_records:
+        entry_time = record['entrada']
+        if entry_time and now - as_utc(entry_time) >= timedelta(hours=PROLONGED_STAY_HOURS):
+            alerts.append({
+                'kind': 'sequence',
+                'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro. Entrada: {to_local(entry_time).isoformat()}.',
+            })
+    return alerts
 
 
 def _register_employee(
@@ -47,9 +106,6 @@ def _register_employee(
         locked_employee = with_hint(Empleado, 'WITH (UPDLOCK, ROWLOCK)', 'mssql').populate_existing().first()
         if locked_employee:
             employee = locked_employee
-    if employee.estado in (EstadoEnum.Retirado, EstadoEnum.Suspendido):
-        raise EmployeeAccessDeniedError(employee)
-
     if operation_id:
         existing = db.query(AttendanceRecord).filter(AttendanceRecord.operacion_id == operation_id).first()
         if existing:
@@ -69,6 +125,10 @@ def _register_employee(
             raise AttendanceError('Lectura duplicada. Espera unos segundos antes de volver a marcar.')
 
     next_type = attendance_type or (AttendanceType.SALIDA if last_record and last_record.tipo == AttendanceType.ENTRADA.value else AttendanceType.ENTRADA)
+    if employee.estado in (EstadoEnum.Retirado, EstadoEnum.Suspendido):
+        has_open_entry = last_record and last_record.tipo == AttendanceType.ENTRADA.value
+        if next_type != AttendanceType.SALIDA or not has_open_entry:
+            raise EmployeeAccessDeniedError(employee, now)
     _validate_attendance_sequence(next_type, last_record, next_record)
     record = AttendanceRecord(empleado_id=employee.id, tipo=next_type.value, fecha_hora=now, origen=origen.value, operacion_id=operation_id)
     db.add(record)
@@ -78,7 +138,6 @@ def _register_employee(
             'empleado_id': record.empleado_id, 'tipo': record.tipo, 'origen': record.origen,
         })
         db.commit()
-        notify_live_change()
     except IntegrityError:
         db.rollback()
         raise AttendanceError('No se pudo registrar el marcaje.')
@@ -165,7 +224,6 @@ def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
             if not result.codigo_tarjeta:
                 publish_exception_mark(db, result.empleado_nombre, result.empleado_id)
                 db.commit()
-                notify_live_change()
         except EmployeeAccessDeniedError as exc:
             errors.append({
                 'empleado_id': exc.employee_id,
@@ -256,6 +314,7 @@ def correct_attendance(
     new_type = attendance_type.value if attendance_type is not None else record.tipo
     new_employee_id = employee.id
     old_values = {'empleado_id': record.empleado_id, 'tipo': record.tipo, 'fecha_hora': record.fecha_hora, 'origen': record.origen}
+    old_type = record.tipo
     new_values = {'empleado_id': new_employee_id, 'tipo': new_type, 'fecha_hora': normalized_time, 'origen': record.origen, 'motivo': reason}
     if old_values == {key: value for key, value in new_values.items() if key != 'motivo'}:
         raise AttendanceError('Debes cambiar al menos un valor del marcaje.')
@@ -266,8 +325,8 @@ def correct_attendance(
     record.fecha_hora = normalized_time
     try:
         add_audit(db, usuario_id, 'correccion_marcaje', 'marcajes_asistencia', record.id, antes=old_values, despues=new_values)
+        publish_attendance_corrected(db, employee.nombre_apellido, old_type, new_type, reason, usuario_id)
         db.commit()
-        notify_live_change()
     except SQLAlchemyError:
         db.rollback()
         raise AttendanceError('No se pudo guardar la corrección.')
@@ -422,7 +481,23 @@ def list_present_employees(db: Session):
     ]
 
 
-def inspector_dashboard(db: Session):
+def alert_id(kind: str, message: str) -> str:
+    return hashlib.sha256(f'{kind}:{message}'.encode('utf-8')).hexdigest()
+
+
+def dismiss_alert(db: Session, user_id: int, alert_identifier: str) -> bool:
+    existing = db.query(AlertDismissal).filter(
+        AlertDismissal.usuario_id == user_id,
+        AlertDismissal.alerta_id == alert_identifier,
+    ).first()
+    if existing:
+        return False
+    db.add(AlertDismissal(usuario_id=user_id, alerta_id=alert_identifier))
+    db.commit()
+    return True
+
+
+def inspector_dashboard(db: Session, user_id: int | None = None):
     start = local_day_start_as_utc()
     now = utc_now()
     summary = attendance_summary(db).model_dump()
@@ -435,11 +510,24 @@ def inspector_dashboard(db: Session):
     ).limit(5).all()
     alert_records = db.query(AttendanceRecord).filter(
         AttendanceRecord.fecha_hora >= start
-    ).order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).limit(100).all()
+    ).order_by(AttendanceRecord.fecha_hora.asc(), AttendanceRecord.id.asc()).limit(100).all()
     alert_employee_ids = {record.empleado_id for record in alert_records}
+    overnight_records = db.query(AttendanceRecord).filter(
+        AttendanceRecord.fecha_hora < start,
+    ).order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).limit(PRESENT_EMPLOYEES_LIMIT * 3).all()
+    latest_overnight = {}
+    for record in overnight_records:
+        latest_overnight.setdefault(record.empleado_id, record)
+    alert_employee_ids.update(latest_overnight)
     alert_employees = {
         employee.id: employee for employee in db.query(Empleado).filter(Empleado.id.in_(alert_employee_ids)).all()
     } if alert_employee_ids else {}
+    overnight_employee_ids = set(latest_overnight) - set(alert_employees)
+    if overnight_employee_ids:
+        alert_employees.update(
+            (employee.id, employee)
+            for employee in db.query(Empleado).filter(Empleado.id.in_(overnight_employee_ids)).all()
+        )
     def employee_label(employee_id):
         employee = alert_employees.get(employee_id)
         return employee.nombre_apellido if employee else f'#{employee_id}'
@@ -448,41 +536,31 @@ def inspector_dashboard(db: Session):
     employee_last_times = {}
     employee_has_entry = {}
     alerts = []
+    for employee_id, record in latest_overnight.items():
+        employee_has_entry[employee_id] = record.tipo == AttendanceType.ENTRADA.value
+        employee_types[employee_id] = record.tipo
+        employee_last_times[employee_id] = record.fecha_hora
     for record in alert_records:
         previous_type = employee_types.get(record.empleado_id)
         if previous_type == record.tipo:
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene dos marcajes {record.tipo.lower()} consecutivos.'})
+            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene dos marcajes {record.tipo.lower()} consecutivos. Último: {to_local(record.fecha_hora).isoformat()}.'})
         previous_time = employee_last_times.get(record.empleado_id)
-        if previous_time is not None and previous_time - record.fecha_hora < timedelta(seconds=DEBOUNCE_SECONDS):
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene marcajes demasiado cercanos.'})
+        if previous_time is not None and attendance_records_are_too_close(previous_time, record.fecha_hora):
+            interval = (record.fecha_hora - previous_time).total_seconds()
+            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene marcajes demasiado cercanos: {interval:.1f} segundos entre {to_local(previous_time).isoformat()} y {to_local(record.fecha_hora).isoformat()}.'})
         if record.tipo == AttendanceType.SALIDA.value and not employee_has_entry.get(record.empleado_id, False):
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene una salida sin entrada previa.'})
-        employee = alert_employees.get(record.empleado_id)
-        if employee and employee.estado in (EstadoEnum.Retirado, EstadoEnum.Suspendido):
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee.nombre_apellido} marcó estando {str(employee.estado.value).lower()}.'})
-        employee_has_entry[record.empleado_id] = employee_has_entry.get(record.empleado_id, False) or record.tipo == AttendanceType.ENTRADA.value
+            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene una salida sin entrada previa ({to_local(record.fecha_hora).isoformat()}).'})
+        employee_has_entry[record.empleado_id] = record.tipo == AttendanceType.ENTRADA.value
         employee_last_times[record.empleado_id] = record.fecha_hora
         employee_types[record.empleado_id] = record.tipo
-    overnight_records = db.query(AttendanceRecord).filter(
-        AttendanceRecord.fecha_hora < start,
-    ).order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).limit(PRESENT_EMPLOYEES_LIMIT * 3).all()
-    latest_overnight = {}
-    for record in overnight_records:
-        latest_overnight.setdefault(record.empleado_id, record)
-    overnight_employee_ids = set(latest_overnight) - set(alert_employees)
-    if overnight_employee_ids:
-        alert_employees.update(
-            (employee.id, employee)
-            for employee in db.query(Empleado).filter(Empleado.id.in_(overnight_employee_ids)).all()
-        )
     today_employee_ids = {record.empleado_id for record in alert_records}
     for record in latest_overnight.values():
         if record.tipo == AttendanceType.ENTRADA.value and record.empleado_id not in today_employee_ids:
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} podría permanecer dentro desde el día anterior.'})
+            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} podría permanecer dentro desde el día anterior. Último marcaje: {to_local(record.fecha_hora).isoformat()}.'})
     for record in list_present_employees(db):
         entry_time = record['entrada']
         if entry_time and now - as_utc(entry_time) >= timedelta(hours=PROLONGED_STAY_HOURS):
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro.'})
+            alerts.append({'kind': 'sequence', 'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro. Entrada: {to_local(entry_time).isoformat()}.'})
     marked_employee_ids = db.query(AttendanceRecord.empleado_id).filter(AttendanceRecord.fecha_hora >= start).distinct().subquery()
     expected_employees = db.query(Empleado).options(
         joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
@@ -491,6 +569,16 @@ def inspector_dashboard(db: Session):
         Empleado.estado == EstadoEnum.Activo,
         ~Empleado.id.in_(db.query(marked_employee_ids.c.empleado_id)),
     ).order_by(Empleado.nombre_apellido.asc()).limit(PRESENT_EMPLOYEES_LIMIT).all()
+    visible_alerts = []
+    dismissed_ids = set()
+    if user_id is not None:
+        dismissed_ids = {
+            item.alerta_id for item in db.query(AlertDismissal.alerta_id).filter(AlertDismissal.usuario_id == user_id).all()
+        }
+    for alert in alerts:
+        alert['id'] = alert_id(alert['kind'], alert['message'])
+        if alert['id'] not in dismissed_ids:
+            visible_alerts.append(alert)
     return {
         'summary': summary,
         'present': present,
@@ -499,5 +587,5 @@ def inspector_dashboard(db: Session):
             {'id': employee.id, 'nombre_apellido': employee.nombre_apellido, 'departamento': employee.departamento or 'Sin departamento', 'gerencia': employee.gerencia or 'Sin gerencia'}
             for employee in expected_employees
         ],
-        'alerts': alerts[:10],
+        'alerts': visible_alerts[:10],
     }

@@ -45,6 +45,13 @@
   }
 
   window.bootstrap = window.bootstrap || { Modal: LocalModal };
+  const closePhotoViewer = () => {
+    const viewer = document.getElementById('photoViewer');
+    if (!viewer) return;
+    viewer.classList.remove('is-open');
+    viewer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('photo-viewer-open');
+  };
   window.AppUI = {
     csrfHeaders() {
       const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
@@ -128,13 +135,31 @@
       });
       return container;
     },
+    openPhoto(src, name) {
+      const viewer = document.getElementById('photoViewer');
+      if (!viewer) return;
+      viewer.querySelector('.photo-viewer__image').src = src || '/static/img/default-avatar.svg';
+      viewer.querySelector('.photo-viewer__name').textContent = name || 'Empleado';
+      viewer.classList.add('is-open');
+      viewer.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('photo-viewer-open');
+      viewer.querySelector('.photo-viewer__close')?.focus();
+    },
   };
+
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('.employee-photo-trigger, #profileEmployeePhoto, #kioskPhoto');
+    if (trigger) window.AppUI.openPhoto(trigger.dataset.photoSrc || trigger.src, trigger.dataset.photoName || trigger.alt);
+    if (event.target.closest('.photo-viewer__close') || event.target.id === 'photoViewer') closePhotoViewer();
+  });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePhotoViewer(); });
 
   const NotificationApp = {
     items: [],
     lastId: 0,
     unread: 0,
     initialized: false,
+    pollTimer: null,
     init() {
       this.trigger = document.getElementById('notificationTrigger');
       this.panel = document.getElementById('notificationPanel');
@@ -177,7 +202,7 @@
       } catch (error) {
         // The next poll retries transient connection failures.
       } finally {
-        window.setTimeout(() => this.poll(), 60000);
+        this.pollTimer = window.setTimeout(() => this.poll(), 60000);
       }
     },
     receive(item) {
@@ -223,15 +248,38 @@
   };
 
   const LiveUpdates = {
+    source: null,
+    wasDisconnected: false,
+    reconnectTimer: null,
     start() {
-      if (!window.EventSource) return;
-      const source = new EventSource('/api/live');
-      ['attendance', 'access_denied', 'notification'].forEach((eventType) => {
-        source.addEventListener(eventType, (event) => {
-          try { window.dispatchEvent(new CustomEvent(`app:${eventType}`, { detail: JSON.parse(event.data) })); } catch (error) {}
-        });
-      });
-      source.onerror = () => {};
+      if (!window.WebSocket || this.source) return;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.source = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+      this.source.onopen = () => {
+        const reconnected = this.wasDisconnected;
+        this.wasDisconnected = false;
+        if (reconnected) window.dispatchEvent(new CustomEvent('app:live-reconnected'));
+      };
+      this.source.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type) window.dispatchEvent(new CustomEvent(`app:${message.type}`, { detail: message.payload }));
+        } catch (error) {}
+      };
+      this.source.onerror = () => {
+        this.wasDisconnected = true;
+        window.dispatchEvent(new CustomEvent('app:live-disconnected'));
+      };
+      this.source.onclose = () => {
+        this.source = null;
+        this.reconnectTimer = window.setTimeout(() => this.start(), 3000);
+      };
+    },
+    stop() {
+      if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+      this.source?.close();
+      this.source = null;
     },
   };
 
@@ -249,18 +297,38 @@
   document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.sidebar-wide');
     const toggle = document.getElementById('sidebarToggle');
-    toggle?.addEventListener('click', () => sidebar?.classList.toggle('sidebar-open'));
-    sidebar?.addEventListener('click', (event) => {
-      if (event.target === sidebar) sidebar.classList.remove('sidebar-open');
-    });
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const setSidebarOpen = (open) => {
+      sidebar?.classList.toggle('sidebar-open', open);
+      document.body.classList.toggle('sidebar-is-open', open);
+      toggle?.setAttribute('aria-expanded', String(open));
+    };
+    toggle?.setAttribute('aria-expanded', 'false');
+    toggle?.addEventListener('click', () => setSidebarOpen(!sidebar?.classList.contains('sidebar-open')));
+    backdrop?.addEventListener('click', () => setSidebarOpen(false));
+    sidebar?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setSidebarOpen(false)));
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') sidebar?.classList.remove('sidebar-open');
+      if (event.key === 'Escape') setSidebarOpen(false);
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) setSidebarOpen(false);
     });
 
     EmployeeApp.init();
     NotificationApp.init();
     LiveUpdates.start();
-    window.addEventListener('app:notification', (event) => NotificationApp.receive(event.detail));
+    window.addEventListener('app:notification', (event) => {
+      NotificationApp.receive(event.detail);
+      if (['empleado_registrado', 'empleado_estado_cambiado'].includes(event.detail?.tipo)) {
+        EmployeeApp.fetchEmployees();
+      }
+    });
+    window.addEventListener('app:employee_changed', () => EmployeeApp.fetchEmployees());
+    window.addEventListener('pagehide', () => {
+      NotificationApp.pollTimer && window.clearTimeout(NotificationApp.pollTimer);
+      LiveUpdates.stop();
+    });
+    window.addEventListener('pageshow', () => LiveUpdates.start());
   });
 
   const state = {
@@ -285,6 +353,15 @@
     organizationCatalog: [],
     organizationCatalogPromise: null,
 
+    getPhotoUrl(value) {
+      const defaultAvatar = '/static/img/default-avatar.svg';
+      const photoPath = String(value || '').trim();
+      if (!photoPath) return defaultAvatar;
+      if (/^(https?:)?\/\//.test(photoPath) || photoPath.startsWith('/static/')) return photoPath;
+      const normalizedPath = photoPath.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+      return `/static/${normalizedPath}`;
+    },
+
     init() {
       this.modal = document.getElementById('employeeModal');
       this.form = document.getElementById('employeeForm');
@@ -295,14 +372,14 @@
       this.paginationInfo = document.getElementById('paginationInfo');
       this.loader = document.getElementById('employeesLoader');
       this.canManage = document.getElementById('employeesTable')?.dataset.canManage === 'true';
+      this.isInspector = document.getElementById('employeesTable')?.dataset.role === 'Inspector';
 
-      if (!this.form || !this.list) return;
+      if (!this.list) return;
 
-      this.bindEvents();
-      this.ensureOrganizationCatalog().finally(() => {
-        this.populateFilterSelects();
-        this.fetchEmployees();
-      });
+      if (this.form) this.bindEvents();
+      this.populateFilterSelects();
+      this.fetchEmployees();
+      if (this.form) this.ensureOrganizationCatalog();
     },
 
     bindEvents() {
@@ -314,8 +391,8 @@
         this.openModal();
       });
 
-      const viewStructureBtn = document.getElementById('viewStructureBtn');
-      viewStructureBtn?.addEventListener('click', () => {
+      const viewOrganizationBtn = document.getElementById('viewOrganizationBtn');
+      viewOrganizationBtn?.addEventListener('click', () => {
         window.location.href = '/organization';
       });
 
@@ -328,7 +405,7 @@
         });
       });
 
-      this.form.addEventListener('submit', (event) => this.handleSubmit(event));
+      this.form?.addEventListener('submit', (event) => this.handleSubmit(event));
 
       const searchInput = document.getElementById('searchInput');
       if (searchInput) {
@@ -480,7 +557,7 @@
         params.set('limit', String(state.pageSize));
         params.set('offset', String(offset));
 
-        const response = await fetch(`/api/employees?${params.toString()}`);
+        const response = await fetch(`/api/employees?${params.toString()}`, { signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error(`Error ${response.status}`);
 
         const payload = await response.json();
@@ -493,6 +570,7 @@
         this.renderPagination();
       } catch (error) {
         console.error(error);
+        this.updateMetrics({ active: '—', vacation: '—', retired_suspended: '—' });
         this.showError('Ocurrió un error al cargar empleados.');
       } finally {
         this.setLoading(false);
@@ -548,17 +626,21 @@
       if (this.tableContainer) this.tableContainer.style.display = 'block';
       if (this.emptyState) this.emptyState.style.display = 'none';
 
-      const defaultAvatar = '/static/img/default-avatar.svg';
-
       items.forEach((employee) => {
         const row = document.createElement('tr');
-        const fotoSrc = employee.foto_url ? `/static/${employee.foto_url}` : defaultAvatar;
         const statusClass = this.getStatusBadgeClass(employee.estado);
 
-        row.innerHTML = `
+        row.innerHTML = this.isInspector ? `
+          <td><span class="fw-medium">${this.escapeHtml(employee.nombre_apellido)}</span></td>
+          <td><button type="button" class="employee-photo-trigger" data-photo-src="${this.escapeHtml(this.getPhotoUrl(employee.foto_url))}" data-photo-name="${this.escapeHtml(employee.nombre_apellido)}" aria-label="Ampliar foto de ${this.escapeHtml(employee.nombre_apellido)}"><img class="employee-avatar" src="${this.getPhotoUrl(employee.foto_url)}" alt=""></button></td>
+          <td><div>${this.escapeHtml(employee.gerencia || 'Sin gerencia')}</div><small class="text-muted">${this.escapeHtml(employee.departamento || 'Sin departamento')}</small></td>
+          <td><div>${this.escapeHtml(employee.telefono || 'Sin teléfono')}</div><small class="text-muted">${this.escapeHtml(employee.email || 'Sin correo')}</small></td>
+          <td><div>${this.escapeHtml(employee.contacto_emergencia_telefono || 'Sin teléfono')}</div><small class="text-muted">${this.escapeHtml(employee.contacto_emergencia_parentesco || 'Sin parentesco')}</small></td>
+          <td><span class="badge-pill ${statusClass}">${this.escapeHtml(employee.estado)}</span></td>
+        ` : `
           <td>
             <div class="d-flex align-items-center gap-2">
-              <img class="employee-avatar" src="${fotoSrc}" alt="avatar" />
+              <button type="button" class="employee-photo-trigger" data-photo-src="${this.escapeHtml(this.getPhotoUrl(employee.foto_url))}" data-photo-name="${this.escapeHtml(employee.nombre_apellido)}" aria-label="Ampliar foto de ${this.escapeHtml(employee.nombre_apellido)}"><img class="employee-avatar" src="${this.getPhotoUrl(employee.foto_url)}" alt=""></button>
               <span class="fw-medium">${this.escapeHtml(employee.nombre_apellido)}</span>
             </div>
           </td>
@@ -577,13 +659,14 @@
         `;
 
         const actions = [{ label: 'Ver ficha del empleado', icon: 'id-card', variant: 'ghost', onClick: () => this.viewProfile(employee.id) }];
+        if (this.isInspector) return this.list.appendChild(row);
         if (this.canManage) {
           actions.push({ label: 'Editar empleado', icon: 'edit', variant: 'ghost', onClick: () => this.editEmployee(employee.id) });
           actions.push({ label: 'Inhabilitar empleado', icon: 'trash', variant: 'danger', onClick: () => this.disableEmployee(employee.id) });
         }
         row.querySelector('[data-row-actions]').replaceWith(window.AppUI.rowActions(actions));
         row.querySelector('.employee-avatar')?.addEventListener('error', (event) => {
-          event.currentTarget.src = defaultAvatar;
+          event.currentTarget.src = this.getPhotoUrl(null);
         }, { once: true });
         this.list.appendChild(row);
       });
@@ -801,7 +884,7 @@
 
         document.getElementById('profileEmployeeName').textContent = employee.nombre_apellido || '--';
         document.getElementById('profileEmployeeOrg').textContent = [employee.gerencia, employee.departamento, employee.cargo].filter(Boolean).join(' / ') || '--';
-        document.getElementById('profileEmployeePhoto').src = employee.foto_url || '/static/img/default-avatar.svg';
+        document.getElementById('profileEmployeePhoto').src = this.getPhotoUrl(employee.foto_url);
         document.getElementById('profilePersonalData').innerHTML = [
           ['Cédula', employee.cedula],
           ['Código RFID', employee.codigo_tarjeta],

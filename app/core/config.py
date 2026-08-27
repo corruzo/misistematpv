@@ -44,16 +44,10 @@ DB_USER = os.getenv('DB_USER', '')
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 DB_TRUSTED = os.getenv('DB_TRUSTED', 'false').lower() in ('1', 'true', 'yes')
 
-# Serial reader settings. Empty port keeps the hardware listener disabled.
-SERIAL_PORT = os.getenv('SERIAL_PORT', '').strip()
-SERIAL_BAUDRATE = int(os.getenv('SERIAL_BAUDRATE', '9600'))
-SERIAL_BYTESIZE = int(os.getenv('SERIAL_BYTESIZE', '8'))
-SERIAL_PARITY = os.getenv('SERIAL_PARITY', 'N').strip().upper()
-SERIAL_STOPBITS = float(os.getenv('SERIAL_STOPBITS', '1'))
-SERIAL_TIMEOUT = float(os.getenv('SERIAL_TIMEOUT', '1'))
-SERIAL_ENCODING = os.getenv('SERIAL_ENCODING', 'ascii').strip() or 'ascii'
-RFID_OFFLINE_QUEUE_PATH = Path(os.getenv('RFID_OFFLINE_QUEUE_PATH', str(BASE_DIR / 'backups' / 'rfid_offline_queue.sqlite3'))).resolve()
-RFID_OFFLINE_QUEUE_LIMIT = int(os.getenv('RFID_OFFLINE_QUEUE_LIMIT', '1000'))
+AGENT_CLOCK_SKEW_MINUTES = float(os.getenv('AGENT_CLOCK_SKEW_MINUTES', '5'))
+AGENT_HEARTBEAT_PERSIST_SECONDS = int(os.getenv('AGENT_HEARTBEAT_PERSIST_SECONDS', '60'))
+GARITA_ID = os.getenv('GARITA_ID', '').strip()
+TEMPORARY_DATA_RETENTION_DAYS = int(os.getenv('TEMPORARY_DATA_RETENTION_DAYS', '30'))
 PROLONGED_STAY_HOURS = float(os.getenv('PROLONGED_STAY_HOURS', '12'))
 
 # Query safety defaults. Keep list endpoints bounded even when clients omit parameters.

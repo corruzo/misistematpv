@@ -127,7 +127,7 @@
     };
 
     const loadManualEmployees = async () => {
-      const response = await fetch('/api/employees?limit=100');
+      const response = await fetch('/api/attendance/manual-employees?limit=100');
       if (!response.ok) throw new Error('No se pudo cargar la lista de empleados.');
       const data = await response.json();
       employees = data.items;
@@ -323,7 +323,8 @@
       }
     });
     window.addEventListener('online', syncPendingQueue);
-    window.setInterval(syncPendingQueue, 15000);
+    const pendingSyncTimer = window.setInterval(syncPendingQueue, 15000);
+    window.addEventListener('pagehide', () => window.clearInterval(pendingSyncTimer));
     renderOfflineStatus();
     syncPendingQueue();
     Promise.all([loadManualEmployees(), loadFrequentEmployees()]).catch((error) => window.AppUI.toast(error.message, 'error'));

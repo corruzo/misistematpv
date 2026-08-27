@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
+from app.models.employee import Empleado
 from app.models.user import Usuario
 from app.services import notification_service
 
@@ -9,9 +10,9 @@ class NotificationServiceTest(unittest.TestCase):
     def setUp(self):
         self.db = MagicMock()
         self.users = [
-            Usuario(id=1, rol='RRHH', activo=1),
-            Usuario(id=2, rol='Desarrollador', activo=1),
-            Usuario(id=3, rol='Inspector', activo=1),
+            Usuario(id=1, nombre='Ana RRHH', rol='RRHH', activo=1),
+            Usuario(id=2, nombre='Diego Desarrollo', rol='Desarrollador', activo=1),
+            Usuario(id=3, nombre='Inés Inspección', rol='Inspector', activo=1),
         ]
         self.db.query.return_value.filter.return_value.all.return_value = self.users
 
@@ -40,6 +41,29 @@ class NotificationServiceTest(unittest.TestCase):
         self.assertEqual(len(added), 1)
         self.assertEqual(added[0].usuario_id, 2)
         self.assertEqual(added[0].prioridad, notification_service.PRIORITY_CRITICAL)
+
+    def test_global_employee_notification_includes_actor_and_employee(self):
+        self.db.query.return_value.filter.return_value.first.return_value = self.users[0]
+
+        employee = Empleado(nombre_apellido='Empleado Nuevo', cedula='100')
+        notification_service.publish_employee_registered(self.db, employee, 1)
+
+        added = [call.args[0] for call in self.db.add.call_args_list]
+        self.assertEqual(len(added), 3)
+        self.assertTrue(all(item.tipo == 'empleado_registrado' for item in added))
+        self.assertIn('Empleado Nuevo', added[0].mensaje)
+        self.assertIn('Ana RRHH', added[0].mensaje)
+
+    def test_global_attendance_correction_notification_describes_change(self):
+        self.db.query.return_value.filter.return_value.first.return_value = self.users[1]
+
+        notification_service.publish_attendance_corrected(self.db, 'Ana', 'ENTRADA', 'SALIDA', 'Error de digitación', 2)
+
+        added = [call.args[0] for call in self.db.add.call_args_list]
+        self.assertEqual(len(added), 3)
+        self.assertIn('Diego Desarrollo', added[0].mensaje)
+        self.assertIn('Ana', added[0].mensaje)
+        self.assertIn('Error de digitación', added[0].mensaje)
 
 
 if __name__ == '__main__':

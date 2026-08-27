@@ -1,11 +1,13 @@
-from sqlalchemy import case, func
+from datetime import timedelta
+
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.auth import ROLE_DEVELOPER, ROLE_HR, ROLE_INSPECTOR
 from app.core.datetime_utils import utc_now
 from app.models.notification import Notification
+from app.models.alert_dismissal import AlertDismissal
 from app.models.user import Usuario
-from app.services.live_bus import notify_live_change
 
 PRIORITY_CRITICAL = 'critica'
 PRIORITY_WARNING = 'advertencia'
@@ -14,12 +16,14 @@ PRIORITY_INFO = 'informativa'
 ROLE_ACCESS_DENIED = (ROLE_HR, ROLE_DEVELOPER, ROLE_INSPECTOR)
 ROLE_EXCEPTION_MARK = (ROLE_HR, ROLE_INSPECTOR)
 ROLE_TECHNICAL = (ROLE_DEVELOPER,)
+ROLE_ALL_USERS = (ROLE_HR, ROLE_DEVELOPER, ROLE_INSPECTOR)
 
 
 def publish(db: Session, roles: tuple[str, ...], tipo: str, prioridad: str, titulo: str, mensaje: str) -> int:
     users = db.query(Usuario).filter(Usuario.rol.in_(roles), Usuario.activo == 1).all()
     for user in users:
-        db.add(Notification(usuario_id=user.id, tipo=tipo, prioridad=prioridad, titulo=titulo, mensaje=mensaje))
+        notification = Notification(usuario_id=user.id, tipo=tipo, prioridad=prioridad, titulo=titulo, mensaje=mensaje)
+        db.add(notification)
     db.flush()
     return len(users)
 
@@ -34,6 +38,34 @@ def publish_exception_mark(db: Session, employee_name: str, employee_id: int) ->
 
 def publish_technical(db: Session, titulo: str, mensaje: str) -> int:
     return publish(db, ROLE_TECHNICAL, 'incidencia_tecnica', PRIORITY_CRITICAL, titulo, mensaje)
+
+
+def _actor_name(db: Session, usuario_id: int | None) -> str:
+    if usuario_id is None:
+        return 'Sistema'
+    user = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    return user.nombre if user and getattr(user, 'nombre', None) else f'Usuario {usuario_id}'
+
+
+def publish_employee_registered(db: Session, employee, usuario_id: int | None) -> int:
+    actor = _actor_name(db, usuario_id)
+    return publish(db, ROLE_ALL_USERS, 'empleado_registrado', PRIORITY_INFO, 'Nuevo empleado registrado', f'{actor} registró al empleado {employee.nombre_apellido} (cédula {employee.cedula}).')
+
+
+def publish_employee_status_changed(db: Session, employee_name: str, old_status: str, new_status: str, usuario_id: int | None) -> int:
+    actor = _actor_name(db, usuario_id)
+    return publish(db, ROLE_ALL_USERS, 'empleado_estado_cambiado', PRIORITY_WARNING, 'Cambio de estatus de empleado', f'{actor} cambió el estatus de {employee_name} de {old_status} a {new_status}.')
+
+
+def publish_attendance_corrected(db: Session, employee_name: str, old_type: str, new_type: str, reason: str, usuario_id: int) -> int:
+    actor = _actor_name(db, usuario_id)
+    return publish(db, ROLE_ALL_USERS, 'marcaje_corregido', PRIORITY_WARNING, 'Marcaje corregido', f'{actor} corrigió el marcaje de {employee_name}: {old_type} a {new_type}. Motivo: {reason}')
+
+
+def publish_reader_status_changed(db: Session, garita_name: str, connected: bool) -> int:
+    status = 'conectado' if connected else 'desconectado'
+    priority = PRIORITY_INFO if connected else PRIORITY_CRITICAL
+    return publish(db, ROLE_ALL_USERS, 'lector_estado_cambiado', priority, f'Lector RFID {status}', f'El lector RFID de {garita_name} ahora está {status}.')
 
 
 def list_notifications(db: Session, user_id: int, after_id: int = 0, limit: int = 50) -> tuple[list[dict], int | None]:
@@ -63,7 +95,6 @@ def mark_read(db: Session, user_id: int, notification_id: int | None = None) -> 
         query = query.filter(Notification.id == notification_id)
     changed = query.update({Notification.leida_en: utc_now()}, synchronize_session=False)
     db.commit()
-    notify_live_change()
     return changed
 
 
@@ -74,8 +105,20 @@ def discard(db: Session, user_id: int, notification_id: int) -> bool:
         Notification.descartada_en.is_(None),
     ).update({Notification.descartada_en: utc_now()}, synchronize_session=False)
     db.commit()
-    notify_live_change()
     return bool(changed)
+
+
+def cleanup_temporary_data(db: Session, retention_days: int = 30) -> dict[str, int]:
+    cutoff = utc_now() - timedelta(days=retention_days)
+    deleted_notifications = db.query(Notification).filter(
+        Notification.creada_en < cutoff,
+        or_(Notification.descartada_en.isnot(None), Notification.leida_en.isnot(None)),
+    ).delete(synchronize_session=False)
+    deleted_alert_dismissals = db.query(AlertDismissal).filter(
+        AlertDismissal.descartada_en < cutoff,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {'notifications': deleted_notifications, 'alert_dismissals': deleted_alert_dismissals}
 
 
 def _serialize(row: Notification) -> dict:

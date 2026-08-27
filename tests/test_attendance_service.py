@@ -8,7 +8,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado
 from app.schemas.attendance import AttendanceOrigin, AttendanceType
 from app.schemas.attendance import AttendanceManualBatchRequest
-from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, correct_attendance, register_manual, register_scan
+from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, attendance_records_are_too_close, correct_attendance, register_manual, register_scan
 
 
 class QueryDouble:
@@ -64,6 +64,12 @@ class DatabaseDouble:
 
 
 class AttendanceServiceTest(unittest.TestCase):
+    def test_dashboard_only_flags_attendance_within_debounce_window(self):
+        reference = datetime.now(timezone.utc)
+        self.assertTrue(attendance_records_are_too_close(reference, reference + timedelta(seconds=10)))
+        self.assertFalse(attendance_records_are_too_close(reference, reference + timedelta(seconds=31)))
+        self.assertFalse(attendance_records_are_too_close(reference, reference + timedelta(minutes=2)))
+
     def make_employee(self, estado=EstadoEmpleado.Activo):
         return Empleado(
             id=1,
@@ -134,7 +140,8 @@ class AttendanceServiceTest(unittest.TestCase):
             with self.assertRaisesRegex(AttendanceError, 'registro posterior ya es una salida'):
                 register_manual(db, 1, marked_at=datetime.now(timezone.utc) - timedelta(minutes=30), attendance_type=AttendanceType.SALIDA)
 
-    def test_correction_updates_values_and_audits_reason(self):
+    @patch('app.services.attendance_service.publish_attendance_corrected')
+    def test_correction_updates_values_and_audits_reason(self, publish_notification):
         db = DatabaseDouble(self.make_employee())
         register_manual(db, 1)
         record = db.records[0]
@@ -146,6 +153,7 @@ class AttendanceServiceTest(unittest.TestCase):
         self.assertEqual(record.tipo, AttendanceType.SALIDA.value)
         self.assertEqual(db.audit_records[-1].accion, 'correccion_marcaje')
         self.assertEqual(json.loads(db.audit_records[-1].datos_despues)['motivo'], 'Error de digitación')
+        publish_notification.assert_called_once_with(db, 'Ana Pérez', 'ENTRADA', 'SALIDA', 'Error de digitación', 7)
 
     def test_correction_requires_reason_and_a_changed_value(self):
         db = DatabaseDouble(self.make_employee())
@@ -178,6 +186,21 @@ class AttendanceServiceTest(unittest.TestCase):
         unknown_db.employees[0].codigo_tarjeta = 'OTHER'
         with self.assertRaisesRegex(AttendanceError, 'Tarjeta no asociada'):
             register_scan(unknown_db, 'RFID-1', AttendanceOrigin.PUERTO_COM)
+
+    def test_inactive_employee_can_leave_after_open_entry(self):
+        db = DatabaseDouble(self.make_employee())
+        register_manual(db, 1, marked_at=datetime.now(timezone.utc) - timedelta(minutes=2))
+        db.employee_by_id.estado = EstadoEmpleado.Suspendido
+
+        result = register_scan(db, 'RFID-1', AttendanceOrigin.PUERTO_COM)
+
+        self.assertEqual(result.tipo, AttendanceType.SALIDA)
+
+    def test_inactive_employee_cannot_enter_without_open_entry(self):
+        db = DatabaseDouble(self.make_employee(EstadoEmpleado.Suspendido))
+
+        with self.assertRaisesRegex(AttendanceError, 'no está activo'):
+            register_scan(db, 'RFID-1', AttendanceOrigin.PUERTO_COM)
 
 
 if __name__ == '__main__':

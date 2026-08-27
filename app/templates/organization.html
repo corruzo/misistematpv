@@ -3,15 +3,15 @@
 {% block title %}Organización - MarcajeTPV{% endblock %}
 {% block page_title %}Organización de la Empresa{% endblock %}
 
+{% block actions %}
+  <button type="button" class="btn-ios primary btn-sm d-flex align-items-center gap-2" id="btnViewForm">
+    <svg class="icon icon--sm" width="16" height="16" aria-hidden="true"><use href="/static/img/icons.svg#plus"></use></svg>
+    <span>Nuevo registro</span>
+  </button>
+{% endblock %}
+
 {% block content %}
 <div class="organization-shell">
-  <div class="section-header">
-    <div class="stack-actions">
-      <button type="button" class="btn-ios primary" id="btnViewTree"><svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#activity"></use></svg>Ver estructura</button>
-      <button type="button" class="btn-ios secondary" id="btnViewForm"><svg class="icon icon--sm" aria-hidden="true"><use href="/static/img/icons.svg#plus"></use></svg>Nuevo registro</button>
-    </div>
-  </div>
-
   <div class="org-summary-grid">
     <div class="org-stat-card">
       <span>Gerencias Registradas</span>
@@ -147,7 +147,6 @@
 
     const sectionTree = document.getElementById('sectionTree');
     const sectionForm = document.getElementById('sectionForm');
-    const btnViewTree = document.getElementById('btnViewTree');
     const btnViewForm = document.getElementById('btnViewForm');
 
     const gerenciaForm = document.getElementById('gerenciaForm');
@@ -177,15 +176,6 @@
       activeForm.classList.remove('d-none');
       activeBtn.classList.remove('secondary');
       activeBtn.classList.add('primary');
-    }
-
-    function switchViewToTree() {
-      sectionTree.classList.remove('d-none');
-      bootstrap.Modal.getInstance(sectionForm)?.hide();
-      btnViewTree.classList.add('primary');
-      btnViewTree.classList.remove('secondary');
-      btnViewForm.classList.add('secondary');
-      btnViewForm.classList.remove('primary');
     }
 
     function openCreateForm(type, parentId = '') {
@@ -221,16 +211,12 @@
       (bootstrap.Modal.getInstance(sectionForm) || new bootstrap.Modal(sectionForm)).show();
     }
 
-    btnViewTree.onclick = switchViewToTree;
-
-    btnViewForm.onclick = () => {
-      sectionTree.classList.remove('d-none');
-      (bootstrap.Modal.getInstance(sectionForm) || new bootstrap.Modal(sectionForm)).show();
-      btnViewForm.classList.add('primary');
-      btnViewForm.classList.remove('secondary');
-      btnViewTree.classList.add('secondary');
-      btnViewTree.classList.remove('primary');
-    };
+    if (btnViewForm) {
+      btnViewForm.onclick = () => {
+        sectionTree.classList.remove('d-none');
+        (bootstrap.Modal.getInstance(sectionForm) || new bootstrap.Modal(sectionForm)).show();
+      };
+    }
 
     tabGerenciaBtn.onclick = () => setActiveTab(gerenciaForm, tabGerenciaBtn);
     tabDepartamentoBtn.onclick = () => setActiveTab(departamentoForm, tabDepartamentoBtn);
@@ -537,7 +523,9 @@
           delete form.dataset.editId;
           delete form.dataset.editType;
           await loadOrganization();
-          switchViewToTree();
+          
+          const modalInstance = bootstrap.Modal.getInstance(sectionForm);
+          if (modalInstance) modalInstance.hide();
         } catch (error) {
           console.error(error);
           window.AppUI.toast('No se pudo completar el registro. Verifica la conexión e inténtalo de nuevo.', 'error');
