@@ -7,15 +7,14 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_employee_manager, require_manual_attendance, require_page_user, require_read_access, require_user
-from app.core.config import APP_ENV, DEFAULT_PAGE_SIZE, GARITA_ID, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, ATTENDANCE_HISTORY_DEFAULT_DAYS
+from app.core.config import APP_ENV, DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, ATTENDANCE_HISTORY_DEFAULT_DAYS
 from app.database.session import get_db
 from app.schemas.attendance import AttendanceCorrectionRequest, AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest, ManualFrequentEmployeeRequest
 from app.schemas.employee import EmpleadoOut
 from app.models.employee import Empleado
-from app.services.attendance_service import AttendanceError, EmployeeAccessDeniedError, add_manual_frequent_employee, alert_id, attendance_summary, correct_attendance, dismiss_alert, get_attendance_since, inspector_dashboard, list_attendance, list_manual_frequent_employees, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan, remove_manual_frequent_employee
+from app.services.attendance_service import AttendanceError, EmployeeAccessDeniedError, add_manual_frequent_employee, attendance_summary, correct_attendance, dismiss_alert, get_attendance_since, inspector_dashboard, list_attendance, list_manual_frequent_employees, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan, remove_manual_frequent_employee
 from app.services.access_event_service import get_denied_events, list_denied_events, record_denied_event
 from app.services.notification_service import publish_exception_mark
-from app.services.agent_service import get_agent_status
 from app.services.organization_service import get_organization_tree
 from app.core.datetime_utils import to_local
 
@@ -204,12 +203,7 @@ def attendance_present_route(db: Session = Depends(get_db), _user=Depends(requir
 
 @router.get('/api/attendance/inspector-dashboard')
 def inspector_dashboard_route(db: Session = Depends(get_db), _user=Depends(require_read_access)):
-    payload = inspector_dashboard(db, _user.id)
-    payload['reader'] = get_agent_status(db, GARITA_ID)
-    if not payload['reader']['connected']:
-        message = payload['reader']['message']
-        payload['alerts'].insert(0, {'id': alert_id('reader', message), 'kind': 'reader', 'message': message})
-    return payload
+    return inspector_dashboard(db, _user.id)
 
 
 @router.post('/api/attendance/alerts/{alert_identifier}/dismiss')

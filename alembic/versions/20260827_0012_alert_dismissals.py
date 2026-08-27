@@ -1,14 +1,14 @@
 """Add per-user dismissal state for calculated operational alerts.
 
 Revision ID: 20260827_0012
-Revises: 20260827_0011
+Revises: 20260827_0010
 """
 from typing import Sequence, Union
 
 from alembic import op
 
 revision: str = '20260827_0012'
-down_revision: Union[str, None] = '20260827_0011'
+down_revision: Union[str, None] = '20260827_0010'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

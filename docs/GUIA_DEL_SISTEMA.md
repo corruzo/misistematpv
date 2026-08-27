@@ -8,7 +8,7 @@ MarcajeTPV gestiona:
 
 - Empleados y su estructura organizativa.
 - Usuarios, roles y sesiones.
-- Marcajes de asistencia desde lector RFID, kiosco y registro manual.
+- Marcajes de asistencia desde kiosco y registro manual.
 - Historial, resumen operativo y correcciones auditadas.
 - Backups administrados desde el módulo de Sistemas.
 
@@ -21,7 +21,7 @@ La aplicación usa FastAPI, plantillas Jinja2, JavaScript del navegador y SQL Se
 | Resumen operativo de asistencia | Resumen | `/attendance/summary` | Usuario autenticado |
 | Registrar marcaje manual | Marcaje manual rápido | `/attendance` | Administrador o RRHH |
 | Consultar y corregir marcajes | Historial | `/attendance/history` | Usuario con lectura; corrección para Administrador o RRHH |
-| Operar el lector en pantalla completa | Kiosco | `/attendance/kiosk` | Usuario autenticado |
+| Registrar marcajes en pantalla completa | Kiosco | `/attendance/kiosk` | Usuario autenticado |
 | Gestionar empleados | Gestión de personal | `/employees` | Desarrollador o RRHH; Inspector solo consulta directorio operativo |
 | Administrar usuarios | Gestión de usuarios | `/users` | Administrador |
 | Organigrama | Organigrama TPV | `/organization` | Administrador |
@@ -34,19 +34,11 @@ La aplicación usa FastAPI, plantillas Jinja2, JavaScript del navegador y SQL Se
 1. Iniciar la aplicación con `start_app.bat`.
 2. Confirmar que el estado de la base de datos aparece conectado.
 3. Abrir `Resumen` y revisar personas dentro, movimientos recientes, personal sin marcaje y alertas.
-4. Confirmar el estado del lector RFID antes de depender del marcaje automático.
+4. Abrir el kiosco o el registro manual según el flujo operativo.
 
-### Marcaje automático
+### Registro en kiosco
 
-El lector envía el código de tarjeta al proceso serial. El sistema identifica al empleado activo y alterna entre `ENTRADA` y `SALIDA`. Las lecturas demasiado cercanas se rechazan como duplicadas.
-
-El lector RFID es atendido por el servicio independiente `rfid_agent` instalado en la PC de la garita. Cada lectura recibe allí su `timestamp_lectura` UTC con offset y se persiste primero en SQLite. Los errores de red, timeout y respuestas `5xx` conservan la cabeza de la cola FIFO con backoff exponencial y jitter; las respuestas `4xx` pasan a `rejected_scans` y no bloquean las siguientes lecturas. La cola no descarta automáticamente registros al llenarse.
-
-El agente envía las lecturas a `POST /api/v1/asistencia/lectura` usando una API key Bearer específica de la garita. El servidor conserva la hora histórica recibida y aplica las reglas centrales de asistencia. `timestamp_envio` permite advertir desfases del reloj sin confundir una lectura acumulada offline con una lectura reciente.
-
-El heartbeat se envía frecuentemente para detectar disponibilidad, pero el servidor solo persiste `last_seen` si cambió el estado o transcurrió `AGENT_HEARTBEAT_PERSIST_SECONDS` (60 segundos por defecto). La UI consulta ese estado remoto y muestra si el agente está en línea, tiene lecturas en cola o tiene el lector desconectado.
-
-El kiosco (`/attendance/kiosk`) muestra el resultado de la lectura y mantiene el foco preparado para la siguiente tarjeta.
+El kiosco (`/attendance/kiosk`) muestra el resultado del marcaje y mantiene el foco preparado para la siguiente operación.
 
 Las pantallas operativas reciben marcajes y alertas mediante SSE (`/api/live`). El canal espera sin consultar la base de datos mientras no hay cambios y se reconcilia periódicamente para cubrir reinicios, desconexiones o procesos separados. El kiosco usa el mismo canal y conserva una reconciliación de baja frecuencia como respaldo.
 

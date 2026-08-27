@@ -37,9 +37,6 @@
       
       <!-- Metadatos con distribución Flex corregida -->
       <div class="inspector-context-meta d-flex align-items-center gap-2 ms-auto">
-        <span id="readerStatus" class="inspector-live inspector-reader-status is-disconnected">
-          Lector no configurado
-        </span>
         <div class="d-flex align-items-center gap-1 text-muted small bg-light px-2 py-1 rounded border">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span id="summaryDate"></span>
@@ -232,11 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('summaryDate').textContent = new Date().toLocaleDateString([], { day: '2-digit', month: 'short' });
       document.getElementById('inspectorUpdated').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      const reader = payload.reader || {};
-      const readerEl = document.getElementById('readerStatus');
-      readerEl.textContent = reader.message || 'Sin estado';
-      readerEl.className = `inspector-live inspector-reader-status ${reader.connected ? 'is-connected' : 'is-disconnected'}`;
-
       renderAlerts(payload.alerts || []);
       renderRecent(payload.recent || []);
       renderExpected(payload.expected || []);
@@ -276,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="badge-pill ${isEntry ? 'badge-status--activo' : 'badge-status--retirado'}">
               ${isEntry ? 'ENTRADA' : 'SALIDA'}
             </span>
-            <small class="text-muted">${escapeHtml(item.origen === 'PUERTO_COM' ? 'Lector RFID' : 'Manual')}</small>
+            <small class="text-muted">${escapeHtml(item.origen === 'PUERTO_COM' ? 'Automático' : 'Manual')}</small>
           </div>
         </div>
         <time class="fw-bold text-secondary small">${formatTime(item.fecha_hora)}</time>

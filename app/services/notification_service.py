@@ -33,7 +33,7 @@ def publish_access_denied(db: Session, employee_name: str, status: str) -> int:
 
 
 def publish_exception_mark(db: Session, employee_name: str, employee_id: int) -> int:
-    return publish(db, ROLE_EXCEPTION_MARK, 'pase_temporal', PRIORITY_WARNING, 'Marcaje por excepción', f'{employee_name} realizó un marcaje manual sin carnet RFID (empleado {employee_id}). Dé seguimiento a la entrega de la ficha.')
+    return publish(db, ROLE_EXCEPTION_MARK, 'pase_temporal', PRIORITY_WARNING, 'Marcaje por excepción', f'{employee_name} realizó un marcaje manual sin código de tarjeta (empleado {employee_id}). Dé seguimiento a la entrega de la ficha.')
 
 
 def publish_technical(db: Session, titulo: str, mensaje: str) -> int:
@@ -75,12 +75,6 @@ def publish_user_changed(db: Session, username: str, action: str, usuario_id: in
 def publish_attendance_corrected(db: Session, employee_name: str, old_type: str, new_type: str, reason: str, usuario_id: int) -> int:
     actor = _actor_name(db, usuario_id)
     return publish(db, ROLE_ALL_USERS, 'marcaje_corregido', PRIORITY_WARNING, 'Marcaje corregido', f'{actor} corrigió el marcaje de {employee_name}: {old_type} a {new_type}. Motivo: {reason}')
-
-
-def publish_reader_status_changed(db: Session, garita_name: str, connected: bool) -> int:
-    status = 'conectado' if connected else 'desconectado'
-    priority = PRIORITY_INFO if connected else PRIORITY_CRITICAL
-    return publish(db, ROLE_ALL_USERS, 'lector_estado_cambiado', priority, f'Lector RFID {status}', f'El lector RFID de {garita_name} ahora está {status}.')
 
 
 def list_notifications(db: Session, user_id: int, after_id: int = 0, limit: int = 50) -> tuple[list[dict], int | None]:

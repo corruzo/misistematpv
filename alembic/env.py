@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import DATABASE_URL
 from app.models.base import Base
-from app.models import access_event, alert_dismissal, attendance, audit, auth_session, employee, gate_agent, notification, organization, user
+from app.models import access_event, alert_dismissal, attendance, audit, auth_session, employee, notification, organization, user
 
 config = context.config
 config.set_main_option('sqlalchemy.url', DATABASE_URL.replace('%', '%%'))

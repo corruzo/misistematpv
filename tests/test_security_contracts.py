@@ -22,7 +22,7 @@ from app.core.auth import (
 from app.core.rate_limit import is_rate_limited
 from app.core.security import hash_password, password_needs_rehash, verify_password
 from app.controllers.employee_controller import router
-from run import configured_worker_count, validate_serial_worker_count
+from run import configured_worker_count
 from app.services.backup_service import backup_path
 
 
@@ -33,14 +33,6 @@ class SecurityContractTest(unittest.TestCase):
             backup_path('../.env')
         with self.assertRaises(ValueError):
             backup_path('database.bak')
-
-    def test_serial_reader_rejects_multiple_workers(self):
-        with self.assertRaisesRegex(RuntimeError, 'un solo worker'):
-            validate_serial_worker_count(2, 'COM3')
-
-    def test_serial_reader_allows_single_worker_or_no_port(self):
-        validate_serial_worker_count(1, 'COM3')
-        validate_serial_worker_count(4, '')
 
     def test_worker_count_reads_uvicorn_argument_or_environment(self):
         self.assertEqual(configured_worker_count(['uvicorn', 'run:app', '--workers', '3'], {}), 3)

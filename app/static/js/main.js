@@ -888,7 +888,7 @@
         document.getElementById('profileEmployeePhoto').src = this.getPhotoUrl(employee.foto_url);
         document.getElementById('profilePersonalData').innerHTML = [
           ['Cédula', employee.cedula],
-          ['Código RFID', employee.codigo_tarjeta],
+          ['Código de tarjeta', employee.codigo_tarjeta],
           ['Estado', employee.estado],
           ['Tipo de nómina', employee.tipo_nomina],
           ['Fecha de nacimiento', employee.fecha_nacimiento],

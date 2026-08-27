@@ -46,9 +46,6 @@ DB_USER = os.getenv('DB_USER', '')
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 DB_TRUSTED = os.getenv('DB_TRUSTED', 'false').lower() in ('1', 'true', 'yes')
 
-AGENT_CLOCK_SKEW_MINUTES = float(os.getenv('AGENT_CLOCK_SKEW_MINUTES', '5'))
-AGENT_HEARTBEAT_PERSIST_SECONDS = int(os.getenv('AGENT_HEARTBEAT_PERSIST_SECONDS', '60'))
-GARITA_ID = os.getenv('GARITA_ID', '').strip()
 TEMPORARY_DATA_RETENTION_DAYS = int(os.getenv('TEMPORARY_DATA_RETENTION_DAYS', '30'))
 
 

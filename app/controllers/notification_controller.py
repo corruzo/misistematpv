@@ -64,8 +64,6 @@ async def websocket_events(websocket: WebSocket):
                             await websocket.send_json({'type': 'user_changed', 'payload': {}})
                         elif item['tipo'] in {'marcaje_corregido', 'pase_temporal', 'acceso_no_autorizado'}:
                             await websocket.send_json({'type': 'attendance', 'payload': {'refresh': True}})
-                        elif item['tipo'] == 'lector_estado_cambiado':
-                            await websocket.send_json({'type': 'reader_changed', 'payload': {}})
             finally:
                 db.close()
     except WebSocketDisconnect:

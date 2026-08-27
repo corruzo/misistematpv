@@ -4,7 +4,7 @@ LOGICA DE VALIDACION DE MARCAJES
 Objetivo
 --------
 Impedir que un empleado termine con dos ENTRADAS consecutivas o dos SALIDAS
-consecutivas. La regla se aplica al registro manual, al lector RFID y a las
+consecutivas. La regla se aplica al registro manual y a las
 correcciones administrativas.
 
 Regla principal
@@ -47,9 +47,6 @@ Fecha y duplicados
 - No se aceptan fechas futuras.
 - Un marcaje dentro de los 15 segundos del registro anterior se rechaza como
   lectura duplicada.
-- La identidad operation_id evita insertar dos veces la misma operacion cuando
-  el lector RFID sincroniza una lectura offline.
-- La cola RFID conserva la hora original y el operation_id durante los reintentos.
 
 Correcciones administrativas
 ----------------------------
@@ -74,11 +71,10 @@ Responsabilidad del sistema
 ---------------------------
 El backend es la autoridad final. La interfaz puede sugerir Entrada o Salida,
 pero nunca sustituye la validacion del servicio. Esto protege tambien las
-lecturas RFID y las peticiones simultaneas o manipuladas desde el navegador.
+peticiones simultaneas o manipuladas desde el navegador.
 
 Archivos relacionados
 --------------------
 - app/services/attendance_service.py: reglas centrales.
-- app/services/serial_reader.py: cola y sincronizacion RFID offline.
 - app/templates/attendance.html: registro manual y sugerencia visual.
 - tests/test_attendance_service.py: pruebas de secuencia y fechas historicas.

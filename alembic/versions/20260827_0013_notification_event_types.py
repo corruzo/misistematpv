@@ -19,7 +19,7 @@ def upgrade() -> None:
     BEGIN
         IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_notificaciones_tipo' AND parent_object_id = OBJECT_ID('dbo.notificaciones'))
             ALTER TABLE dbo.notificaciones DROP CONSTRAINT CK_notificaciones_tipo;
-        ALTER TABLE dbo.notificaciones ADD CONSTRAINT CK_notificaciones_tipo CHECK (tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica', 'empleado_registrado', 'empleado_estado_cambiado', 'marcaje_corregido', 'lector_estado_cambiado'));
+        ALTER TABLE dbo.notificaciones ADD CONSTRAINT CK_notificaciones_tipo CHECK (tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica', 'empleado_registrado', 'empleado_estado_cambiado', 'marcaje_corregido'));
     END
     """)
 

@@ -17,7 +17,6 @@ from app.controllers.organization_controller import router as organization_route
 from app.controllers.user_controller import router as user_router
 from app.controllers.auth_controller import router as auth_router
 from app.controllers.attendance_controller import router as attendance_router
-from app.controllers.agent_controller import router as agent_router
 from app.controllers.system_controller import router as system_router, backup_loop
 from app.controllers.notification_controller import router as notification_router
 from fastapi import Depends
@@ -56,18 +55,6 @@ app = FastAPI(
 )
 
 
-def validate_serial_worker_count(worker_count: int, serial_port: str) -> None:
-    """Preserve the public validation helper for older integrations.
-
-    Serial ownership now belongs to the independent RFID agent, so the web
-    server no longer calls this check during startup.
-    """
-    if serial_port and worker_count > 1:
-        raise RuntimeError(
-            'SERIAL_PORT requiere un solo worker. Configure WEB_CONCURRENCY=1 o deje SERIAL_PORT vacío.'
-        )
-
-
 def configured_worker_count(argv=None, environ=None) -> int:
     args = list(sys.argv if argv is None else argv)
     environment = os.environ if environ is None else environ
@@ -82,9 +69,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request.state.csp_nonce = secrets.token_urlsafe(16)
         if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
-            agent_route = request.url.path == '/api/v1/asistencia/lectura' or request.url.path.startswith('/api/v1/garitas/')
-            if agent_route:
-                return await call_next(request)
             origin = request.headers.get('origin')
             if not origin or not is_allowed_csrf_origin(origin, request.headers.get('host', '')):
                 return JSONResponse({'detail': 'Origen de solicitud no permitido.'}, status_code=403)
@@ -140,7 +124,6 @@ app.include_router(router, dependencies=[Depends(require_user)])
 app.include_router(organization_router, dependencies=[Depends(require_user)])
 app.include_router(user_router, dependencies=[Depends(require_user)])
 app.include_router(attendance_router, dependencies=[Depends(require_user)])
-app.include_router(agent_router)
 app.include_router(system_router, dependencies=[Depends(require_user)])
 app.include_router(notification_router, dependencies=[Depends(require_user)])
 app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
