@@ -219,6 +219,33 @@
               </div>
             </div>
           </section>
+
+          <hr class="my-4 text-muted">
+
+          <section class="employee-form-section">
+            <div class="employee-form-section__heading mb-3">
+              <span class="org-status-badge employee-step-badge me-2">04</span>
+              <strong class="d-inline-block">Contacto y emergencia</strong>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-medium" for="telefono">Teléfono</label>
+                <input id="telefono" name="telefono" type="tel" class="form-control" maxlength="30" autocomplete="tel" placeholder="Número de teléfono">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium" for="email">Correo electrónico</label>
+                <input id="email" name="email" type="email" class="form-control" maxlength="254" autocomplete="email" placeholder="correo@empresa.com">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium" for="contacto_emergencia_parentesco">Parentesco de emergencia</label>
+                <input id="contacto_emergencia_parentesco" name="contacto_emergencia_parentesco" type="text" class="form-control" maxlength="100" placeholder="Ej. Madre, padre o pareja">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium" for="contacto_emergencia_telefono">Teléfono de emergencia</label>
+                <input id="contacto_emergencia_telefono" name="contacto_emergencia_telefono" type="tel" class="form-control" maxlength="30" autocomplete="tel" placeholder="Número de contacto">
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="modal-footer border-top p-3 bg-light">
@@ -236,8 +263,7 @@
     <div class="modal-content ios-modal border-0 shadow">
       <div class="modal-header border-bottom p-4">
         <div>
-          <p class="text-muted small mb-0">Ficha técnica del empleado</p>
-          <h5 class="modal-title h5 mb-0" id="employeeProfileModalLabel">Detalle del empleado</h5>
+          <h5 class="modal-title h5 mb-0" id="employeeProfileModalLabel">Ficha Técnica del Empleado</h5>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
@@ -247,7 +273,8 @@
           <img id="profileEmployeePhoto" class="employee-profile-photo" src="/static/img/default-avatar.svg" alt="">
           <div><h2 id="profileEmployeeName" class="h5 mb-1">--</h2><p id="profileEmployeeOrg" class="text-muted mb-0">--</p></div>
         </div>
-        <section class="employee-profile-section"><h3>Información personal y laboral</h3><div id="profilePersonalData" class="employee-profile-grid"></div></section>
+        <section class="employee-profile-section"><h3>Información Personal y Laboral</h3><div id="profilePersonalData" class="employee-profile-grid"></div></section>
+        <section class="employee-profile-section"><h3>Contacto y emergencia</h3><div id="profileContactData" class="employee-profile-grid"></div></section>
       </div>
     </div>
   </div>

@@ -96,6 +96,10 @@ BEGIN
         id INT IDENTITY(1,1) PRIMARY KEY,
         cedula NVARCHAR(50) NOT NULL UNIQUE,
         nombre_apellido NVARCHAR(200) NOT NULL,
+        telefono NVARCHAR(30) NULL,
+        email NVARCHAR(254) NULL,
+        contacto_emergencia_parentesco NVARCHAR(100) NULL,
+        contacto_emergencia_telefono NVARCHAR(30) NULL,
         departamento_id INT NOT NULL,
         cargo_id INT NOT NULL,
         estado NVARCHAR(50) NOT NULL DEFAULT 'Activo',
@@ -107,6 +111,16 @@ BEGIN
         CONSTRAINT CK_empleados_estado CHECK (estado IN ('Activo', 'Vacaciones', 'Retirado', 'Suspendido'))
     );
 END
+GO
+
+IF COL_LENGTH('dbo.empleados', 'telefono') IS NULL
+    ALTER TABLE dbo.empleados ADD telefono NVARCHAR(30) NULL;
+IF COL_LENGTH('dbo.empleados', 'email') IS NULL
+    ALTER TABLE dbo.empleados ADD email NVARCHAR(254) NULL;
+IF COL_LENGTH('dbo.empleados', 'contacto_emergencia_parentesco') IS NULL
+    ALTER TABLE dbo.empleados ADD contacto_emergencia_parentesco NVARCHAR(100) NULL;
+IF COL_LENGTH('dbo.empleados', 'contacto_emergencia_telefono') IS NULL
+    ALTER TABLE dbo.empleados ADD contacto_emergencia_telefono NVARCHAR(30) NULL;
 GO
 
 IF COL_LENGTH('dbo.empleados', 'fecha_nacimiento') IS NULL

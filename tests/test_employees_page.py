@@ -14,6 +14,10 @@ class EmployeePageTemplateTest(unittest.TestCase):
         self.assertIn('id="employeeForm"', html)
         self.assertIn('name="cedula"', html)
         self.assertIn('name="nombre_apellido"', html)
+        self.assertIn('name="telefono"', html)
+        self.assertIn('name="email"', html)
+        self.assertIn('name="contacto_emergencia_parentesco"', html)
+        self.assertIn('name="contacto_emergencia_telefono"', html)
 
     def test_employees_template_has_visible_action_buttons(self):
         html = TEMPLATE.read_text(encoding='utf-8')
@@ -51,7 +55,7 @@ class EmployeePageTemplateTest(unittest.TestCase):
         javascript = (ROOT / 'app' / 'static' / 'js' / 'main.js').read_text(encoding='utf-8')
 
         self.assertIn('id="employeeProfileModal"', html)
-        self.assertIn('Información personal y laboral', html)
+        self.assertIn('Información Personal y Laboral', html)
         self.assertNotIn('profileDays', html)
         self.assertNotIn('profilePageSize', html)
         self.assertNotIn('profileAttendanceList', html)

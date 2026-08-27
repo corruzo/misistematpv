@@ -10,6 +10,10 @@ class EmpleadoCreate(BaseModel):
     codigo_tarjeta: Optional[str] = Field(None, min_length=1, max_length=100)
     nombre_apellido: str = Field(..., min_length=2, max_length=200)
     fecha_nacimiento: Optional[date] = None
+    telefono: Optional[str] = Field(None, max_length=30)
+    email: Optional[str] = Field(None, max_length=254)
+    contacto_emergencia_parentesco: Optional[str] = Field(None, max_length=100)
+    contacto_emergencia_telefono: Optional[str] = Field(None, max_length=30)
     gerencia: Optional[str] = Field(None, max_length=150)
     departamento: Optional[str] = Field(None, max_length=150)
     cargo: Optional[str] = Field(None, max_length=150)
@@ -31,6 +35,10 @@ class EmpleadoUpdate(BaseModel):
     codigo_tarjeta: Optional[str] = Field(None, min_length=1, max_length=100)
     nombre_apellido: Optional[str] = Field(None, min_length=2, max_length=200)
     fecha_nacimiento: Optional[date] = None
+    telefono: Optional[str] = Field(None, max_length=30)
+    email: Optional[str] = Field(None, max_length=254)
+    contacto_emergencia_parentesco: Optional[str] = Field(None, max_length=100)
+    contacto_emergencia_telefono: Optional[str] = Field(None, max_length=30)
     gerencia: Optional[str] = Field(None, max_length=150)
     departamento: Optional[str] = Field(None, max_length=150)
     cargo: Optional[str] = Field(None, max_length=150)
@@ -54,6 +62,10 @@ class EmpleadoOut(BaseModel):
     codigo_tarjeta: Optional[str] = None
     nombre_apellido: str
     fecha_nacimiento: Optional[date] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+    contacto_emergencia_parentesco: Optional[str] = None
+    contacto_emergencia_telefono: Optional[str] = None
     gerencia: Optional[str] = None
     departamento: Optional[str] = None
     cargo: Optional[str] = None

@@ -728,6 +728,10 @@
         this.form.querySelector('[name="codigo_tarjeta"]').value = employee.codigo_tarjeta || '';
         this.form.querySelector('[name="nombre_apellido"]').value = employee.nombre_apellido || '';
         this.form.querySelector('[name="fecha_nacimiento"]').value = employee.fecha_nacimiento || '';
+        this.form.querySelector('[name="telefono"]').value = employee.telefono || '';
+        this.form.querySelector('[name="email"]').value = employee.email || '';
+        this.form.querySelector('[name="contacto_emergencia_parentesco"]').value = employee.contacto_emergencia_parentesco || '';
+        this.form.querySelector('[name="contacto_emergencia_telefono"]').value = employee.contacto_emergencia_telefono || '';
         this.form.querySelector('[name="estado"]').value = employee.estado || 'Activo';
         this.form.querySelector('[name="tipo_nomina"]').value = employee.tipo_nomina || '';
 
@@ -804,6 +808,12 @@
           ['Estado', employee.estado],
           ['Tipo de nómina', employee.tipo_nomina],
           ['Fecha de nacimiento', employee.fecha_nacimiento],
+        ].map(([label, value]) => `<div><span>${label}</span><strong>${this.escapeHtml(value || '--')}</strong></div>`).join('');
+        document.getElementById('profileContactData').innerHTML = [
+          ['Teléfono', employee.telefono],
+          ['Correo electrónico', employee.email],
+          ['Parentesco de emergencia', employee.contacto_emergencia_parentesco],
+          ['Teléfono de emergencia', employee.contacto_emergencia_telefono],
         ].map(([label, value]) => `<div><span>${label}</span><strong>${this.escapeHtml(value || '--')}</strong></div>`).join('');
         errorElement?.classList.add('d-none');
       } catch (error) {

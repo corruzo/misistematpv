@@ -104,6 +104,10 @@ def create_employee(db: Session, data, foto: Optional[UploadFile] = None, usuari
         codigo_tarjeta=(str(data.codigo_tarjeta).strip() or None) if data.codigo_tarjeta else None,
         nombre_apellido=nombre_apellido,
         fecha_nacimiento=getattr(data, 'fecha_nacimiento', None),
+        telefono=(str(data.telefono).strip() or None) if data.telefono else None,
+        email=(str(data.email).strip().lower() or None) if data.email else None,
+        contacto_emergencia_parentesco=(str(data.contacto_emergencia_parentesco).strip() or None) if data.contacto_emergencia_parentesco else None,
+        contacto_emergencia_telefono=(str(data.contacto_emergencia_telefono).strip() or None) if data.contacto_emergencia_telefono else None,
         departamento_id=departamento_id,
         cargo_id=cargo_id,
         estado=data.estado,
@@ -115,6 +119,9 @@ def create_employee(db: Session, data, foto: Optional[UploadFile] = None, usuari
     add_audit(db, usuario_id, 'alta', 'empleados', emp.id, despues={
         'cedula': emp.cedula, 'nombre_apellido': emp.nombre_apellido,
         'departamento_id': emp.departamento_id, 'cargo_id': emp.cargo_id, 'estado': emp.estado,
+        'telefono': emp.telefono, 'email': emp.email,
+        'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
+        'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
     })
     db.commit()
     db.refresh(emp)
@@ -125,7 +132,9 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     antes = {
         'nombre_apellido': emp.nombre_apellido, 'departamento_id': emp.departamento_id,
         'cargo_id': emp.cargo_id, 'estado': emp.estado, 'tipo_nomina': emp.tipo_nomina,
-        'foto_url': emp.foto_url,
+        'foto_url': emp.foto_url, 'telefono': emp.telefono, 'email': emp.email,
+        'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
+        'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
     }
     if foto and foto.filename:
         foto_url = save_image(foto)
@@ -165,7 +174,7 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
         if field in {'departamento', 'cargo', 'gerencia', 'gerencia_id'}:
             continue
         if value is not None or field == 'codigo_tarjeta':
-            normalized_value = value.strip() if isinstance(value, str) else value
+            normalized_value = value.strip().lower() if field == 'email' and isinstance(value, str) else (value.strip() if isinstance(value, str) else value)
             if field == 'nombre_apellido' and not normalized_value:
                 raise ValueError('El nombre del empleado no puede estar vacío.')
             setattr(emp, field, normalized_value)
@@ -173,7 +182,9 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     add_audit(db, usuario_id, 'actualizacion', 'empleados', emp.id, antes, {
         'nombre_apellido': emp.nombre_apellido, 'departamento_id': emp.departamento_id,
         'cargo_id': emp.cargo_id, 'estado': emp.estado, 'tipo_nomina': emp.tipo_nomina,
-        'foto_url': emp.foto_url,
+        'foto_url': emp.foto_url, 'telefono': emp.telefono, 'email': emp.email,
+        'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
+        'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
     })
     db.commit()
     db.refresh(emp)
