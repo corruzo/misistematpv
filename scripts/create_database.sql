@@ -255,7 +255,7 @@ BEGIN
         descartada_en DATETIME2 NULL,
         CONSTRAINT FK_notificaciones_usuario FOREIGN KEY (usuario_id) REFERENCES dbo.usuarios(id) ON DELETE CASCADE,
         CONSTRAINT CK_notificaciones_prioridad CHECK (prioridad IN ('critica', 'advertencia', 'informativa')),
-        CONSTRAINT CK_notificaciones_tipo CHECK (tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica'))
+        CONSTRAINT CK_notificaciones_tipo CHECK (tipo IN ('acceso_no_autorizado', 'pase_temporal', 'incidencia_tecnica', 'empleado_registrado', 'empleado_estado_cambiado', 'marcaje_corregido', 'lector_estado_cambiado', 'organizacion_cambiada', 'usuario_cambiado'))
     );
     CREATE INDEX IX_notificaciones_usuario_id ON dbo.notificaciones(usuario_id, id);
     CREATE INDEX IX_notificaciones_usuario_estado ON dbo.notificaciones(usuario_id, leida_en, descartada_en, id);

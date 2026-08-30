@@ -66,7 +66,7 @@
       return token ? { 'X-CSRFToken': token } : {};
     };
     const kioskChannel = 'BroadcastChannel' in window ? new BroadcastChannel('marcaje-kiosko') : null;
-    const keepFocus = () => { if (document.activeElement !== input) input.focus(); };
+    const keepFocus = () => { input.focus(); };
     const reset = () => { document.body.classList.remove('kiosk-access-denied'); document.body.classList.remove('kiosk-vacation'); accessAlert.classList.add('d-none'); vacationAlert.classList.add('d-none'); result.classList.add('d-none'); waiting.classList.remove('d-none'); clock.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
     const showAccessDenied = (payload) => {
       const eventTime = Date.parse(payload.fecha_hora || '') || Date.now();
@@ -113,17 +113,49 @@
       if (event.data?.code === 'employee_access_denied') showAccessDenied(event.data);
       else if (event.data?.id) showResult(event.data);
     });
-    const websocketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const liveSocket = 'WebSocket' in window ? new WebSocket(`${websocketProtocol}//${window.location.host}/api/ws`) : null;
-    liveSocket?.addEventListener('message', (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === 'attendance') showResult(message.payload);
-        if (message.type === 'access_denied') showAccessDenied(message.payload);
-      } catch (error) {}
-    });
+    const KioskLiveUpdates = {
+      source: null,
+      reconnectTimer: null,
+      backoff: 1000,
+      maxBackoff: 30000,
+      start() {
+        if (!window.WebSocket || this.source) return;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.source = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+        this.source.onopen = () => {
+          this.backoff = 1000;
+          if (pollingInitialized) pollLatestAttendance(); 
+        };
+        this.source.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'attendance') showResult(message.payload);
+            if (message.type === 'access_denied') showAccessDenied(message.payload);
+          } catch (error) {}
+        };
+        this.source.onclose = () => {
+          this.source = null;
+          this.reconnectTimer = window.setTimeout(() => this.start(), this.backoff);
+          this.backoff = Math.min(this.backoff * 1.5, this.maxBackoff);
+        };
+        this.source.onerror = () => {
+          if (this.source && this.source.readyState === WebSocket.OPEN) this.source.close();
+        };
+      },
+      stop() {
+        if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+        if (this.source) {
+            this.source.onclose = null;
+            this.source.close();
+        }
+        this.source = null;
+      }
+    };
+    KioskLiveUpdates.start();
+
     window.addEventListener('pagehide', () => {
-      liveSocket?.close();
+      KioskLiveUpdates.stop();
       if (latestPollingTimer) window.clearTimeout(latestPollingTimer);
       if (clockTimer) window.clearInterval(clockTimer);
     });
@@ -165,7 +197,6 @@
       } catch (error) { feedback.textContent = error.message; window.setTimeout(() => { feedback.textContent = ''; }, 5000); }
       finally { busy = false; input.value = ''; keepFocus(); }
     });
-    document.addEventListener('click', keepFocus);
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') event.preventDefault(); });
     keepFocus();
     updateClock();

@@ -4,6 +4,7 @@ from app.models.organization import Gerencia, Departamento, Cargo
 from app.models.employee import Empleado
 from app.schemas.organization import GerenciaCreate, DepartamentoCreate, CargoCreate
 from app.services.audit_service import add_audit
+from app.services.notification_service import publish_organization_changed
 from app.core.config import MAX_ORGANIZATION_CHILDREN
 
 
@@ -79,6 +80,7 @@ def set_organization_state(db: Session, model_cls: Type, item_id: int, estado: O
     antes = {'estado': item.estado}
     item.estado = normalized_state
     add_audit(db, usuario_id, 'cambio_estado', model_cls.__tablename__, item.id, antes, {'estado': item.estado})
+    publish_organization_changed(db, f"Cambió estado de {model_cls.__name__} '{item.nombre}' a {item.estado}", usuario_id)
     db.commit()
     db.refresh(item)
     return item
@@ -103,6 +105,7 @@ def update_organization(db: Session, model_cls: Type, item_id: int, payload, usu
     item.descripcion = (payload.descripcion or '').strip() or None
     item.estado = normalize_organization_state(payload.estado)
     add_audit(db, usuario_id, 'actualizacion', model_cls.__tablename__, item.id, antes, {'nombre': item.nombre, 'descripcion': item.descripcion, 'estado': item.estado})
+    publish_organization_changed(db, f"Actualizó {model_cls.__name__} '{item.nombre}'", usuario_id)
     db.commit()
     db.refresh(item)
     return item
@@ -113,6 +116,7 @@ def delete_or_disable_organization(db: Session, model_cls: Type, item_id: int, u
     if not item:
         raise ValueError('El registro no existe.')
 
+    item_name = item.nombre
     if model_cls is Gerencia:
         department_ids = [row.id for row in db.query(Departamento.id).filter(Departamento.gerencia_id == item.id).all()]
         cargo_ids = [row.id for row in db.query(Cargo.id).filter(Cargo.departamento_id.in_(department_ids)).all()] if department_ids else []
@@ -133,12 +137,14 @@ def delete_or_disable_organization(db: Session, model_cls: Type, item_id: int, u
         previous_state = item.estado
         item.estado = 'Inactivo'
         add_audit(db, usuario_id, 'cambio_estado', model_cls.__tablename__, item.id, {'estado': previous_state}, {'estado': 'Inactivo', 'motivo': 'Tiene empleados vinculados'})
+        publish_organization_changed(db, f"Inhabilitó {model_cls.__name__} '{item_name}' (empleados vinculados)", usuario_id)
         db.commit()
         return {'action': 'disabled', 'detail': 'El registro tiene empleados vinculados y fue inhabilitado.'}
 
     for child in children:
         db.delete(child)
     db.delete(item)
+    publish_organization_changed(db, f"Eliminó {model_cls.__name__} '{item_name}'", usuario_id)
     db.commit()
     return {'action': 'deleted', 'detail': 'El registro fue eliminado permanentemente.'}
 
@@ -157,6 +163,7 @@ def create_gerencia(db: Session, payload: GerenciaCreate, usuario_id: int | None
     db.add(item)
     db.flush()
     add_audit(db, usuario_id, 'alta', 'gerencias', item.id, despues={'nombre': item.nombre, 'estado': item.estado})
+    publish_organization_changed(db, f"Creó Gerencia '{item.nombre}'", usuario_id)
     db.commit()
     db.refresh(item)
     return {'id': item.id, 'nombre': item.nombre, 'descripcion': item.descripcion, 'estado': item.estado, 'fecha_creacion': item.fecha_creacion}
@@ -182,6 +189,7 @@ def create_departamento(db: Session, payload: DepartamentoCreate, usuario_id: in
     db.add(item)
     db.flush()
     add_audit(db, usuario_id, 'alta', 'departamentos', item.id, despues={'nombre': item.nombre, 'gerencia_id': item.gerencia_id, 'estado': item.estado})
+    publish_organization_changed(db, f"Creó Departamento '{item.nombre}'", usuario_id)
     db.commit()
     db.refresh(item)
     return {'id': item.id, 'nombre': item.nombre, 'descripcion': item.descripcion, 'estado': item.estado, 'fecha_creacion': item.fecha_creacion, 'gerencia_id': gerencia.id}
@@ -209,6 +217,7 @@ def create_cargo(db: Session, payload: CargoCreate, usuario_id: int | None = Non
     db.add(item)
     db.flush()
     add_audit(db, usuario_id, 'alta', 'cargos', item.id, despues={'nombre': item.nombre, 'departamento_id': item.departamento_id, 'estado': item.estado})
+    publish_organization_changed(db, f"Creó Cargo '{item.nombre}'", usuario_id)
     db.commit()
     db.refresh(item)
-    return {'id': item.id, 'nombre': item.nombre, 'descripcion': item.descripcion, 'estado': item.estado, 'fecha_creacion': item.fecha_creacion, 'departamento_id': departamento.id}
+    return {'id': item.id, 'nombre': item.nombre, 'descripcion': item.descripcion, 'estado': item.estado, 'fecha_creacion': item.fecha_creacion, 'departamento_id': departamento.id}

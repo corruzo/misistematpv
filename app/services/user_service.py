@@ -6,6 +6,7 @@ from app.models.user import Usuario
 from app.services.auth_service import invalidate_user_sessions
 from app.schemas.user import UsuarioCreate, UsuarioUpdate
 from app.services.audit_service import add_audit
+from app.services.notification_service import publish_user_changed
 
 
 class UserNotFoundError(ValueError):
@@ -34,6 +35,7 @@ def create_user(db: Session, payload: UsuarioCreate, actor_id: int | None = None
     db.add(usuario)
     db.flush()
     add_audit(db, actor_id, 'alta', 'usuarios', usuario.id, despues={'username': usuario.username, 'nombre': usuario.nombre, 'rol': usuario.rol, 'activo': True})
+    publish_user_changed(db, usuario.username, 'creó', actor_id)
     db.commit()
     db.refresh(usuario)
     return usuario
@@ -91,6 +93,7 @@ def update_user(db: Session, user_id: int, payload: UsuarioUpdate, actor_id: int
         invalidate_user_sessions(db, usuario.id)
     db.add(usuario)
     add_audit(db, actor_id, 'actualizacion', 'usuarios', usuario.id, antes, {'username': usuario.username, 'nombre': usuario.nombre, 'rol': usuario.rol, 'activo': bool(usuario.activo)})
+    publish_user_changed(db, usuario.username, 'actualizó', actor_id)
     db.commit()
     db.refresh(usuario)
     return usuario
@@ -110,6 +113,7 @@ def set_user_status(db: Session, user_id: int, active: bool, actor_id: int | Non
         invalidate_user_sessions(db, usuario.id)
     db.add(usuario)
     add_audit(db, actor_id, 'cambio_estado', 'usuarios', usuario.id, antes, {'activo': bool(usuario.activo)})
+    publish_user_changed(db, usuario.username, 'inhabilitó' if not active else 'habilitó', actor_id)
     db.commit()
     db.refresh(usuario)
     return usuario

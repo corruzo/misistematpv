@@ -328,6 +328,8 @@
     renderOfflineStatus();
     syncPendingQueue();
     Promise.all([loadManualEmployees(), loadFrequentEmployees()]).catch((error) => window.AppUI.toast(error.message, 'error'));
+    window.addEventListener('app:employee_changed', loadManualEmployees);
+    window.addEventListener('app:organization_changed', loadManualEmployees);
   });
 </script>
 {% endblock %}

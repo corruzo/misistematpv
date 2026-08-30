@@ -41,7 +41,7 @@ async def websocket_events(websocket: WebSocket):
             await asyncio.sleep(1)
             db = SessionLocal()
             try:
-                records = get_attendance_since(db, attendance_id, AttendanceOrigin.PUERTO_COM)
+                records = get_attendance_since(db, attendance_id, None)
                 denied = get_denied_events(db, denied_id)
                 notifications, _unread = list_notifications(db, user_id, notification_id)
                 if records:
@@ -58,7 +58,11 @@ async def websocket_events(websocket: WebSocket):
                         await websocket.send_json({'type': 'notification', 'payload': item})
                         if item['tipo'] in {'empleado_registrado', 'empleado_estado_cambiado'}:
                             await websocket.send_json({'type': 'employee_changed', 'payload': {}})
-                        elif item['tipo'] == 'marcaje_corregido':
+                        elif item['tipo'] == 'organizacion_cambiada':
+                            await websocket.send_json({'type': 'organization_changed', 'payload': {}})
+                        elif item['tipo'] == 'usuario_cambiado':
+                            await websocket.send_json({'type': 'user_changed', 'payload': {}})
+                        elif item['tipo'] in {'marcaje_corregido', 'pase_temporal', 'acceso_no_autorizado'}:
                             await websocket.send_json({'type': 'attendance', 'payload': {'refresh': True}})
                         elif item['tipo'] == 'lector_estado_cambiado':
                             await websocket.send_json({'type': 'reader_changed', 'payload': {}})

@@ -4,6 +4,7 @@ import os
 from urllib.parse import quote_plus, urlparse
 from datetime import timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+import pyodbc
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR.parent / '.env'
@@ -36,9 +37,10 @@ def is_allowed_csrf_origin(origin: str, request_host: str) -> bool:
     parsed_origin = urlparse(origin)
     return parsed_origin.scheme in {'http', 'https'} and parsed_origin.netloc == request_host
 
-# Database settings (SQL Server)
+# Database settings (SQL Server). "auto" supports the default instance and
+# the conventional SQL Server Express named instance on the local machine.
 DB_DRIVER = os.getenv('DB_DRIVER', 'ODBC Driver 17 for SQL Server')
-DB_SERVER = os.getenv('DB_SERVER', 'localhost')
+DB_SERVER = os.getenv('DB_SERVER', 'auto').strip()
 DB_NAME = os.getenv('DB_NAME', 'misistema_db')
 DB_USER = os.getenv('DB_USER', '')
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
@@ -48,6 +50,56 @@ AGENT_CLOCK_SKEW_MINUTES = float(os.getenv('AGENT_CLOCK_SKEW_MINUTES', '5'))
 AGENT_HEARTBEAT_PERSIST_SECONDS = int(os.getenv('AGENT_HEARTBEAT_PERSIST_SECONDS', '60'))
 GARITA_ID = os.getenv('GARITA_ID', '').strip()
 TEMPORARY_DATA_RETENTION_DAYS = int(os.getenv('TEMPORARY_DATA_RETENTION_DAYS', '30'))
+
+
+def _connection_string(server: str, database: str = 'master') -> str:
+    credentials = (
+        f'Trusted_Connection=yes;'
+        if DB_TRUSTED or not DB_USER
+        else f'UID={DB_USER};PWD={DB_PASSWORD};'
+    )
+    return (
+        f'DRIVER={{{DB_DRIVER}}};SERVER={server};DATABASE={database};'
+        f'{credentials}TrustServerCertificate={"yes" if TRUST_SERVER_CERTIFICATE else "no"}'
+    )
+
+
+def _resolve_db_server() -> str:
+    configured_server = DB_SERVER.replace('/', '\\') if DB_SERVER.lower().startswith('localhost/') else DB_SERVER
+    if configured_server.lower() != 'auto':
+        return configured_server
+
+    candidates = [candidate.strip() for candidate in os.getenv(
+        'DB_SERVER_CANDIDATES', 'localhost,localhost\\SQLEXPRESS'
+    ).split(',') if candidate.strip()]
+    failures = []
+    for candidate in candidates:
+        try:
+            connection = pyodbc.connect(_connection_string(candidate), timeout=2)
+            connection.close()
+            return candidate
+        except pyodbc.Error as exc:
+            failures.append(f'{candidate}: {exc.args[0] if exc.args else exc}')
+    details = '; '.join(failures)
+    raise RuntimeError(
+        'No se encontró una instancia local de SQL Server. Se probaron '
+        f'{", ".join(candidates)}. Verifica que SQL Server esté iniciado, '
+        f'o configura DB_SERVER con el servidor exacto. Detalle: {details}'
+    )
+
+
+DB_SERVER = _resolve_db_server()
+
+# Serial reader settings. Empty port keeps the hardware listener disabled.
+SERIAL_PORT = os.getenv('SERIAL_PORT', '').strip()
+SERIAL_BAUDRATE = int(os.getenv('SERIAL_BAUDRATE', '9600'))
+SERIAL_BYTESIZE = int(os.getenv('SERIAL_BYTESIZE', '8'))
+SERIAL_PARITY = os.getenv('SERIAL_PARITY', 'N').strip().upper()
+SERIAL_STOPBITS = float(os.getenv('SERIAL_STOPBITS', '1'))
+SERIAL_TIMEOUT = float(os.getenv('SERIAL_TIMEOUT', '1'))
+SERIAL_ENCODING = os.getenv('SERIAL_ENCODING', 'ascii').strip() or 'ascii'
+RFID_OFFLINE_QUEUE_PATH = Path(os.getenv('RFID_OFFLINE_QUEUE_PATH', str(BASE_DIR / 'backups' / 'rfid_offline_queue.sqlite3'))).resolve()
+RFID_OFFLINE_QUEUE_LIMIT = int(os.getenv('RFID_OFFLINE_QUEUE_LIMIT', '1000'))
 PROLONGED_STAY_HOURS = float(os.getenv('PROLONGED_STAY_HOURS', '12'))
 
 # Query safety defaults. Keep list endpoints bounded even when clients omit parameters.
@@ -64,15 +116,7 @@ BACKUP_SLOT_COUNT = int(os.getenv('BACKUP_SLOT_COUNT', '3'))
 BACKUP_INTERVAL_SECONDS = int(os.getenv('BACKUP_INTERVAL_SECONDS', str(24 * 60 * 60)))
 
 # Build SQLAlchemy URL. Prefer Trusted Connection if configured.
-if DB_TRUSTED or not DB_USER:
-    # Use Windows Authentication / Trusted Connection
-    odbc_str = (
-        f"DRIVER={{{DB_DRIVER}}};SERVER={DB_SERVER};DATABASE={DB_NAME};Trusted_Connection=yes;TrustServerCertificate={'yes' if TRUST_SERVER_CERTIFICATE else 'no'}"
-    )
-else:
-    odbc_str = (
-        f"DRIVER={{{DB_DRIVER}}};SERVER={DB_SERVER};DATABASE={DB_NAME};UID={DB_USER};PWD={DB_PASSWORD};TrustServerCertificate={'yes' if TRUST_SERVER_CERTIFICATE else 'no'}"
-    )
+odbc_str = _connection_string(DB_SERVER, DB_NAME)
 
 DATABASE_URL = "mssql+pyodbc:///?odbc_connect=" + quote_plus(odbc_str)
 

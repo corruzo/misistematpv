@@ -15,7 +15,7 @@
     
     {% block head %}{% endblock %}
   </head>
-  <body class="ios-bg">
+  <body class="ios-bg {% if request.query_params.get('embedded') == 'true' %}is-embedded{% endif %}">
     <div class="app-shell">
       <aside class="sidebar-wide" aria-label="Navegación principal">
         <div class="sidebar-brand">
@@ -63,7 +63,11 @@
               <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary">
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Resumen</span>
               </a>
-              {% if user.rol in ('Desarrollador', 'RRHH', 'Inspector') %}<a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance">
+              {% if user.rol in ('Desarrollador', 'RRHH', 'Inspector') %}
+              <a class="side-link {% if active_page == 'garita_launcher' %}active{% endif %}" href="/garita">
+                <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#monitor"></use></svg></span><span>Puesto de Garita (Dual)</span>
+              </a>
+              <a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance">
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#check"></use></svg></span><span>Registro de marcaje</span>
               </a>{% endif %}
               <a class="side-link {% if active_page == 'attendance_history' %}active{% endif %}" href="/attendance/history">

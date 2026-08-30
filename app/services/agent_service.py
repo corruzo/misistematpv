@@ -66,19 +66,19 @@ def get_agent_status(db: Session, garita_id: str | None = None) -> dict:
         query = query.filter(GateAgent.codigo == garita_id)
     agent = query.order_by(GateAgent.ultimo_heartbeat.desc()).first()
     if not agent:
-        return {'configured': bool(garita_id), 'connected': False, 'reader_connected': False, 'queue_depth': 0, 'message': 'Agente de garita no configurado'}
+        return {'configured': bool(garita_id), 'connected': False, 'reader_connected': False, 'queue_depth': 0, 'message': 'Lector RFID de Garita: No configurado'}
     now = utc_now()
     heartbeat = agent.ultimo_heartbeat
     age = (now - heartbeat).total_seconds() if heartbeat else None
     connected = age is not None and age <= max(AGENT_HEARTBEAT_PERSIST_SECONDS * 3, 180)
     if not connected:
-        message = 'Agente de garita desconectado'
+        message = 'Lector RFID de Garita: Desconectado'
     elif agent.cola_reportada:
-        message = f'Agente en línea; {agent.cola_reportada} lectura(s) en cola'
+        message = f'Lector RFID de Garita: En línea ({agent.cola_reportada} marcaje(s) pendientes por sincronizar)'
     elif not agent.lector_conectado:
-        message = 'Agente en línea; lector desconectado'
+        message = 'Garita en línea (Lector RFID no detectado en puerto USB)'
     else:
-        message = 'Agente y lector en línea'
+        message = 'Lector RFID de Garita: Operativo y listo'
     return {
         'configured': True,
         'connected': connected,

@@ -324,6 +324,7 @@
       }
     });
     window.addEventListener('app:employee_changed', () => EmployeeApp.fetchEmployees());
+    window.addEventListener('app:organization_changed', () => EmployeeApp.ensureOrganizationCatalog(true));
     window.addEventListener('pagehide', () => {
       NotificationApp.pollTimer && window.clearTimeout(NotificationApp.pollTimer);
       LiveUpdates.stop();

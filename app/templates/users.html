@@ -328,6 +328,10 @@
     });
 
     loadUsers();
+
+    window.addEventListener('app:user_changed', () => {
+      loadUsers().catch(() => {});
+    });
   });
 </script>
 {% endblock %}

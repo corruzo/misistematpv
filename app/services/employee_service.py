@@ -192,6 +192,8 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     current_status = emp.estado.value if isinstance(emp.estado, EstadoEnum) else str(emp.estado)
     if current_status != previous_status:
         publish_employee_status_changed(db, emp.nombre_apellido, previous_status, current_status, usuario_id)
+    else:
+        publish_employee_updated(db, emp.nombre_apellido, usuario_id)
     db.commit()
     db.refresh(emp)
     return emp

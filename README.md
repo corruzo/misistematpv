@@ -10,26 +10,72 @@ El archivo [prioridades_inspector_garita.md](prioridades_inspector_garita.md) co
 
 ## Requisitos previos
 
+- Git instalado para clonar el repositorio.
+- Python instalado y disponible como `python` en PowerShell o CMD.
 - SQL Server con la base de datos disponible.
+- SSMS (SQL Server Management Studio) o una herramienta equivalente para ejecutar el script inicial.
 - ODBC Driver 17 para SQL Server instalado en la máquina.
 - Windows (porque la app usa scripts .bat para iniciar el proyecto de forma rápida).
 
+## Instalación desde GitHub en una PC nueva
+
+Este es el procedimiento oficial para una PC que nunca ha ejecutado el sistema. Hazlo en este orden:
+
+1. Instala Git, Python y el ODBC Driver 17 para SQL Server. Durante la instalación de Python activa `Add Python to PATH`.
+2. Clona el repositorio y entra en su carpeta:
+
+```powershell
+git clone <URL-DEL-REPOSITORIO>
+cd misistematpv
+```
+
+3. Inicia SQL Server y abre `scripts/create_database.sql` en SSMS. Ejecuta el script completo. Este script crea la base `misistema_db` y las tablas iniciales. Si SQL Server usa una instancia distinta, asegúrate de conectarte a esa instancia en SSMS.
+4. Revisa el archivo `.env`. La primera ejecución crea ese archivo automáticamente desde `.env.template`. Por defecto `DB_SERVER=auto` prueba la instancia normal (`localhost`) y SQL Server Express (`localhost\SQLEXPRESS`). Si SQL Server está en otro equipo o usa otro nombre de instancia, cambia `DB_SERVER` por el servidor exacto. Con autenticación de Windows conserva `DB_TRUSTED=true` y deja `DB_USER` y `DB_PASSWORD` vacíos. Si usarás un lector RFID, configura después `SERIAL_PORT=COM...`; sin lector, déjalo vacío.
+5. Desde la raíz del repositorio ejecuta:
+
+```powershell
+.\start_app.bat
+```
+
+El lanzador crea `.venv`, instala `requirements.txt`, aplica las migraciones Alembic pendientes y arranca la aplicación. En ejecuciones posteriores no tienes que repetir esos pasos.
+
+6. Abre la dirección que muestra la consola. En la misma PC normalmente es `http://127.0.0.1:8000/`. Si es la primera instalación, entra en `/setup` para crear el primer usuario administrador; después usa `/login`.
+
+Si la base de datos ya existía y solo estás instalando el código en otra PC, no vuelvas a crearla: configura el mismo `DB_SERVER` y `DB_NAME` en `.env` y ejecuta `start_app.bat` para aplicar las migraciones pendientes.
+
+### Actualizar una instalación existente
+
+Después de traer cambios desde GitHub:
+
+```powershell
+git pull
+.\start_app.bat
+```
+
+El arranque aplica automáticamente las migraciones nuevas. Solo usa la actualización forzada de dependencias cuando cambien `requirements.txt` o `requirements-dev.txt`:
+
+```powershell
+.\start_app.bat /update
+```
+
+### Errores habituales al instalar
+
+- `python no se reconoce`: reinstala Python activando `Add Python to PATH`, o usa `py start_app.py` como alternativa.
+- Error de `ODBC Driver 17`: instala el Microsoft ODBC Driver 17 para SQL Server y reinicia la terminal.
+- Error de conexión SQL Server: verifica que el servicio esté iniciado. Con instalación local deja `DB_SERVER=auto`; para una instancia remota configura `DB_SERVER=SERVIDOR\INSTANCIA` (o `SERVIDOR,PUERTO`) y revisa la autenticación.
+- Error al abrir el puerto: cambia `APP_PORT` en `.env` y vuelve a ejecutar el lanzador. Para acceder desde otra PC, permite ese puerto en el firewall de Windows.
+- No hay marcajes con lector: revisa el COM en el Administrador de dispositivos y configúralo en `SERIAL_PORT`; el lector debe enviar el código terminado en `CR` o `LF`.
+
 ## Copia portable del proyecto
 
-Si vas a llevar la carpeta raíz a otra PC:
+Si vas a llevar una copia de la carpeta raíz a otra PC en lugar de clonar Git:
 
 1. Copia toda la carpeta del proyecto.
-2. Abre SSMS y ejecuta el script SQL de creación/actualización de la base de datos, incluida la tabla de alertas de acceso denegado.
-3. En la raíz del proyecto, ejecuta el archivo:
-   - `start_app.bat`
+2. En la PC nueva instala los mismos requisitos previos indicados arriba.
+3. Si es una base de datos nueva, abre SSMS y ejecuta `scripts/create_database.sql` completo. Si reutilizas una base existente, conserva sus datos y configura su conexión en `.env`.
+4. En la raíz del proyecto, ejecuta `.\start_app.bat` desde PowerShell o `start_app.bat` desde CMD.
 
-Eso crea el entorno virtual si hace falta, instala las dependencias solo cuando no están disponibles, crea `.env` si no existe y levanta la aplicación. Si ya está preparado, el arranque no descarga nada.
-
-Para forzar una actualización de dependencias:
-
-```bat
-start_app.bat /update
-```
+Eso crea el entorno virtual si hace falta, instala las dependencias solo cuando no están disponibles, crea `.env` si no existe, aplica las migraciones y levanta la aplicación.
 
 ## Cómo funciona el arranque
 
@@ -48,7 +94,8 @@ La configuración de conexión se toma de `.env`.
 Ejemplo base:
 
 ```env
-DB_SERVER=localhost
+DB_SERVER=auto
+DB_SERVER_CANDIDATES=localhost,localhost\SQLEXPRESS
 DB_NAME=misistema_db
 DB_DRIVER=ODBC Driver 17 for SQL Server
 DB_USER=
@@ -64,7 +111,7 @@ SERIAL_TIMEOUT=1
 SERIAL_ENCODING=ascii
 ```
 
-Si usas autenticación de Windows, deja `DB_TRUSTED=true` y `DB_USER`/`DB_PASSWORD` vacíos.
+Si usas autenticación de Windows, deja `DB_TRUSTED=true` y `DB_USER`/`DB_PASSWORD` vacíos. Con `DB_SERVER=auto`, la aplicación detecta automáticamente SQL Server normal o Express en el equipo local. Para otro equipo o una instancia con nombre diferente, usa el valor exacto de `DB_SERVER`.
 
 Para el lector serial, configura `SERIAL_PORT` con el COM asignado por Windows. En equipos de desarrollo sin lector, deja `SERIAL_PORT=` vacío: la aplicación funciona normalmente y no intenta abrir ningún puerto. En la PC de producción, conecta el lector, revisa el COM en el Administrador de dispositivos y configura ese valor, por ejemplo `SERIAL_PORT=COM5`. La configuración inicial usa 9600 baudios, 8 bits, sin paridad y 1 bit de parada (8N1); cambia `SERIAL_PARITY` a `E` u `O`, o `SERIAL_STOPBITS`, si el fabricante indica otros valores. El lector debe enviar el código de tarjeta terminado en salto de línea (`CR` o `LF`).
 

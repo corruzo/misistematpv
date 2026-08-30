@@ -22,8 +22,13 @@ templates_env = Environment(
 
 
 @router.get('/')
-def root_page(request: Request, user=Depends(current_user_optional)):
+def root_page(request: Request, db: Session = Depends(get_db), user=Depends(current_user_optional)):
     if not user:
+        try:
+            if db.query(Usuario).count() == 0:
+                return RedirectResponse('/setup', status_code=303)
+        except SQLAlchemyError:
+            db.rollback()
         return RedirectResponse('/login', status_code=303)
     return RedirectResponse('/attendance/summary', status_code=303)
 
@@ -33,6 +38,11 @@ def login_page(request: Request, db: Session = Depends(get_db)):
     from app.services.auth_service import get_user_by_token
     if get_user_by_token(db, request.cookies.get(SESSION_COOKIE)):
         return RedirectResponse('/', status_code=303)
+    try:
+        if db.query(Usuario).count() == 0:
+            return RedirectResponse('/setup', status_code=303)
+    except SQLAlchemyError:
+        db.rollback()
     template = templates_env.get_template('login.html')
     error = 'Tu sesión expiró. Inicia sesión nuevamente.' if request.query_params.get('reason') == 'session_expired' else None
     return HTMLResponse(template.render(error=error))

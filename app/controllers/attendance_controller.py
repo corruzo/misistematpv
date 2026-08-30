@@ -76,6 +76,12 @@ def attendance_summary_page(request: Request, user=Depends(require_page_user)):
     return HTMLResponse(template.render(active_page='attendance_summary', user=user, csp_nonce=request.state.csp_nonce))
 
 
+@router.get('/garita', response_class=HTMLResponse)
+def garita_launcher_page(request: Request, user=Depends(require_page_user)):
+    template = templates_env.get_template('garita_launcher.html')
+    return HTMLResponse(template.render(active_page='garita_launcher', user=user, csp_nonce=request.state.csp_nonce))
+
+
 @router.post('/api/attendance/kiosk-scan')
 def kiosk_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _user=Depends(require_user)):
     try:

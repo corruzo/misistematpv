@@ -543,6 +543,10 @@
       console.error(err);
       tree.innerHTML = '<p class="text-danger mb-0">No se pudo cargar la organización.</p>';
     });
+
+    window.addEventListener('app:organization_changed', () => {
+      loadOrganization().catch(() => {});
+    });
   });
 </script>
 {% endblock %}

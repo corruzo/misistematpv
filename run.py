@@ -23,6 +23,7 @@ from app.controllers.notification_controller import router as notification_route
 from fastapi import Depends
 from app.core.auth import require_user
 from app.core.config import APP_ENV, COOKIE_SECURE, TEMPORARY_DATA_RETENTION_DAYS, is_allowed_csrf_origin, STATIC_DIR
+from app.core.exceptions import AppException
 from app.database.session import SessionLocal
 from app.services.auth_service import cleanup_expired_sessions
 from app.services.notification_service import cleanup_temporary_data
@@ -115,6 +116,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+@app.exception_handler(AppException)
+async def app_exception_handler(request: Request, exc: AppException):
+    if request.url.path.startswith('/api/'):
+        content = {'detail': exc.message}
+        if exc.details:
+            content['details'] = exc.details
+        return JSONResponse(content, status_code=exc.status_code)
+    return JSONResponse({'detail': exc.message}, status_code=exc.status_code)
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    print(f'CRITICAL: Error de SQLAlchemy en endpoint {request.url.path}: {exc}')
+    if request.url.path.startswith('/api/'):
+        return JSONResponse({'detail': 'Error de comunicación o consulta en la base de datos SQL Server.'}, status_code=500)
+    return JSONResponse({'detail': 'Error al procesar la solicitud en la base de datos.'}, status_code=500)
+
+
 app.include_router(auth_router)
 app.include_router(router, dependencies=[Depends(require_user)])
 app.include_router(organization_router, dependencies=[Depends(require_user)])

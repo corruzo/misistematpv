@@ -52,9 +52,24 @@ def publish_employee_registered(db: Session, employee, usuario_id: int | None) -
     return publish(db, ROLE_ALL_USERS, 'empleado_registrado', PRIORITY_INFO, 'Nuevo empleado registrado', f'{actor} registró al empleado {employee.nombre_apellido} (cédula {employee.cedula}).')
 
 
+def publish_employee_updated(db: Session, employee_name: str, usuario_id: int | None) -> int:
+    actor = _actor_name(db, usuario_id)
+    return publish(db, ROLE_ALL_USERS, 'empleado_registrado', PRIORITY_INFO, 'Empleado actualizado', f'{actor} actualizó los datos del empleado {employee_name}.')
+
+
 def publish_employee_status_changed(db: Session, employee_name: str, old_status: str, new_status: str, usuario_id: int | None) -> int:
     actor = _actor_name(db, usuario_id)
     return publish(db, ROLE_ALL_USERS, 'empleado_estado_cambiado', PRIORITY_WARNING, 'Cambio de estatus de empleado', f'{actor} cambió el estatus de {employee_name} de {old_status} a {new_status}.')
+
+
+def publish_organization_changed(db: Session, detail: str, usuario_id: int | None) -> int:
+    actor = _actor_name(db, usuario_id)
+    return publish(db, ROLE_ALL_USERS, 'organizacion_cambiada', PRIORITY_INFO, 'Estructura organizacional actualizada', f'{actor}: {detail}')
+
+
+def publish_user_changed(db: Session, username: str, action: str, usuario_id: int | None) -> int:
+    actor = _actor_name(db, usuario_id)
+    return publish(db, ROLE_ALL_USERS, 'usuario_cambiado', PRIORITY_INFO, 'Usuario del sistema actualizado', f'{actor} {action} al usuario {username}.')
 
 
 def publish_attendance_corrected(db: Session, employee_name: str, old_type: str, new_type: str, reason: str, usuario_id: int) -> int:

@@ -4,6 +4,23 @@
 {% block title %}Control de Asistencia - Garita{% endblock %}
 
 {% block content %}
+<script nonce="{{ csp_nonce }}">
+  if (localStorage.getItem('inspectorTheme') === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+</script>
+{% block actions %}
+<div class="d-flex align-items-center gap-2 me-3">
+  <button id="themeToggleBtn" class="btn-ios ghost" title="Alternar Modo Oscuro" aria-label="Alternar modo oscuro">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
+  <button class="btn-ios primary" type="button" data-bs-toggle="modal" data-bs-target="#manualMarkModal">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+    Marcaje Manual Rápido
+  </button>
+</div>
+{% endblock %}
+
 <div class="attendance-page inspector-page pt-2">
 
   <!-- 1. ALERTAS Y ESTADO (Fecha/Hora limpia a la derecha) -->
@@ -89,7 +106,7 @@
     <section class="card inspector-panel inspector-panel--recent">
       <div class="card-panel__header">
         <h3>Últimos Movimientos</h3>
-        <p>Historial reciente de marcaje en garita.</p>
+        <p>Historial reciente de marcajes en la Garita de Control.</p>
       </div>
       <div id="recentAttendanceList" class="inspector-recent-list">
         <p class="table-state">Cargando movimientos...</p>
@@ -108,6 +125,21 @@
   </div>
 
 </div>
+
+<!-- Modal de Marcaje Manual Rápido -->
+<div class="modal" id="manualMarkModal" tabindex="-1" aria-labelledby="manualMarkModalLabel" aria-hidden="true">
+  <div class="modal-dialog" style="max-width: 900px;">
+    <div class="modal-content" style="height: 85vh;">
+      <div class="modal-header">
+        <h2 class="modal-title h5 mb-0" id="manualMarkModalLabel">Registro Manual Rápido</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body p-0">
+        <iframe src="/attendance?embedded=true" style="width:100%; height:100%; border:none; border-radius: 0 0 12px 12px;" title="Marcaje Manual"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -125,6 +157,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const SVG_CHECK = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="20 6 9 17l-5-5"/></svg>`;
   const SVG_ALERT = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+
+  const themeBtn = document.getElementById('themeToggleBtn');
+  if (themeBtn) {
+    const currentTheme = localStorage.getItem('inspectorTheme') || 'light';
+    if (currentTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    themeBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      localStorage.setItem('inspectorTheme', isDark ? 'light' : 'dark');
+    });
+  }
 
   function render() {
     const term = search.value.trim().toLowerCase();
@@ -169,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const response = await fetch('/api/attendance/inspector-dashboard', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Error al sincronizar garita.');
+      if (!response.ok) throw new Error('Error al consultar estado del punto de control.');
       
       const payload = await response.json();
       const summary = payload.summary || {};
@@ -274,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!items.length) {
       container.innerHTML = `
         <p class="table-state text-success d-flex align-items-center gap-2 mb-0 py-1">
-          ${SVG_CHECK} Sin anomalías ni alertas activas en garita.
+          ${SVG_CHECK} Sin anomalías ni alertas activas en el punto de control.
         </p>`;
       return;
     }
@@ -305,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!container.children.length) {
             container.innerHTML = `
               <p class="table-state text-success d-flex align-items-center gap-2 mb-0 py-1">
-                ${SVG_CHECK} Sin anomalías ni alertas activas en garita.
+                ${SVG_CHECK} Sin anomalías ni alertas activas en el punto de control.
               </p>`;
           }
         } catch (error) {
