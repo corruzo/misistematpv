@@ -44,6 +44,13 @@ def get_local_ip():
         except OSError:
             return '127.0.0.1'
 
+def port_is_in_use(port):
+    try:
+        with socket.create_connection(('127.0.0.1', int(port)), timeout=1):
+            return True
+    except OSError:
+        return False
+
 def main():
     print("=========================================")
     print("   Gestor de Arranque de MarcajeTPV      ")
@@ -54,6 +61,28 @@ def main():
         os.chdir(base_dir)
     else:
         base_dir = os.getcwd()
+
+    env_file = os.path.join(base_dir, ".env")
+    env_template = os.path.join(base_dir, ".env.template")
+    if not os.path.exists(env_file) and os.path.exists(env_template):
+        shutil.copyfile(env_template, env_file)
+    load_dotenv(env_file, override=False)
+
+    port = os.getenv('APP_PORT', '8000')
+    loopback_url = f"http://127.0.0.1:{port}/"
+    try:
+        with urllib.request.urlopen(loopback_url, timeout=1) as response:
+            if 200 <= response.status < 500:
+                print("El sistema ya estaba iniciado.")
+                if "--no-browser" not in sys.argv:
+                    webbrowser.open(loopback_url)
+                return
+    except (urllib.error.URLError, TimeoutError):
+        if port_is_in_use(port):
+            print("El puerto del sistema ya está ocupado; se abrirá la aplicación existente.")
+            if "--no-browser" not in sys.argv:
+                webbrowser.open(loopback_url)
+            return
     
     venv_dir = os.path.join(base_dir, ".venv")
     if os.name == "nt":
@@ -103,17 +132,6 @@ def main():
     else:
         print("Dependencias ya instaladas. Se omite la descarga.")
         
-    env_file = os.path.join(base_dir, ".env")
-    env_template = os.path.join(base_dir, ".env.template")
-    if not os.path.exists(env_file):
-        if os.path.exists(env_template):
-            print("Creando archivo .env desde plantilla...")
-            shutil.copyfile(env_template, env_file)
-        else:
-            print("WARNING: No se encontró .env.template para inicializar .env.")
-
-    load_dotenv(env_file, override=False)
-            
     print("Aplicando migraciones de base de datos (Alembic)...")
     if run_cmd([active_python, "-m", "alembic", "upgrade", "head"]) != 0:
         print("\nERROR: No se pudieron aplicar las migraciones automáticamente.")
@@ -122,9 +140,7 @@ def main():
         input("Presiona Enter para salir...")
         sys.exit(1)
         
-    port = os.getenv('APP_PORT', '8000')
     local_url = f"http://{get_local_ip()}:{port}/"
-    loopback_url = f"http://127.0.0.1:{port}/"
     print(f"Iniciando MarcajeTPV en 0.0.0.0:{port}...")
     print(f"Acceso desde esta PC: {loopback_url}")
     print(f"Acceso desde la red local: {local_url}")
