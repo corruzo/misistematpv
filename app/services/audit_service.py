@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime
 from enum import Enum
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditRecord
@@ -31,3 +32,23 @@ def add_audit(db: Session, usuario_id: int | None, accion: str, entidad: str, en
     )
     db.add(record)
     return record
+
+
+def list_audit_events(db: Session, *, entidad: str | None = None, since: datetime | None = None, limit: int = 50) -> list[AuditRecord]:
+    query = db.query(AuditRecord)
+    if entidad is not None:
+        query = query.filter(AuditRecord.entidad == entidad)
+    if since is not None:
+        query = query.filter(AuditRecord.fecha >= since)
+    return query.order_by(AuditRecord.fecha.desc(), AuditRecord.id.desc()).limit(limit).all()
+
+
+def summarize_audit(db: Session, *, since: datetime | None = None) -> dict[str, int | list[dict]]:
+    query = db.query(AuditRecord)
+    if since is not None:
+        query = query.filter(AuditRecord.fecha >= since)
+    by_entity = query.with_entities(AuditRecord.entidad, func.count(AuditRecord.id)).group_by(AuditRecord.entidad).all()
+    return {
+        'total': query.count(),
+        'by_entity': {entity: count for entity, count in by_entity},
+    }

@@ -7,6 +7,9 @@ engine = create_engine(
     fast_executemany=True,
     pool_pre_ping=True,
     pool_recycle=1800,
+    pool_size=10,
+    max_overflow=5,
+    pool_timeout=10,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
 

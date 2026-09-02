@@ -43,6 +43,9 @@
   </main>
   <script nonce="{{ csp_nonce }}">
   (() => {
+    const isDeveloper = {{ 'true' if is_developer else 'false' }};
+    const isInspector = {{ 'true' if is_inspector else 'false' }};
+    const shouldLockKiosk = isInspector && !isDeveloper;
     const form = document.getElementById('kioskScanForm');
     const input = document.getElementById('kioskCardCode');
     const waiting = document.getElementById('kioskWaiting');
@@ -60,13 +63,51 @@
     let resultTimer = null;
     let latestPollingTimer = null;
     let clockTimer = null;
-    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
     const csrfHeaders = () => {
       const token = document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
       return token ? { 'X-CSRFToken': token } : {};
     };
     const kioskChannel = 'BroadcastChannel' in window ? new BroadcastChannel('marcaje-kiosko') : null;
     const keepFocus = () => { input.focus(); };
+    const requestKioskMode = async () => {
+      if (!shouldLockKiosk) return;
+      try {
+        if (document.fullscreenElement === null) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (error) {
+        // La restricción funciona mejor cuando la aplicación se ejecuta en modo kiosco del navegador.
+      }
+    };
+    const preventUserExit = () => {
+      if (!shouldLockKiosk) return;
+      const blockedKeys = new Set(['Escape', 'F11', 'Alt', 'Meta', 'Tab', 'Control']);
+      document.addEventListener('keydown', (event) => {
+        if (blockedKeys.has(event.key) || event.ctrlKey || event.metaKey || event.altKey) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }, { capture: true });
+      document.addEventListener('contextmenu', (event) => event.preventDefault(), { capture: true });
+      window.addEventListener('blur', () => {
+        window.focus();
+        requestKioskMode();
+      }, { capture: true });
+      window.addEventListener('focus', () => {
+        requestKioskMode();
+        keepFocus();
+      }, { capture: true });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          requestKioskMode();
+          window.focus();
+        }
+      });
+      window.addEventListener('beforeunload', (event) => {
+        event.preventDefault();
+        event.returnValue = '';
+      });
+    };
     const reset = () => { document.body.classList.remove('kiosk-access-denied'); document.body.classList.remove('kiosk-vacation'); accessAlert.classList.add('d-none'); vacationAlert.classList.add('d-none'); result.classList.add('d-none'); waiting.classList.remove('d-none'); clock.classList.remove('d-none'); feedback.textContent = ''; input.value = ''; keepFocus(); };
     const showAccessDenied = (payload) => {
       const eventTime = Date.parse(payload.fecha_hora || '') || Date.now();
@@ -197,7 +238,14 @@
       } catch (error) { feedback.textContent = error.message; window.setTimeout(() => { feedback.textContent = ''; }, 5000); }
       finally { busy = false; input.value = ''; keepFocus(); }
     });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') event.preventDefault(); });
+    if (shouldLockKiosk) {
+      preventUserExit();
+      requestKioskMode();
+      setInterval(() => {
+        requestKioskMode();
+        keepFocus();
+      }, 1000);
+    }
     keepFocus();
     updateClock();
     clockTimer = window.setInterval(updateClock, 1000);

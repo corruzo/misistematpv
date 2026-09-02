@@ -1,13 +1,16 @@
 import asyncio
 import hmac
+import logging
 import os
 import secrets
 import sys
+import warnings
 from contextlib import asynccontextmanager
 
 import uvicorn
+from sqlalchemy.exc import SAWarning
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import text
@@ -21,11 +24,26 @@ from app.controllers.system_controller import router as system_router, backup_lo
 from app.controllers.notification_controller import router as notification_router
 from fastapi import Depends
 from app.core.auth import require_user
-from app.core.config import APP_ENV, COOKIE_SECURE, TEMPORARY_DATA_RETENTION_DAYS, is_allowed_csrf_origin, STATIC_DIR
+from app.core.config import APP_ENV, APP_RELOAD, COOKIE_SECURE, TEMPORARY_DATA_RETENTION_DAYS, is_allowed_csrf_origin, STATIC_DIR
 from app.core.exceptions import AppException
 from app.database.session import SessionLocal
 from app.services.auth_service import cleanup_expired_sessions
 from app.services.notification_service import cleanup_temporary_data
+
+warnings.filterwarnings(
+    'ignore',
+    category=SAWarning,
+    message=r'Unrecognized server version info .*',
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
+logging.getLogger('uvicorn.access').setLevel(logging.WARNING)
+logging.getLogger('websockets.server').setLevel(logging.WARNING)
+logging.getLogger('websockets.client').setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -113,10 +131,15 @@ async def app_exception_handler(request: Request, exc: AppException):
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    print(f'CRITICAL: Error de SQLAlchemy en endpoint {request.url.path}: {exc}')
+    logger.exception('Error de SQLAlchemy en endpoint %s', request.url.path)
     if request.url.path.startswith('/api/'):
         return JSONResponse({'detail': 'Error de comunicación o consulta en la base de datos SQL Server.'}, status_code=500)
     return JSONResponse({'detail': 'Error al procesar la solicitud en la base de datos.'}, status_code=500)
+
+
+@app.get('/healthz', include_in_schema=False)
+def health_check():
+    return {'status': 'ok'}
 
 
 app.include_router(auth_router)
@@ -125,8 +148,13 @@ app.include_router(organization_router, dependencies=[Depends(require_user)])
 app.include_router(user_router, dependencies=[Depends(require_user)])
 app.include_router(attendance_router, dependencies=[Depends(require_user)])
 app.include_router(system_router, dependencies=[Depends(require_user)])
-app.include_router(notification_router, dependencies=[Depends(require_user)])
+app.include_router(notification_router)
 app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
+
+
+@app.get('/favicon.ico', include_in_schema=False)
+def favicon():
+    return FileResponse(STATIC_DIR / 'img' / 'favicon.svg', media_type='image/svg+xml')
 
 
 async def _session_cleanup_loop():
@@ -136,9 +164,9 @@ async def _session_cleanup_loop():
             cleanup_expired_sessions(db)
             result = cleanup_temporary_data(db, TEMPORARY_DATA_RETENTION_DAYS)
             if any(result.values()):
-                print(f'Purga temporal: {result}')
+                logger.info('Purga temporal ejecutada: %s', result)
         except SQLAlchemyError as exc:
-            print(f'WARNING: No se pudieron limpiar sesiones expiradas: {exc}')
+            logger.warning('No se pudieron limpiar sesiones expiradas: %s', exc)
         finally:
             db.close()
         await asyncio.sleep(24 * 60 * 60)
@@ -149,6 +177,7 @@ if __name__ == '__main__':
         'run:app',
         host=os.getenv('APP_HOST', '0.0.0.0'),
         port=int(os.getenv('APP_PORT', '8000')),
-        reload=APP_ENV != 'production',
+        reload=APP_RELOAD,
         workers=worker_count,
+        access_log=False,
     )

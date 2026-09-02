@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, Request
+from starlette.requests import HTTPConnection
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -49,14 +50,19 @@ ROLE_PERMISSIONS = {
 }
 
 
+def get_request_session_token(request: Request) -> str | None:
+    cookies = getattr(request, 'cookies', {}) or {}
+    return cookies.get(SESSION_COOKIE) or cookies.get('session')
+
+
 def current_user_optional(
-    request: Request,
+    request: HTTPConnection,
     db: Session = Depends(get_db),
 ) -> Usuario | None:
-    return get_user_by_token(db, request.cookies.get(SESSION_COOKIE))
+    return get_user_by_token(db, get_request_session_token(request))
 
 
-def require_user(request: Request, user: Usuario | None = Depends(current_user_optional)) -> Usuario:
+def require_user(request: HTTPConnection, user: Usuario | None = Depends(current_user_optional)) -> Usuario:
     if not user:
         if not request.url.path.startswith('/api/'):
             raise HTTPException(status_code=307, headers={'Location': '/login?reason=session_expired'})
@@ -102,7 +108,7 @@ def require_read_access(user: Usuario = Depends(require_user)) -> Usuario:
 
 
 def require_page_user(request: Request, db: Session = Depends(get_db)) -> Usuario:
-    user = get_user_by_token(db, request.cookies.get(SESSION_COOKIE))
+    user = get_user_by_token(db, get_request_session_token(request))
     if not user:
         raise HTTPException(status_code=307, headers={'Location': '/login?reason=session_expired'})
     return user

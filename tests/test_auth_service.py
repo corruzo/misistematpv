@@ -15,6 +15,7 @@ from app.services.auth_service import (
     invalidate_user_sessions,
     SESSION_HOURS,
 )
+from app.core.auth import current_user_optional
 from app.core.security import hash_password
 from app.services.user_service import set_user_status
 
@@ -106,6 +107,16 @@ class AuthServiceTest(unittest.TestCase):
 
         self.assertIs(get_user_by_token(db, 'valid'), user)
         db.delete.assert_not_called()
+
+    def test_current_user_optional_reads_session_cookie(self):
+        db = MagicMock()
+        request = MagicMock()
+        request.cookies = {'session': 'abc123'}
+
+        user = Usuario(id=9, activo=1, username='ana')
+        db.query.return_value.filter.return_value.first.return_value = user
+
+        self.assertIs(current_user_optional(request, db), user)
 
     def test_admin_cannot_disable_own_user(self):
         db = MagicMock()

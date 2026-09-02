@@ -8,7 +8,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado
 from app.schemas.attendance import AttendanceOrigin, AttendanceType
 from app.schemas.attendance import AttendanceManualBatchRequest
-from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, attendance_records_are_too_close, correct_attendance, register_manual, register_scan
+from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, attendance_records_are_too_close, correct_attendance, inspector_dashboard, normalize_inspector_dashboard_payload, register_manual, register_scan
 
 
 class QueryDouble:
@@ -80,6 +80,26 @@ class AttendanceServiceTest(unittest.TestCase):
             departamento_id=1,
             cargo_id=1,
         )
+
+    def test_inspector_dashboard_handles_incomplete_data_without_crashing(self):
+        payload = normalize_inspector_dashboard_payload(
+            summary=None,
+            present=None,
+            recent_records=[type('BadRecord', (), {
+                'id': 1,
+                'empleado_id': 77,
+                'tipo': 'ENTRADA',
+                'fecha_hora': datetime.now(timezone.utc),
+                'origen': 'PUERTO_COM',
+                'empleado': None,
+            })()],
+            expected_employees=[],
+            alerts=[{'id': 'abc123', 'message': 'Prueba'}],
+        )
+
+        self.assertEqual(payload['summary']['presentes'], 0)
+        self.assertEqual(payload['recent'][0]['empleado_nombre'], 'Empleado no identificado')
+        self.assertEqual(payload['alerts'][0]['message'], 'Prueba')
 
     def test_manual_mark_alternates_entry_and_exit(self):
         db = DatabaseDouble(self.make_employee())

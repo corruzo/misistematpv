@@ -79,7 +79,6 @@ def run_scheduled_backup() -> None:
 
 
 async def backup_loop() -> None:
-    await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
     while True:
         await asyncio.to_thread(run_scheduled_backup)
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)

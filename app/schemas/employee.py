@@ -82,7 +82,9 @@ class EmpleadoOut(BaseModel):
 
 
 class EmpleadoOperativoOut(BaseModel):
+    id: int
     nombre_apellido: str
+    cedula: Optional[str] = None
     gerencia: Optional[str] = None
     departamento: Optional[str] = None
     estado: EstadoEnum
@@ -91,6 +93,8 @@ class EmpleadoOperativoOut(BaseModel):
     email: Optional[str] = None
     contacto_emergencia_parentesco: Optional[str] = None
     contacto_emergencia_telefono: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmpleadoManualOut(BaseModel):

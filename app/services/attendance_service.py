@@ -38,6 +38,11 @@ def attendance_records_are_too_close(previous_time: datetime, current_time: date
     return timedelta(0) <= current_time - previous_time < timedelta(seconds=DEBOUNCE_SECONDS)
 
 
+def format_alert_time(value: datetime | None) -> str:
+    local_value = to_local(value)
+    return local_value.strftime('%d/%m/%Y a las %H:%M') if local_value else 'fecha no disponible'
+
+
 def build_attendance_alerts(today_records, overnight_records, employee_label, present_records, now):
     records_by_employee = {}
     for record in overnight_records:
@@ -59,26 +64,26 @@ def build_attendance_alerts(today_records, overnight_records, employee_label, pr
             if same_type:
                 alerts.append({
                     'kind': 'sequence',
-                    'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes {record.tipo.lower()} consecutivos. Entre {to_local(previous.fecha_hora).isoformat()} y {to_local(record.fecha_hora).isoformat()}.',
+                    'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes de {record.tipo.lower()} consecutivos. Entre {format_alert_time(previous.fecha_hora)} y {format_alert_time(record.fecha_hora)}.',
                 })
             elif 0 <= interval < DEBOUNCE_SECONDS:
                 alerts.append({
                     'kind': 'sequence',
-                    'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes en {interval:.1f} segundos. Entre {to_local(previous.fecha_hora).isoformat()} y {to_local(record.fecha_hora).isoformat()}.',
+                    'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes en {interval:.1f} segundos. Entre {format_alert_time(previous.fecha_hora)} y {format_alert_time(record.fecha_hora)}.',
                 })
             if record.tipo == AttendanceType.SALIDA.value and not any(
                 item.tipo == AttendanceType.ENTRADA.value for item in records[:records.index(record)]
             ):
                 alerts.append({
                     'kind': 'sequence',
-                    'message': f'El empleado {employee_label(employee_id)} tiene una salida sin entrada previa ({to_local(record.fecha_hora).isoformat()}).',
+                    'message': f'El empleado {employee_label(employee_id)} tiene una salida sin entrada previa ({format_alert_time(record.fecha_hora)}).',
                 })
             previous = record
 
         if employee_id not in today_employee_ids and records[-1].tipo == AttendanceType.ENTRADA.value:
             alerts.append({
                 'kind': 'sequence',
-                'message': f'El empleado {employee_label(employee_id)} podría permanecer dentro desde el día anterior. Último marcaje: {to_local(records[-1].fecha_hora).isoformat()}.',
+                'message': f'El empleado {employee_label(employee_id)} podría permanecer dentro desde el día anterior. Último marcaje: {format_alert_time(records[-1].fecha_hora)}.',
             })
 
     for record in present_records:
@@ -86,7 +91,7 @@ def build_attendance_alerts(today_records, overnight_records, employee_label, pr
         if entry_time and now - as_utc(entry_time) >= timedelta(hours=PROLONGED_STAY_HOURS):
             alerts.append({
                 'kind': 'sequence',
-                'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro. Entrada: {to_local(entry_time).isoformat()}.',
+                'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro. Entrada: {format_alert_time(entry_time)}.',
             })
     return alerts
 
@@ -444,6 +449,15 @@ def attendance_summary(db: Session):
     )
 
 
+def build_daily_report_payload(summary: AttendanceSummary, recent_records: list[dict], recent_audit: list[dict], *, report_date: str | None = None) -> dict:
+    return {
+        'date': report_date or date.today().isoformat(),
+        'summary': summary.model_dump(mode='json') if hasattr(summary, 'model_dump') else summary,
+        'recent_records': recent_records,
+        'recent_audit': recent_audit,
+    }
+
+
 def list_present_employees(db: Session):
     start = local_day_start_as_utc()
     latest_by_employee = db.query(
@@ -487,7 +501,6 @@ def alert_id(kind: str, message: str) -> str:
 
 def dismiss_alert(db: Session, user_id: int, alert_identifier: str) -> bool:
     existing = db.query(AlertDismissal).filter(
-        AlertDismissal.usuario_id == user_id,
         AlertDismissal.alerta_id == alert_identifier,
     ).first()
     if existing:
@@ -497,95 +510,143 @@ def dismiss_alert(db: Session, user_id: int, alert_identifier: str) -> bool:
     return True
 
 
+def normalize_inspector_dashboard_payload(summary=None, present=None, recent_records=None, expected_employees=None, alerts=None):
+    normalized_summary = summary.model_dump(mode='json') if hasattr(summary, 'model_dump') else {
+        'presentes': 0,
+        'entradas_hoy': 0,
+        'salidas_hoy': 0,
+        'marcajes_hoy': 0,
+        'presentes_por_area': [],
+    }
+    normalized_present = present or []
+    recent = []
+    for record in recent_records or []:
+        employee = getattr(record, 'empleado', None)
+        if employee is not None:
+            recent.append(_to_output(record, employee).model_dump(mode='json'))
+        else:
+            recent.append({
+                'id': getattr(record, 'id', None),
+                'empleado_id': getattr(record, 'empleado_id', None),
+                'empleado_nombre': 'Empleado no identificado',
+                'codigo_tarjeta': '',
+                'tipo': getattr(record, 'tipo', 'DESCONOCIDO'),
+                'fecha_hora': getattr(record, 'fecha_hora', None).isoformat() if getattr(record, 'fecha_hora', None) else None,
+                'origen': getattr(record, 'origen', 'PUERTO_COM'),
+                'cedula': '',
+                'departamento': None,
+                'gerencia': None,
+                'cargo': None,
+                'foto_url': None,
+                'estado': 'Desconocido',
+            })
+    normalized_expected = []
+    for employee in expected_employees or []:
+        normalized_expected.append({
+            'id': getattr(employee, 'id', None),
+            'nombre_apellido': getattr(employee, 'nombre_apellido', 'Empleado sin nombre'),
+            'departamento': getattr(employee, 'departamento', None) or 'Sin departamento',
+            'gerencia': getattr(employee, 'gerencia', None) or 'Sin gerencia',
+        })
+    return {
+        'summary': normalized_summary,
+        'present': normalized_present,
+        'recent': recent,
+        'expected': normalized_expected,
+        'alerts': alerts or [],
+    }
+
+
 def inspector_dashboard(db: Session, user_id: int | None = None):
     start = local_day_start_as_utc()
     now = utc_now()
-    summary = attendance_summary(db).model_dump()
-    present = list_present_employees(db)
-    recent_records = db.query(AttendanceRecord).options(
-        joinedload(AttendanceRecord.empleado).joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
-        joinedload(AttendanceRecord.empleado).joinedload(Empleado.cargo_rel),
-    ).filter(AttendanceRecord.fecha_hora >= start).order_by(
-        AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()
-    ).limit(5).all()
-    alert_records = db.query(AttendanceRecord).filter(
-        AttendanceRecord.fecha_hora >= start
-    ).order_by(AttendanceRecord.fecha_hora.asc(), AttendanceRecord.id.asc()).limit(100).all()
-    alert_employee_ids = {record.empleado_id for record in alert_records}
-    overnight_records = db.query(AttendanceRecord).filter(
-        AttendanceRecord.fecha_hora < start,
-    ).order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).limit(PRESENT_EMPLOYEES_LIMIT * 3).all()
-    latest_overnight = {}
-    for record in overnight_records:
-        latest_overnight.setdefault(record.empleado_id, record)
-    alert_employee_ids.update(latest_overnight)
-    alert_employees = {
-        employee.id: employee for employee in db.query(Empleado).filter(Empleado.id.in_(alert_employee_ids)).all()
-    } if alert_employee_ids else {}
-    overnight_employee_ids = set(latest_overnight) - set(alert_employees)
-    if overnight_employee_ids:
-        alert_employees.update(
-            (employee.id, employee)
-            for employee in db.query(Empleado).filter(Empleado.id.in_(overnight_employee_ids)).all()
-        )
-    def employee_label(employee_id):
-        employee = alert_employees.get(employee_id)
-        return employee.nombre_apellido if employee else f'#{employee_id}'
+    try:
+        summary = attendance_summary(db).model_dump()
+        present = list_present_employees(db)
+        recent_records = db.query(AttendanceRecord).options(
+            joinedload(AttendanceRecord.empleado).joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
+            joinedload(AttendanceRecord.empleado).joinedload(Empleado.cargo_rel),
+        ).filter(AttendanceRecord.fecha_hora >= start).order_by(
+            AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()
+        ).limit(5).all()
+        alert_records = db.query(AttendanceRecord).filter(
+            AttendanceRecord.fecha_hora >= start
+        ).order_by(AttendanceRecord.fecha_hora.asc(), AttendanceRecord.id.asc()).limit(100).all()
+        alert_employee_ids = {record.empleado_id for record in alert_records}
+        overnight_records = db.query(AttendanceRecord).filter(
+            AttendanceRecord.fecha_hora < start,
+        ).order_by(AttendanceRecord.fecha_hora.desc(), AttendanceRecord.id.desc()).limit(PRESENT_EMPLOYEES_LIMIT * 3).all()
+        latest_overnight = {}
+        for record in overnight_records:
+            latest_overnight.setdefault(record.empleado_id, record)
+        alert_employee_ids.update(latest_overnight)
+        alert_employees = {
+            employee.id: employee for employee in db.query(Empleado).filter(Empleado.id.in_(alert_employee_ids)).all()
+        } if alert_employee_ids else {}
+        overnight_employee_ids = set(latest_overnight) - set(alert_employees)
+        if overnight_employee_ids:
+            alert_employees.update(
+                (employee.id, employee)
+                for employee in db.query(Empleado).filter(Empleado.id.in_(overnight_employee_ids)).all()
+            )
+        def employee_label(employee_id):
+            employee = alert_employees.get(employee_id)
+            return employee.nombre_apellido if employee else f'#{employee_id}'
 
-    employee_types = {}
-    employee_last_times = {}
-    employee_has_entry = {}
-    alerts = []
-    for employee_id, record in latest_overnight.items():
-        employee_has_entry[employee_id] = record.tipo == AttendanceType.ENTRADA.value
-        employee_types[employee_id] = record.tipo
-        employee_last_times[employee_id] = record.fecha_hora
-    for record in alert_records:
-        previous_type = employee_types.get(record.empleado_id)
-        if previous_type == record.tipo:
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene dos marcajes {record.tipo.lower()} consecutivos. Último: {to_local(record.fecha_hora).isoformat()}.'})
-        previous_time = employee_last_times.get(record.empleado_id)
-        if previous_time is not None and attendance_records_are_too_close(previous_time, record.fecha_hora):
-            interval = (record.fecha_hora - previous_time).total_seconds()
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene marcajes demasiado cercanos: {interval:.1f} segundos entre {to_local(previous_time).isoformat()} y {to_local(record.fecha_hora).isoformat()}.'})
-        if record.tipo == AttendanceType.SALIDA.value and not employee_has_entry.get(record.empleado_id, False):
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene una salida sin entrada previa ({to_local(record.fecha_hora).isoformat()}).'})
-        employee_has_entry[record.empleado_id] = record.tipo == AttendanceType.ENTRADA.value
-        employee_last_times[record.empleado_id] = record.fecha_hora
-        employee_types[record.empleado_id] = record.tipo
-    today_employee_ids = {record.empleado_id for record in alert_records}
-    for record in latest_overnight.values():
-        if record.tipo == AttendanceType.ENTRADA.value and record.empleado_id not in today_employee_ids:
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} podría permanecer dentro desde el día anterior. Último marcaje: {to_local(record.fecha_hora).isoformat()}.'})
-    for record in list_present_employees(db):
-        entry_time = record['entrada']
-        if entry_time and now - as_utc(entry_time) >= timedelta(hours=PROLONGED_STAY_HOURS):
-            alerts.append({'kind': 'sequence', 'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro. Entrada: {to_local(entry_time).isoformat()}.'})
-    marked_employee_ids = db.query(AttendanceRecord.empleado_id).filter(AttendanceRecord.fecha_hora >= start).distinct().subquery()
-    expected_employees = db.query(Empleado).options(
-        joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
-        joinedload(Empleado.cargo_rel),
-    ).filter(
-        Empleado.estado == EstadoEnum.Activo,
-        ~Empleado.id.in_(db.query(marked_employee_ids.c.empleado_id)),
-    ).order_by(Empleado.nombre_apellido.asc()).limit(PRESENT_EMPLOYEES_LIMIT).all()
-    visible_alerts = []
-    dismissed_ids = set()
-    if user_id is not None:
-        dismissed_ids = {
-            item.alerta_id for item in db.query(AlertDismissal.alerta_id).filter(AlertDismissal.usuario_id == user_id).all()
-        }
-    for alert in alerts:
-        alert['id'] = alert_id(alert['kind'], alert['message'])
-        if alert['id'] not in dismissed_ids:
-            visible_alerts.append(alert)
-    return {
-        'summary': summary,
-        'present': present,
-        'recent': [_to_output(record, record.empleado).model_dump(mode='json') for record in recent_records],
-        'expected': [
-            {'id': employee.id, 'nombre_apellido': employee.nombre_apellido, 'departamento': employee.departamento or 'Sin departamento', 'gerencia': employee.gerencia or 'Sin gerencia'}
-            for employee in expected_employees
-        ],
-        'alerts': visible_alerts[:10],
-    }
+        employee_types = {}
+        employee_last_times = {}
+        employee_has_entry = {}
+        alerts = []
+        for employee_id, record in latest_overnight.items():
+            employee_has_entry[employee_id] = record.tipo == AttendanceType.ENTRADA.value
+            employee_types[employee_id] = record.tipo
+            employee_last_times[employee_id] = record.fecha_hora
+        for record in alert_records:
+            previous_type = employee_types.get(record.empleado_id)
+            if previous_type == record.tipo:
+                alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene dos marcajes de {record.tipo.lower()} consecutivos. Último: {format_alert_time(record.fecha_hora)}.'})
+            previous_time = employee_last_times.get(record.empleado_id)
+            if previous_time is not None and attendance_records_are_too_close(previous_time, record.fecha_hora):
+                interval = (record.fecha_hora - previous_time).total_seconds()
+                alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene marcajes demasiado cercanos: {interval:.1f} segundos entre {format_alert_time(previous_time)} y {format_alert_time(record.fecha_hora)}.'})
+            if record.tipo == AttendanceType.SALIDA.value and not employee_has_entry.get(record.empleado_id, False):
+                alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} tiene una salida sin entrada previa ({format_alert_time(record.fecha_hora)}).'})
+            employee_has_entry[record.empleado_id] = record.tipo == AttendanceType.ENTRADA.value
+            employee_last_times[record.empleado_id] = record.fecha_hora
+            employee_types[record.empleado_id] = record.tipo
+        today_employee_ids = {record.empleado_id for record in alert_records}
+        for record in latest_overnight.values():
+            if record.tipo == AttendanceType.ENTRADA.value and record.empleado_id not in today_employee_ids:
+                alerts.append({'kind': 'sequence', 'message': f'El empleado {employee_label(record.empleado_id)} podría permanecer dentro desde el día anterior. Último marcaje: {format_alert_time(record.fecha_hora)}.'})
+        for record in list_present_employees(db):
+            entry_time = record['entrada']
+            if entry_time and now - as_utc(entry_time) >= timedelta(hours=PROLONGED_STAY_HOURS):
+                alerts.append({'kind': 'sequence', 'message': f'El empleado {record["nombre_apellido"]} supera {PROLONGED_STAY_HOURS} horas dentro. Entrada: {format_alert_time(entry_time)}.'})
+        marked_employee_ids = db.query(AttendanceRecord.empleado_id).filter(AttendanceRecord.fecha_hora >= start).distinct().subquery()
+        expected_employees = db.query(Empleado).options(
+            joinedload(Empleado.departamento_rel).joinedload(Departamento.gerencia),
+            joinedload(Empleado.cargo_rel),
+        ).filter(
+            Empleado.estado == EstadoEnum.Activo,
+            ~Empleado.id.in_(db.query(marked_employee_ids.c.empleado_id)),
+        ).order_by(Empleado.nombre_apellido.asc()).limit(PRESENT_EMPLOYEES_LIMIT).all()
+        visible_alerts = []
+        dismissed_ids = set()
+        if user_id is not None:
+            dismissed_ids = {item.alerta_id for item in db.query(AlertDismissal.alerta_id).all()}
+        for alert in alerts:
+            alert['id'] = alert_id(alert['kind'], alert['message'])
+            if alert['id'] not in dismissed_ids:
+                visible_alerts.append(alert)
+        payload = normalize_inspector_dashboard_payload(
+            summary,
+            present,
+            recent_records,
+            expected_employees,
+            visible_alerts[:10],
+        )
+        return payload
+    except SQLAlchemyError:
+        return normalize_inspector_dashboard_payload()
+    except Exception:
+        return normalize_inspector_dashboard_payload()

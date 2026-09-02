@@ -15,7 +15,7 @@
     
     {% block head %}{% endblock %}
   </head>
-  <body class="ios-bg {% if request.query_params.get('embedded') == 'true' %}is-embedded{% endif %}">
+  <body class="ios-bg {% if request is defined and request.query_params.get('embedded') == 'true' %}is-embedded{% endif %}">
     <div class="app-shell">
       <aside class="sidebar-wide" aria-label="Navegación principal">
         <div class="sidebar-brand">
@@ -23,57 +23,46 @@
         </div>
         <nav class="sidebar-nav">
           <div class="sidebar-section sidebar-accordion">
-            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-people" aria-expanded="{{ 'true' if active_page in ('organization', 'employees', 'users') else 'false' }}" aria-controls="module-people">
-              <span>Administración de datos maestros</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <div class="collapse {{ 'show' if active_page in ('organization', 'employees', 'users') else '' }}" id="module-people">
-              <div class="sidebar-section__body">
-                {% if user.rol == 'Desarrollador' %}<a class="side-link {% if active_page == 'organization' %}active{% endif %}" href="/organization" {% if active_page == 'organization' %}aria-current="page"{% endif %}>
-                  <span class="side-icon">
-                    <svg class="icon"><use href="/static/img/icons.svg#building"></use></svg>
-                  </span>
-                  <span>Organigrama TPV</span>
-                </a>{% endif %}
-                {% if user.rol in ('Desarrollador', 'RRHH', 'Inspector') %}<a class="side-link {% if active_page == 'employees' %}active{% endif %}" href="/employees" {% if active_page == 'employees' %}aria-current="page"{% endif %}>
-                  <span class="side-icon">
-                    <svg class="icon"><use href="/static/img/icons.svg#users"></use></svg>
-                  </span>
-                  <span>Gestión de personal</span>
-                </a>{% endif %}
-                {% if user.rol == 'Desarrollador' %}<a class="side-link {% if active_page == 'users' %}active{% endif %}" href="/users" {% if active_page == 'users' %}aria-current="page"{% endif %}>
-                  <span class="side-icon">
-                    <svg class="icon"><use href="/static/img/icons.svg#users"></use></svg>
-                  </span>
-                  <span>Gestión de usuarios</span>
-                </a>{% endif %}
-              </div>
-            </div>
-          </div>
-
-          <div class="sidebar-section sidebar-accordion">
             <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-attendance" aria-expanded="{{ 'true' if active_page in ('attendance_summary', 'attendance', 'attendance_history') else 'false' }}" aria-controls="module-attendance">
               <span>Operación de asistencia</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <div class="collapse {{ 'show' if active_page in ('attendance_summary', 'attendance', 'attendance_history') else '' }}" id="module-attendance">
-            <div class="sidebar-section__body">
-              <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary">
+              <div class="sidebar-section__body">
+              <a class="side-link {% if active_page == 'attendance_summary' %}active{% endif %}" href="/attendance/summary" {% if active_page == 'attendance_summary' %}aria-current="page"{% endif %}>
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Resumen</span>
               </a>
               {% if user.rol in ('Desarrollador', 'RRHH', 'Inspector') %}
-              <a class="side-link {% if active_page == 'garita_launcher' %}active{% endif %}" href="/garita">
+              <a class="side-link {% if active_page == 'garita_launcher' %}active{% endif %}" href="/garita" {% if active_page == 'garita_launcher' %}aria-current="page"{% endif %}>
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#monitor"></use></svg></span><span>Puesto de Garita (Dual)</span>
               </a>
-              <a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance">
+              <a class="side-link {% if active_page == 'attendance' %}active{% endif %}" href="/attendance" {% if active_page == 'attendance' %}aria-current="page"{% endif %}>
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#check"></use></svg></span><span>Registro de marcaje</span>
               </a>{% endif %}
-              <a class="side-link {% if active_page == 'attendance_history' %}active{% endif %}" href="/attendance/history">
+              <a class="side-link {% if active_page == 'attendance_history' %}active{% endif %}" href="/attendance/history" {% if active_page == 'attendance_history' %}aria-current="page"{% endif %}>
                 <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#activity"></use></svg></span><span>Historial de Marcajes y Alertas</span>
               </a>
+              </div>
             </div>
+          </div>
+
+          <div class="sidebar-section sidebar-accordion">
+            <button class="sidebar-section__toggle" type="button" data-bs-toggle="collapse" data-bs-target="#module-people" aria-expanded="{{ 'true' if active_page in ('organization', 'employees', 'users') else 'false' }}" aria-controls="module-people">
+              <span>Administración de datos maestros</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="collapse {{ 'show' if active_page in ('organization', 'employees', 'users') else '' }}" id="module-people">
+              <div class="sidebar-section__body">
+                {% if user.rol == 'Desarrollador' %}<a class="side-link {% if active_page == 'organization' %}active{% endif %}" href="/organization" {% if active_page == 'organization' %}aria-current="page"{% endif %}>
+                  <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#building"></use></svg></span><span>Organigrama TPV</span>
+                </a>{% endif %}
+                {% if user.rol in ('Desarrollador', 'RRHH', 'Inspector') %}<a class="side-link {% if active_page == 'employees' %}active{% endif %}" href="/employees" {% if active_page == 'employees' %}aria-current="page"{% endif %}>
+                  <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#users"></use></svg></span><span>Gestión de personal</span>
+                </a>{% endif %}
+                {% if user.rol == 'Desarrollador' %}<a class="side-link {% if active_page == 'users' %}active{% endif %}" href="/users" {% if active_page == 'users' %}aria-current="page"{% endif %}>
+                  <span class="side-icon"><svg class="icon"><use href="/static/img/icons.svg#users"></use></svg></span><span>Gestión de usuarios</span>
+                </a>{% endif %}
+              </div>
             </div>
           </div>
 

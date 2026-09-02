@@ -51,7 +51,9 @@ def create_backup(db: Session, slot: int | None = None) -> dict:
     with _backup_lock:
         connection = engine.raw_connection()
         try:
-            connection.connection.autocommit = True
+            driver_connection = connection.driver_connection if hasattr(connection, 'driver_connection') else connection.connection
+            if hasattr(driver_connection, 'autocommit'):
+                driver_connection.autocommit = True
             cursor = connection.cursor()
             if slot is None:
                 existing = list_backups()

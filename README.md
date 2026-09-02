@@ -6,7 +6,7 @@ Aplicación web para gestión de empleados y organización empresarial con SQL S
 
 La referencia operativa y técnica está en [docs/GUIA_DEL_SISTEMA.md](docs/GUIA_DEL_SISTEMA.md). Incluye el mapa de pantallas, el flujo diario de asistencia, los roles actuales, las reglas de corrección y el procedimiento para documentar nuevas funciones.
 
-El archivo [prioridades_inspector_garita.md](prioridades_inspector_garita.md) conserva el checklist de producto. Las casillas solo deben marcarse cuando la función esté implementada y validada; las decisiones o pendientes deben explicarse en la guía central.
+Las funciones pendientes y las decisiones abiertas se mantienen en la sección correspondiente de [docs/GUIA_DEL_SISTEMA.md](docs/GUIA_DEL_SISTEMA.md). Las funciones solo se consideran terminadas cuando están implementadas y validadas.
 
 ## Requisitos previos
 
@@ -87,6 +87,8 @@ El archivo `start_app.bat` hace lo siguiente automáticamente:
 - Copia `.env.template` a `.env` si aún no hay uno
 - Ejecuta la app con `python run.py`
 
+El arranque normal usa una sola instancia estable y no activa la recarga automática. Para desarrollo con recarga, define `APP_RELOAD=true` en `.env`; no se recomienda en el equipo de producción o kiosco.
+
 ## Variables de entorno
 
 La configuración de conexión se toma de `.env`.
@@ -117,7 +119,7 @@ Los marcajes se registran desde el kiosco y el formulario de registro manual. Lo
 
 ## Backups del sistema
 
-El rol `Sistemas` (y `Administrador` como respaldo) puede abrir `/system/backups`, crear una copia manual y descargar cualquiera de los tres slots disponibles. La aplicación crea automáticamente una copia cada 24 horas y rota `backup_1.bak`, `backup_2.bak` y `backup_3.bak` en la carpeta indicada por `BACKUP_DIR`.
+El rol `Desarrollador` puede abrir `/system/backups`, crear una copia manual y descargar cualquiera de los tres slots disponibles. La aplicación crea automáticamente una copia cada 24 horas y rota `backup_1.bak`, `backup_2.bak` y `backup_3.bak` en la carpeta indicada por `BACKUP_DIR`.
 
 La carpeta debe existir en el servidor y la cuenta del servicio de SQL Server debe tener permisos de escritura allí. El archivo `.bak` se genera en el servidor; el navegador solo recibe una descarga autorizada de un slot válido. Configura `BACKUP_DIR` con una ruta absoluta en producción si la aplicación y SQL Server usan directorios de trabajo distintos.
 
@@ -166,7 +168,7 @@ El servidor escucha en `0.0.0.0:8000`. Para iniciarlo en Windows ejecuta `start_
 
 ## Módulo de usuarios
 
-El sistema incluye cuatro roles: `Administrador` (gestión total), `RRHH` (empleados y reportes), `Consulta` (solo lectura) y `Sistemas` (herramientas de sistema y backups). Antes de usar la pantalla de usuarios, ejecuta nuevamente `scripts/create_database.sql` en SSMS para crear o actualizar las tablas de forma idempotente.
+El sistema incluye tres roles: `Desarrollador` (gestión total y herramientas del sistema), `RRHH` (empleados y asistencia) e `Inspector` (consulta operativa y marcaje manual autorizado). Antes de usar la pantalla de usuarios, aplica las migraciones pendientes con `python -m alembic upgrade head`.
 
 Después, abre:
 
@@ -174,7 +176,7 @@ Después, abre:
 http://127.0.0.1:8000/users
 ```
 
-Las contraseñas no se guardan en texto plano: se almacenan usando `scrypt` con parámetros versionados en el hash. La interfaz permite crear usuarios, asignar roles, listarlos y activar o inhabilitar cuentas. El primer usuario creado por `/setup` es `Administrador`.
+Las contraseñas no se guardan en texto plano: se almacenan usando `scrypt` con parámetros versionados en el hash. La interfaz permite crear usuarios, asignar roles, listarlos y activar o inhabilitar cuentas. El primer usuario creado por `/setup` es `Desarrollador`.
 
 ## Inicio de sesión y perfil
 

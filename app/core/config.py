@@ -12,6 +12,7 @@ ENV_PATH = BASE_DIR.parent / '.env'
 load_dotenv(dotenv_path=ENV_PATH)
 
 APP_ENV = os.getenv('APP_ENV', 'development').lower()
+APP_RELOAD = os.getenv('APP_RELOAD', 'false').lower() in ('1', 'true', 'yes')
 APP_TIMEZONE = os.getenv('APP_TIMEZONE', 'America/Caracas')
 try:
     LOCAL_TIMEZONE = ZoneInfo(APP_TIMEZONE)
@@ -46,7 +47,7 @@ DB_USER = os.getenv('DB_USER', '')
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 DB_TRUSTED = os.getenv('DB_TRUSTED', 'false').lower() in ('1', 'true', 'yes')
 
-TEMPORARY_DATA_RETENTION_DAYS = int(os.getenv('TEMPORARY_DATA_RETENTION_DAYS', '30'))
+TEMPORARY_DATA_RETENTION_DAYS = max(1, int(os.getenv('TEMPORARY_DATA_RETENTION_DAYS', '30')))
 
 
 def _connection_string(server: str, database: str = 'master') -> str:
@@ -109,8 +110,8 @@ PRESENT_EMPLOYEES_LIMIT = int(os.getenv('PRESENT_EMPLOYEES_LIMIT', '500'))
 
 # Server-side SQL Server backups. The SQL Server service account needs write access.
 BACKUP_DIR = Path(os.getenv('BACKUP_DIR', str(BASE_DIR / 'backups'))).resolve()
-BACKUP_SLOT_COUNT = int(os.getenv('BACKUP_SLOT_COUNT', '3'))
-BACKUP_INTERVAL_SECONDS = int(os.getenv('BACKUP_INTERVAL_SECONDS', str(24 * 60 * 60)))
+BACKUP_SLOT_COUNT = max(3, int(os.getenv('BACKUP_SLOT_COUNT', '3')))
+BACKUP_INTERVAL_SECONDS = max(60, int(os.getenv('BACKUP_INTERVAL_SECONDS', str(24 * 60 * 60))))
 
 # Build SQLAlchemy URL. Prefer Trusted Connection if configured.
 odbc_str = _connection_string(DB_SERVER, DB_NAME)

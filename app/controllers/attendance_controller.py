@@ -1,5 +1,5 @@
 import csv
-from datetime import date
+from datetime import date, datetime
 from io import StringIO
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -12,11 +12,12 @@ from app.database.session import get_db
 from app.schemas.attendance import AttendanceCorrectionRequest, AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest, ManualFrequentEmployeeRequest
 from app.schemas.employee import EmpleadoOut
 from app.models.employee import Empleado
-from app.services.attendance_service import AttendanceError, EmployeeAccessDeniedError, add_manual_frequent_employee, attendance_summary, correct_attendance, dismiss_alert, get_attendance_since, inspector_dashboard, list_attendance, list_manual_frequent_employees, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan, remove_manual_frequent_employee
+from app.services.attendance_service import AttendanceError, EmployeeAccessDeniedError, add_manual_frequent_employee, attendance_summary, build_daily_report_payload, correct_attendance, dismiss_alert, get_attendance_since, inspector_dashboard, list_attendance, list_manual_frequent_employees, list_present_employees, preview_manual_batch, register_manual, register_manual_batch, register_scan, remove_manual_frequent_employee
 from app.services.access_event_service import get_denied_events, list_denied_events, record_denied_event
+from app.services.audit_service import list_audit_events
 from app.services.notification_service import publish_exception_mark
 from app.services.organization_service import get_organization_tree
-from app.core.datetime_utils import to_local
+from app.core.datetime_utils import LOCAL_TIMEZONE, to_local
 
 
 router = APIRouter()
@@ -60,19 +61,24 @@ if APP_ENV != 'production':
 @router.get('/attendance/kiosk', response_class=HTMLResponse)
 def attendance_kiosk_page(request: Request, user=Depends(require_user)):
     template = templates_env.get_template('attendance_kiosk.html')
-    return HTMLResponse(template.render(user=user, csp_nonce=request.state.csp_nonce))
+    return HTMLResponse(template.render(
+        user=user,
+        csp_nonce=request.state.csp_nonce,
+        is_developer=user.rol == 'Desarrollador',
+        is_inspector=user.rol == 'Inspector',
+    ))
 
 
 @router.get('/attendance/history', response_class=HTMLResponse)
 def attendance_history_page(request: Request, user=Depends(require_page_user)):
     template = templates_env.get_template('attendance_history.html')
-    return HTMLResponse(template.render(active_page='attendance_history', user=user, csp_nonce=request.state.csp_nonce, attendance_history_default_days=ATTENDANCE_HISTORY_DEFAULT_DAYS, attendance_default_page_size=DEFAULT_PAGE_SIZE))
+    return HTMLResponse(template.render(request=request, active_page='attendance_history', user=user, csp_nonce=request.state.csp_nonce, attendance_history_default_days=ATTENDANCE_HISTORY_DEFAULT_DAYS, attendance_default_page_size=DEFAULT_PAGE_SIZE))
 
 
 @router.get('/attendance/summary', response_class=HTMLResponse)
 def attendance_summary_page(request: Request, user=Depends(require_page_user)):
     template = templates_env.get_template('attendance_summary.html')
-    return HTMLResponse(template.render(active_page='attendance_summary', user=user, csp_nonce=request.state.csp_nonce))
+    return HTMLResponse(template.render(request=request, active_page='attendance_summary', user=user, csp_nonce=request.state.csp_nonce))
 
 
 @router.get('/garita', response_class=HTMLResponse)
@@ -194,6 +200,27 @@ def attendance_export(
 @router.get('/api/attendance/summary')
 def attendance_summary_route(db: Session = Depends(get_db), _user=Depends(require_read_access)):
     return attendance_summary(db)
+
+
+@router.get('/api/attendance/daily-report')
+def attendance_daily_report(db: Session = Depends(get_db), _user=Depends(require_read_access)):
+    report_date = date.today()
+    day_start = datetime.combine(report_date, datetime.min.time(), tzinfo=LOCAL_TIMEZONE)
+    summary = attendance_summary(db)
+    today_records = list_attendance(db, page=1, page_size=25, date_from=report_date, date_to=report_date)
+    recent_audit = list_audit_events(db, since=day_start, limit=20)
+    return build_daily_report_payload(
+        summary,
+        [
+            {'id': item.id, 'tipo': item.tipo.value if hasattr(item.tipo, 'value') else item.tipo, 'fecha_hora': item.fecha_hora.isoformat()}
+            for item in today_records.items
+        ],
+        [
+            {'id': record.id, 'accion': record.accion, 'entidad': record.entidad, 'fecha': record.fecha.isoformat() if record.fecha else None}
+            for record in recent_audit
+        ],
+        report_date=report_date.isoformat(),
+    )
 
 
 @router.get('/api/attendance/present')

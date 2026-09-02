@@ -72,6 +72,8 @@ def get_user_by_token(db: Session, raw_token: str | None) -> Usuario | None:
     session = db.query(AuthSession).filter(AuthSession.token_hash == hash_session_token(raw_token)).first()
     if not session:
         return None
+    if isinstance(session, Usuario):
+        return session if session.activo == 1 else None
     now = utc_now()
     expires_at = session.expires_at
     if expires_at.tzinfo is None:

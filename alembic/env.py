@@ -1,13 +1,20 @@
 from logging.config import fileConfig
+import warnings
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.exc import SAWarning
 
 from app.core.config import DATABASE_URL
 from app.models.base import Base
 from app.models import access_event, alert_dismissal, attendance, audit, auth_session, employee, notification, organization, user
 
 config = context.config
+warnings.filterwarnings(
+    'ignore',
+    category=SAWarning,
+    message=r'Unrecognized server version info .*',
+)
 config.set_main_option('sqlalchemy.url', DATABASE_URL.replace('%', '%%'))
 if config.config_file_name:
     fileConfig(config.config_file_name)

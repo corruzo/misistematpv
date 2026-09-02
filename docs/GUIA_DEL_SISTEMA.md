@@ -19,13 +19,13 @@ La aplicación usa FastAPI, plantillas Jinja2, JavaScript del navegador y SQL Se
 | Necesidad | Pantalla | Ruta principal | Autorización |
 | --- | --- | --- | --- |
 | Resumen operativo de asistencia | Resumen | `/attendance/summary` | Usuario autenticado |
-| Registrar marcaje manual | Marcaje manual rápido | `/attendance` | Administrador o RRHH |
+| Registrar marcaje manual | Marcaje manual rápido | `/attendance` | Desarrollador o RRHH |
 | Consultar y corregir marcajes | Historial | `/attendance/history` | Usuario con lectura; corrección para Administrador o RRHH |
 | Registrar marcajes en pantalla completa | Kiosco | `/attendance/kiosk` | Usuario autenticado |
 | Gestionar empleados | Gestión de personal | `/employees` | Desarrollador o RRHH; Inspector solo consulta directorio operativo |
-| Administrar usuarios | Gestión de usuarios | `/users` | Administrador |
-| Organigrama | Organigrama TPV | `/organization` | Administrador |
-| Backups y sistema | Sistema y backups | `/system/backups` | Administrador o Sistemas |
+| Administrar usuarios | Gestión de usuarios | `/users` | Desarrollador |
+| Organigrama | Organigrama TPV | `/organization` | Desarrollador |
+| Backups y sistema | Sistema y backups | `/system/backups` | Desarrollador |
 
 ## 3. Flujo diario de asistencia
 
@@ -90,6 +90,8 @@ start_app.bat
 ```
 
 El servidor escucha en `0.0.0.0:8000`. Al iniciar, el lanzador muestra la IP local del equipo; usa `http://<IP-LOCAL-DEL-EQUIPO>:8000/` desde otra PC de la red.
+
+El arranque normal usa una sola instancia y no activa la recarga automática. `APP_RELOAD=true` queda reservado para desarrollo; en producción debe mantenerse en `false`.
 
 Arranque manual:
 

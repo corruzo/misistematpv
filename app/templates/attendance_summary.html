@@ -3,28 +3,28 @@
 
 {% block title %}Control de Asistencia - Garita{% endblock %}
 
+{% block actions %}
+<div class="summary-actions">
+  <button id="themeToggleBtn" class="btn-ios ghost" title="Alternar Modo Oscuro" aria-label="Alternar modo oscuro">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
+  <a class="btn-ios primary" href="/attendance">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+    Marcaje Manual Rápido
+  </a>
+</div>
+{% endblock %}
+
 {% block content %}
 <script nonce="{{ csp_nonce }}">
   if (localStorage.getItem('inspectorTheme') === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
   }
 </script>
-{% block actions %}
-<div class="d-flex align-items-center gap-2 me-3">
-  <button id="themeToggleBtn" class="btn-ios ghost" title="Alternar Modo Oscuro" aria-label="Alternar modo oscuro">
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-  </button>
-  <button class="btn-ios primary" type="button" data-bs-toggle="modal" data-bs-target="#manualMarkModal">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-    Marcaje Manual Rápido
-  </button>
-</div>
-{% endblock %}
 
 <div class="attendance-page inspector-page pt-2">
 
-  <!-- 1. ALERTAS Y ESTADO (Fecha/Hora limpia a la derecha) -->
-  <section class="card inspector-panel inspector-panel--alerts alert-priority-zone mb-3">
+  <section class="card inspector-panel inspector-panel--alerts alert-priority-zone mb-3 d-none">
     <div class="card-panel__header card-panel__header--warning d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div class="d-flex align-items-center gap-2">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -35,7 +35,6 @@
         <h3 class="mb-0 fs-6 fw-bold">Alertas e Incidentes Operativos</h3>
       </div>
       
-      <!-- Metadatos con distribución Flex corregida -->
       <div class="inspector-context-meta d-flex align-items-center gap-2 ms-auto">
         <div class="d-flex align-items-center gap-1 text-muted small bg-light px-2 py-1 rounded border">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -51,7 +50,6 @@
     </div>
   </section>
 
-  <!-- 2. TARJETAS DE MÉTRICAS -->
   <div class="kpi-grid kpi-grid--compact inspector-kpis mb-3">
     {{ kpi_card('Personal Dentro', 'summaryPresentes', 'Presentes en planta', 'summaryPresentesMeta', 'green', 'users') }}
     {{ kpi_card('Entradas Hoy', 'summaryEntradas', 'Accesos autorizados', 'summaryEntradasMeta', 'blue', 'check') }}
@@ -59,7 +57,6 @@
     {{ kpi_card('Marcajes Totales', 'summaryMarcajes', 'Flujo acumulado', 'summaryMarcajesMeta', 'violet', 'activity') }}
   </div>
 
-  <!-- 3. PERSONAL PRESENTE -->
   <section class="card inspector-presence-card mb-3">
     <div class="card-panel__header inspector-table-header">
       <div>
@@ -98,7 +95,6 @@
     <div id="presentEmptyState" class="table-state d-none">No hay personal registrado dentro en este momento.</div>
   </section>
 
-  <!-- 4. PANELES SECUNDARIOS (Formato de movimientos ajustado) -->
   <div class="inspector-dashboard-grid">
     <section class="card inspector-panel inspector-panel--recent">
       <div class="card-panel__header">
@@ -123,7 +119,6 @@
 
 </div>
 
-<!-- Modal de Marcaje Manual Rápido -->
 <div class="modal" id="manualMarkModal" tabindex="-1" aria-labelledby="manualMarkModalLabel" aria-hidden="true">
   <div class="modal-dialog" style="max-width: 900px;">
     <div class="modal-content" style="height: 85vh;">
@@ -245,7 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* RENDER CORREGIDO PARA ÚLTIMOS MOVIMIENTOS */
   function renderRecent(items) {
     const container = document.getElementById('recentAttendanceList'); 
     container.replaceChildren();
@@ -303,16 +297,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderAlerts(items) {
+    const panel = document.querySelector('.alert-priority-zone');
     const container = document.getElementById('inspectorAlertsList'); 
     container.replaceChildren();
 
     if (!items.length) {
-      container.innerHTML = `
-        <p class="table-state text-success d-flex align-items-center gap-2 mb-0 py-1">
-          ${SVG_CHECK} Sin anomalías ni alertas activas en el punto de control.
-        </p>`;
+      panel.classList.add('d-none');
       return;
     }
+
+    panel.classList.remove('d-none');
 
     const fragment = document.createDocumentFragment();
     items.forEach((item) => {
@@ -321,6 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const message = document.createElement('span');
       message.className = 'd-flex align-items-center gap-2 text-danger font-weight-bold';
+      message.setAttribute('role', 'alert');
       message.innerHTML = `${SVG_ALERT} <span>${escapeHtml(item.message)}</span>`;
 
       const dismiss = document.createElement('button');
@@ -338,10 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!response.ok) throw new Error('No se pudo descartar.');
           element.remove();
           if (!container.children.length) {
-            container.innerHTML = `
-              <p class="table-state text-success d-flex align-items-center gap-2 mb-0 py-1">
-                ${SVG_CHECK} Sin anomalías ni alertas activas en el punto de control.
-              </p>`;
+            panel.classList.add('d-none');
           }
         } catch (error) {
           dismiss.disabled = false;

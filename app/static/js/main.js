@@ -251,11 +251,13 @@
     source: null,
     wasDisconnected: false,
     reconnectTimer: null,
+    reconnectDelay: 3000,
     start() {
-      if (!window.WebSocket || this.source) return;
+      if (!window.WebSocket || this.source || this.reconnectTimer) return;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       this.source = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
       this.source.onopen = () => {
+        this.reconnectDelay = 3000;
         const reconnected = this.wasDisconnected;
         this.wasDisconnected = false;
         if (reconnected) window.dispatchEvent(new CustomEvent('app:live-reconnected'));
@@ -272,7 +274,11 @@
       };
       this.source.onclose = () => {
         this.source = null;
-        this.reconnectTimer = window.setTimeout(() => this.start(), 3000);
+        this.reconnectTimer = window.setTimeout(() => {
+          this.reconnectTimer = null;
+          this.start();
+        }, this.reconnectDelay);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 60000);
       };
     },
     stop() {
@@ -286,12 +292,6 @@
   document.addEventListener('click', (event) => {
     const dismiss = event.target.closest('[data-bs-dismiss="modal"]');
     if (dismiss) dismiss.closest('.modal') && window.bootstrap.Modal.getInstance(dismiss.closest('.modal'))?.hide();
-    const toggle = event.target.closest('[data-bs-toggle="collapse"]');
-    if (toggle) {
-      const target = document.querySelector(toggle.dataset.bsTarget);
-      target?.classList.toggle('show');
-      toggle.setAttribute('aria-expanded', String(target?.classList.contains('show')));
-    }
   });
 
   document.addEventListener('DOMContentLoaded', () => {

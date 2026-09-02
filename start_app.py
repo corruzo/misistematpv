@@ -10,26 +10,37 @@ import webbrowser
 
 from dotenv import load_dotenv
 
+DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def open_local(url, timeout=1):
+    return DIRECT_OPENER.open(url, timeout=timeout)
+
+
 def run_cmd(args, env=None):
     """Ejecuta un comando y devuelve el código de salida."""
     try:
         result = subprocess.run(args, env=env, check=False)
         return result.returncode
     except Exception as e:
-        print(f"Error al ejecutar {' '.join(args)}: {e}")
+        print(f"ERROR: No se pudo ejecutar {' '.join(args)}: {e}")
         return 1
 
 def wait_for_server(url, process, timeout=30):
     """Espera a que Uvicorn acepte conexiones o a que el proceso termine."""
     deadline = time.monotonic() + timeout
+    last_error = None
     while time.monotonic() < deadline:
         if process.poll() is not None:
             return False
         try:
-            with urllib.request.urlopen(url, timeout=1) as response:
+            with open_local(url, timeout=1) as response:
                 return 200 <= response.status < 500
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError) as error:
+            last_error = error
             time.sleep(0.5)
+    if last_error:
+        print(f'Último diagnóstico del health check: {last_error}')
     return False
 
 def get_local_ip():
@@ -70,8 +81,9 @@ def main():
 
     port = os.getenv('APP_PORT', '8000')
     loopback_url = f"http://127.0.0.1:{port}/"
+    health_url = f"http://127.0.0.1:{port}/healthz"
     try:
-        with urllib.request.urlopen(loopback_url, timeout=1) as response:
+        with open_local(health_url, timeout=1) as response:
             if 200 <= response.status < 500:
                 print("El sistema ya estaba iniciado.")
                 if "--no-browser" not in sys.argv:
@@ -95,7 +107,6 @@ def main():
         print("Creando entorno virtual (.venv)...")
         if run_cmd([sys.executable, "-m", "venv", ".venv"]) != 0:
             print("ERROR: No se pudo crear el entorno virtual.")
-            input("Presiona Enter para salir...")
             sys.exit(1)
         install_deps = True
     else:
@@ -110,7 +121,6 @@ def main():
             shutil.rmtree(venv_dir, ignore_errors=True)
             if run_cmd([sys.executable, '-m', 'venv', '.venv']) != 0:
                 print('ERROR: No se pudo recrear el entorno virtual.')
-                input('Presiona Enter para salir...')
                 sys.exit(1)
             active_python = venv_python
             install_deps = True
@@ -127,7 +137,6 @@ def main():
         print("Instalando o actualizando dependencias...")
         if run_cmd([active_python, "-m", "pip", "install", "-r", "requirements.txt"]) != 0:
             print("ERROR: No se pudieron instalar las dependencias.")
-            input("Presiona Enter para salir...")
             sys.exit(1)
     else:
         print("Dependencias ya instaladas. Se omite la descarga.")
@@ -137,7 +146,6 @@ def main():
         print("\nERROR: No se pudieron aplicar las migraciones automáticamente.")
         print("Asegúrate de que el servidor de SQL Server esté activo y de que")
         print("las credenciales en el archivo .env sean correctas.")
-        input("Presiona Enter para salir...")
         sys.exit(1)
         
     local_url = f"http://{get_local_ip()}:{port}/"
@@ -147,27 +155,28 @@ def main():
     try:
         process_env = os.environ.copy()
         process = subprocess.Popen([active_python, "run.py"], env=process_env)
-        if not wait_for_server(loopback_url, process):
+        if not wait_for_server(health_url, process):
             return_code = process.poll()
             if return_code is None:
                 process.terminate()
                 print("\nERROR: El servidor no respondió en 30 segundos.")
             else:
                 print(f"\nLa aplicación terminó con código de error {return_code}.")
-            input("Presiona Enter para continuar...")
-            return
+            return 1
         print(f"Sistema listo: {local_url}")
         if "--no-browser" not in sys.argv:
             webbrowser.open(loopback_url)
         process.wait()
         if process.returncode != 0:
             print(f"\nLa aplicación terminó con código de error {process.returncode}.")
-            input("Presiona Enter para continuar...")
+            return process.returncode
+        return 0
     except KeyboardInterrupt:
         print("\nAplicación detenida por el usuario.")
+        return 0
     except Exception as e:
         print(f"\nERROR al iniciar la aplicación: {e}")
-        input("Presiona Enter para continuar...")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
