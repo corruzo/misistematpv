@@ -30,7 +30,7 @@ cd misistematpv
 ```
 
 3. Inicia SQL Server y abre `scripts/create_database.sql` en SSMS. Ejecuta el script completo. Este script crea la base `misistema_db` y las tablas iniciales. Si SQL Server usa una instancia distinta, asegúrate de conectarte a esa instancia en SSMS.
-4. Revisa el archivo `.env`. La primera ejecución crea ese archivo automáticamente desde `.env.template`. Por defecto `DB_SERVER=auto` prueba la instancia normal (`localhost`) y SQL Server Express (`localhost\SQLEXPRESS`). Si SQL Server está en otro equipo o usa otro nombre de instancia, cambia `DB_SERVER` por el servidor exacto. Con autenticación de Windows conserva `DB_TRUSTED=true` y deja `DB_USER` y `DB_PASSWORD` vacíos. Si usarás un lector RFID, configura después `SERIAL_PORT=COM...`; sin lector, déjalo vacío.
+4. Revisa el archivo `.env`. La primera ejecución crea ese archivo automáticamente desde `.env.template`. Por defecto `DB_SERVER=auto` prueba la instancia normal (`localhost`) y SQL Server Express (`localhost\SQLEXPRESS`). Si SQL Server está en otro equipo o usa otro nombre de instancia, cambia `DB_SERVER` por el servidor exacto. Con autenticación de Windows conserva `DB_TRUSTED=true` y deja `DB_USER` y `DB_PASSWORD` vacíos. El lector HID queda configurado por defecto en `COM1` a `9600` baudios; cambia `SERIAL_PORT` solo si el equipo usa otro puerto.
 5. Desde la raíz del repositorio ejecuta:
 
 ```powershell

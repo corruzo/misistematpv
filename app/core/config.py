@@ -88,8 +88,8 @@ def _resolve_db_server() -> str:
 
 DB_SERVER = _resolve_db_server()
 
-# Serial reader settings. Empty port keeps the hardware listener disabled.
-SERIAL_PORT = os.getenv('SERIAL_PORT', '').strip()
+# Serial reader settings. The legacy HID reader uses COM1 at 9600 baud.
+SERIAL_PORT = os.getenv('SERIAL_PORT', 'COM1').strip()
 SERIAL_BAUDRATE = int(os.getenv('SERIAL_BAUDRATE', '9600'))
 SERIAL_BYTESIZE = int(os.getenv('SERIAL_BYTESIZE', '8'))
 SERIAL_PARITY = os.getenv('SERIAL_PARITY', 'N').strip().upper()

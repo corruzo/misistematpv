@@ -24,11 +24,15 @@ from app.controllers.system_controller import router as system_router, backup_lo
 from app.controllers.notification_controller import router as notification_router
 from fastapi import Depends
 from app.core.auth import require_user
-from app.core.config import APP_ENV, APP_RELOAD, COOKIE_SECURE, TEMPORARY_DATA_RETENTION_DAYS, is_allowed_csrf_origin, STATIC_DIR
+from app.core.config import APP_ENV, APP_RELOAD, COOKIE_SECURE, SERIAL_PORT, TEMPORARY_DATA_RETENTION_DAYS, is_allowed_csrf_origin, STATIC_DIR
 from app.core.exceptions import AppException
 from app.database.session import SessionLocal
 from app.services.auth_service import cleanup_expired_sessions
 from app.services.notification_service import cleanup_temporary_data
+from app.schemas.attendance import AttendanceOrigin
+from app.services.attendance_service import AttendanceError, EmployeeAccessDeniedError, register_scan
+from app.services.access_event_service import record_denied_event
+from app.services.rfid_reader_service import get_reader
 
 warnings.filterwarnings(
     'ignore',
@@ -53,6 +57,18 @@ async def lifespan(_app):
     except SQLAlchemyError as exc:
         raise RuntimeError('No se pudo verificar la conexión con la base de datos al iniciar.') from exc
 
+    def process_reader_scan(card_code):
+        with SessionLocal() as reader_db:
+            try:
+                register_scan(reader_db, card_code, AttendanceOrigin.PUERTO_COM)
+            except EmployeeAccessDeniedError as exc:
+                record_denied_event(reader_db, exc)
+            except AttendanceError as exc:
+                logger.info('Lectura HID no registrada: %s', exc)
+
+    rfid_reader = get_reader()
+    rfid_reader._on_attendance_scan = process_reader_scan
+    rfid_reader.start()
     tasks = [
         asyncio.create_task(_session_cleanup_loop()),
         asyncio.create_task(backup_loop()),
@@ -63,6 +79,7 @@ async def lifespan(_app):
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        rfid_reader.stop()
 
 
 app = FastAPI(
@@ -82,6 +99,17 @@ def configured_worker_count(argv=None, environ=None) -> int:
         if argument.startswith('--workers='):
             return int(argument.split('=', 1)[1])
     return int(environment.get('WEB_CONCURRENCY', '1'))
+
+
+def resolve_worker_count(argv=None, environ=None, serial_port: str | None = None) -> int:
+    worker_count = configured_worker_count(argv, environ)
+    if serial_port is None:
+        serial_target = (SERIAL_PORT or '').strip()
+    else:
+        serial_target = serial_port.strip()
+    if serial_target and worker_count != 1:
+        return 1
+    return worker_count
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -172,7 +200,9 @@ async def _session_cleanup_loop():
         await asyncio.sleep(24 * 60 * 60)
 
 if __name__ == '__main__':
-    worker_count = configured_worker_count()
+    worker_count = resolve_worker_count(serial_port=SERIAL_PORT)
+    if SERIAL_PORT and worker_count == 1:
+        logger.warning('El lector HID usa %s; se forzará un solo worker para evitar competencia por el puerto.', SERIAL_PORT)
     uvicorn.run(
         'run:app',
         host=os.getenv('APP_HOST', '0.0.0.0'),

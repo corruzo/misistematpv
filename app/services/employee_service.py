@@ -4,6 +4,7 @@ from typing import List, Optional
 from datetime import timedelta
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
+from enum import Enum
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app.models.employee import Empleado, EstadoEnum
@@ -293,10 +294,24 @@ def soft_delete_employee(db: Session, emp: Empleado, usuario_id: int | None = No
     return emp
 
 
+def normalize_employee_status_counts(rows):
+    normalized = {state: 0 for state in ('Activo', 'Vacaciones', 'Retirado', 'Suspendido')}
+    for state, count in rows or []:
+        if state is None:
+            continue
+        label = state.value if isinstance(state, EstadoEnum) else str(state).strip()
+        if label not in normalized:
+            continue
+        try:
+            normalized[label] = int(count or 0)
+        except (TypeError, ValueError):
+            normalized[label] = 0
+    return normalized
+
+
 def get_employee_metrics(db: Session):
     status_rows = db.query(Empleado.estado, func.count(Empleado.id)).group_by(Empleado.estado).all()
-    estado_counts = {state.value if isinstance(state, EstadoEnum) else state: count for state, count in status_rows}
-    estado_counts = {state: estado_counts.get(state, 0) for state in ('Activo', 'Vacaciones', 'Retirado', 'Suspendido')}
+    estado_counts = normalize_employee_status_counts(status_rows)
     total = sum(estado_counts.values())
 
     activos = estado_counts['Activo']
@@ -309,19 +324,28 @@ def get_employee_metrics(db: Session):
     } if latest_employee else None
 
     departamento_counts = db.query(Departamento.estado, func.count(Departamento.id)).group_by(Departamento.estado).all()
-    departamento_counts = {state: count for state, count in departamento_counts}
+    departamento_counts = {
+        state.value if isinstance(state, Enum) else str(state or 'Activo'): count
+        for state, count in departamento_counts
+    }
     total_departamentos = sum(departamento_counts.values())
     departamentos_activas = departamento_counts.get('Activo', 0)
     departamentos_inactivas = total_departamentos - departamentos_activas
 
     gerencia_counts = db.query(Gerencia.estado, func.count(Gerencia.id)).group_by(Gerencia.estado).all()
-    gerencia_counts = {state: count for state, count in gerencia_counts}
+    gerencia_counts = {
+        state.value if isinstance(state, Enum) else str(state or 'Activo'): count
+        for state, count in gerencia_counts
+    }
     total_gerencias = sum(gerencia_counts.values())
     gerencias_activas = gerencia_counts.get('Activo', 0)
     gerencias_inactivas = total_gerencias - gerencias_activas
 
     cargo_counts = db.query(Cargo.estado, func.count(Cargo.id)).group_by(Cargo.estado).all()
-    cargo_counts = {state: count for state, count in cargo_counts}
+    cargo_counts = {
+        state.value if isinstance(state, Enum) else str(state or 'Activo'): count
+        for state, count in cargo_counts
+    }
     total_cargos = sum(cargo_counts.values())
     cargos_activas = cargo_counts.get('Activo', 0)
     cargos_inactivas = total_cargos - cargos_activas
@@ -337,31 +361,33 @@ def get_employee_metrics(db: Session):
         func.count(Empleado.id).label('total')
     ).filter(Empleado.tipo_nomina.isnot(None)).group_by(Empleado.tipo_nomina).order_by(func.count(Empleado.id).desc()).all()
 
+    payroll_breakdown = [
+        {'nombre': str(nombre or 'Sin nómina'), 'total': int(total or 0)}
+        for nombre, total in payroll_breakdown
+    ]
+
     return {
-        'total': total,
-        'active': activos,
-        'vacation': estado_counts['Vacaciones'],
-        'retired_suspended': estado_counts['Retirado'] + estado_counts['Suspendido'],
-        'inactive': inactivos,
+        'total': int(total or 0),
+        'active': int(activos or 0),
+        'vacation': int(estado_counts['Vacaciones'] or 0),
+        'retired_suspended': int((estado_counts['Retirado'] or 0) + (estado_counts['Suspendido'] or 0)),
+        'inactive': int(inactivos or 0),
         'by_estado': estado_counts,
-        'depts': unique_departments,
-        'gerencias': total_gerencias,
-        'cargos': total_cargos,
-        'gerencias_activas': gerencias_activas,
-        'gerencias_inactivas': gerencias_inactivas,
-        'departamentos_activas': departamentos_activas,
-        'departamentos_inactivas': departamentos_inactivas,
-        'cargos_activas': cargos_activas,
-        'cargos_inactivas': cargos_inactivas,
+        'depts': int(unique_departments or 0),
+        'gerencias': int(total_gerencias or 0),
+        'cargos': int(total_cargos or 0),
+        'gerencias_activas': int(gerencias_activas or 0),
+        'gerencias_inactivas': int(gerencias_inactivas or 0),
+        'departamentos_activas': int(departamentos_activas or 0),
+        'departamentos_inactivas': int(departamentos_inactivas or 0),
+        'cargos_activas': int(cargos_activas or 0),
+        'cargos_inactivas': int(cargos_inactivas or 0),
         'latest_employee': latest_employee_label,
         'latest_activity': latest_activity,
         'top_departamentos': [
-            {'nombre': nombre, 'total': total_empleados}
+            {'nombre': str(nombre or 'Sin departamento'), 'total': int(total_empleados or 0)}
             for nombre, total_empleados in top_departamentos
         ],
-        'payroll_breakdown': [
-            {'nombre': nombre, 'total': total}
-            for nombre, total in payroll_breakdown
-        ],
+        'payroll_breakdown': payroll_breakdown,
         'active_ratio': round((activos / total * 100), 1) if total else 0,
     }

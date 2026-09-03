@@ -407,6 +407,40 @@ def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=N
     return AttendanceHistoryPage(items=[_to_output(record, record.empleado) for record in records], total=total, page=page, page_size=page_size)
 
 
+def normalize_attendance_summary_counts(payload):
+    normalized = {
+        'presentes': 0,
+        'entradas_hoy': 0,
+        'salidas_hoy': 0,
+        'marcajes_hoy': 0,
+        'presentes_por_area': [],
+    }
+    if not isinstance(payload, dict):
+        return normalized
+
+    for key, default in [('presentes', 0), ('entradas_hoy', 0), ('salidas_hoy', 0), ('marcajes_hoy', 0)]:
+        value = payload.get(key, default)
+        try:
+            normalized[key] = int(value or 0)
+        except (TypeError, ValueError):
+            normalized[key] = 0
+
+    raw_area = payload.get('presentes_por_area') or []
+    normalized_area = []
+    for item in raw_area:
+        if not isinstance(item, dict):
+            continue
+        gerencia = item.get('gerencia') or 'Sin gerencia'
+        departamento = item.get('departamento') or 'Sin departamento'
+        try:
+            total = int(item.get('total') or 0)
+        except (TypeError, ValueError):
+            total = 0
+        normalized_area.append({'gerencia': str(gerencia), 'departamento': str(departamento), 'total': total})
+    normalized['presentes_por_area'] = normalized_area
+    return normalized
+
+
 def attendance_summary(db: Session):
     start = local_day_start_as_utc()
     type_counts = dict(
@@ -433,20 +467,25 @@ def attendance_summary(db: Session):
     area_counts = {}
     for record in present_records:
         employee = employees_by_id.get(record.empleado_id)
-        area = employee.departamento_rel.nombre if employee and employee.departamento_rel else 'Sin departamento'
-        gerencia = employee.departamento_rel.gerencia.nombre if employee and employee.departamento_rel and employee.departamento_rel.gerencia else 'Sin gerencia'
+        if employee is None:
+            continue
+        department = employee.departamento_rel if employee.departamento_rel else None
+        area = department.nombre if department and department.nombre else 'Sin departamento'
+        gerencia = department.gerencia.nombre if department and department.gerencia and department.gerencia.nombre else 'Sin gerencia'
         key = (gerencia, area)
         area_counts[key] = area_counts.get(key, 0) + 1
-    return AttendanceSummary(
-        presentes=len(present_records),
-        entradas_hoy=type_counts.get(AttendanceType.ENTRADA.value, 0),
-        salidas_hoy=type_counts.get(AttendanceType.SALIDA.value, 0),
-        marcajes_hoy=sum(type_counts.values()),
-        presentes_por_area=[
-            {'gerencia': gerencia, 'departamento': departamento, 'total': total}
+
+    summary = {
+        'presentes': len(present_records),
+        'entradas_hoy': int(type_counts.get(AttendanceType.ENTRADA.value, 0) or 0),
+        'salidas_hoy': int(type_counts.get(AttendanceType.SALIDA.value, 0) or 0),
+        'marcajes_hoy': int(sum(int(value or 0) for value in type_counts.values()) or 0),
+        'presentes_por_area': [
+            {'gerencia': gerencia, 'departamento': departamento, 'total': int(total or 0)}
             for (gerencia, departamento), total in sorted(area_counts.items())
         ],
-    )
+    }
+    return AttendanceSummary(**normalize_attendance_summary_counts(summary))
 
 
 def build_daily_report_payload(summary: AttendanceSummary, recent_records: list[dict], recent_audit: list[dict], *, report_date: str | None = None) -> dict:

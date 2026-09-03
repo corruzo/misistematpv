@@ -351,6 +351,8 @@
     pagination: null,
     paginationInfo: null,
     loader: null,
+    cardScanButton: null,
+    cardScanFeedback: null,
     organizationCatalog: [],
     organizationCatalogPromise: null,
 
@@ -372,6 +374,8 @@
       this.pagination = document.getElementById('pagination');
       this.paginationInfo = document.getElementById('paginationInfo');
       this.loader = document.getElementById('employeesLoader');
+      this.cardScanButton = document.getElementById('scanCardBtn');
+      this.cardScanFeedback = document.getElementById('scanCardFeedback');
       this.canManage = document.getElementById('employeesTable')?.dataset.canManage === 'true';
       this.isInspector = document.getElementById('employeesTable')?.dataset.role === 'Inspector';
 
@@ -384,6 +388,7 @@
     },
 
     bindEvents() {
+      this.cardScanButton?.addEventListener('click', () => this.scanCard());
       const newButton = document.getElementById('newBtn');
       newButton?.addEventListener('click', async () => {
         this.resetForm();
@@ -443,6 +448,33 @@
         state.page = 1;
         this.fetchEmployees();
       });
+    },
+
+    async scanCard() {
+      const input = this.form?.querySelector('[name="codigo_tarjeta"]');
+      if (!input || !this.cardScanButton) return;
+      this.cardScanButton.disabled = true;
+      input.value = '';
+      input.placeholder = 'Leyendo...';
+      if (this.cardScanFeedback) this.cardScanFeedback.textContent = 'Pase la tarjeta por el lector.';
+      try {
+        const response = await fetch('/api/rfid/read-card', {
+          method: 'POST',
+          headers: window.AppUI.csrfHeaders(),
+          signal: AbortSignal.timeout(30000),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || 'No se pudo leer la tarjeta.');
+        input.value = payload.codigo_tarjeta || '';
+        input.placeholder = 'Código leído por el lector';
+        if (this.cardScanFeedback) this.cardScanFeedback.textContent = 'Tarjeta leída correctamente.';
+        input.focus();
+      } catch (error) {
+        input.placeholder = 'Código leído por el lector';
+        if (this.cardScanFeedback) this.cardScanFeedback.textContent = error.name === 'TimeoutError' ? 'Tiempo de lectura agotado.' : error.message;
+      } finally {
+        this.cardScanButton.disabled = false;
+      }
     },
 
     getModalInstance() {

@@ -21,6 +21,7 @@ from app.services.employee_service import (
     get_employee_metrics,
 )
 from app.core.config import DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR
+from app.services.rfid_reader_service import RFIDReaderError, get_reader
 
 router = APIRouter()
 
@@ -29,6 +30,14 @@ templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+
+
+@router.post('/api/rfid/read-card')
+def read_rfid_card(_manager=Depends(require_employee_manager)):
+    try:
+        return {'codigo_tarjeta': get_reader().read_card()}
+    except RFIDReaderError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.get('/employees')

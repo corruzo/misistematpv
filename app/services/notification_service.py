@@ -16,7 +16,9 @@ PRIORITY_INFO = 'informativa'
 ROLE_ACCESS_DENIED = (ROLE_HR, ROLE_DEVELOPER, ROLE_INSPECTOR)
 ROLE_EXCEPTION_MARK = (ROLE_HR, ROLE_INSPECTOR)
 ROLE_TECHNICAL = (ROLE_DEVELOPER,)
-ROLE_ALL_USERS = (ROLE_HR, ROLE_DEVELOPER, ROLE_INSPECTOR)
+ROLE_EMPLOYEE_LIFECYCLE = (ROLE_HR, ROLE_DEVELOPER)
+ROLE_ORGANIZATION_SYSTEM = (ROLE_HR, ROLE_DEVELOPER)
+ROLE_ATTENDANCE_OPERATIONS = (ROLE_HR, ROLE_DEVELOPER, ROLE_INSPECTOR)
 
 
 def publish(db: Session, roles: tuple[str, ...], tipo: str, prioridad: str, titulo: str, mensaje: str) -> int:
@@ -49,32 +51,32 @@ def _actor_name(db: Session, usuario_id: int | None) -> str:
 
 def publish_employee_registered(db: Session, employee, usuario_id: int | None) -> int:
     actor = _actor_name(db, usuario_id)
-    return publish(db, ROLE_ALL_USERS, 'empleado_registrado', PRIORITY_INFO, 'Nuevo empleado registrado', f'{actor} registró al empleado {employee.nombre_apellido} (cédula {employee.cedula}).')
+    return publish(db, ROLE_EMPLOYEE_LIFECYCLE, 'empleado_registrado', PRIORITY_INFO, 'Nuevo empleado registrado', f'{actor} registró al empleado {employee.nombre_apellido} (cédula {employee.cedula}).')
 
 
 def publish_employee_updated(db: Session, employee_name: str, usuario_id: int | None) -> int:
     actor = _actor_name(db, usuario_id)
-    return publish(db, ROLE_ALL_USERS, 'empleado_registrado', PRIORITY_INFO, 'Empleado actualizado', f'{actor} actualizó los datos del empleado {employee_name}.')
+    return publish(db, ROLE_EMPLOYEE_LIFECYCLE, 'empleado_registrado', PRIORITY_INFO, 'Empleado actualizado', f'{actor} actualizó los datos del empleado {employee_name}.')
 
 
 def publish_employee_status_changed(db: Session, employee_name: str, old_status: str, new_status: str, usuario_id: int | None) -> int:
     actor = _actor_name(db, usuario_id)
-    return publish(db, ROLE_ALL_USERS, 'empleado_estado_cambiado', PRIORITY_WARNING, 'Cambio de estatus de empleado', f'{actor} cambió el estatus de {employee_name} de {old_status} a {new_status}.')
+    return publish(db, ROLE_EMPLOYEE_LIFECYCLE, 'empleado_estado_cambiado', PRIORITY_WARNING, 'Cambio de estatus de empleado', f'{actor} cambió el estatus de {employee_name} de {old_status} a {new_status}.')
 
 
 def publish_organization_changed(db: Session, detail: str, usuario_id: int | None) -> int:
     actor = _actor_name(db, usuario_id)
-    return publish(db, ROLE_ALL_USERS, 'organizacion_cambiada', PRIORITY_INFO, 'Estructura organizacional actualizada', f'{actor}: {detail}')
+    return publish(db, ROLE_ORGANIZATION_SYSTEM, 'organizacion_cambiada', PRIORITY_INFO, 'Estructura organizacional actualizada', f'{actor}: {detail}')
 
 
 def publish_user_changed(db: Session, username: str, action: str, usuario_id: int | None) -> int:
     actor = _actor_name(db, usuario_id)
-    return publish(db, ROLE_ALL_USERS, 'usuario_cambiado', PRIORITY_INFO, 'Usuario del sistema actualizado', f'{actor} {action} al usuario {username}.')
+    return publish(db, ROLE_ORGANIZATION_SYSTEM, 'usuario_cambiado', PRIORITY_INFO, 'Usuario del sistema actualizado', f'{actor} {action} al usuario {username}.')
 
 
 def publish_attendance_corrected(db: Session, employee_name: str, old_type: str, new_type: str, reason: str, usuario_id: int) -> int:
     actor = _actor_name(db, usuario_id)
-    return publish(db, ROLE_ALL_USERS, 'marcaje_corregido', PRIORITY_WARNING, 'Marcaje corregido', f'{actor} corrigió el marcaje de {employee_name}: {old_type} a {new_type}. Motivo: {reason}')
+    return publish(db, ROLE_ATTENDANCE_OPERATIONS, 'marcaje_corregido', PRIORITY_WARNING, 'Marcaje corregido', f'{actor} corrigió el marcaje de {employee_name}: {old_type} a {new_type}. Motivo: {reason}')
 
 
 def list_notifications(db: Session, user_id: int, after_id: int = 0, limit: int = 50) -> tuple[list[dict], int | None]:

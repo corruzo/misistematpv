@@ -2,6 +2,10 @@ import base64
 import hashlib
 import secrets
 import unittest
+from unittest import mock
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from app.core.auth import (
     PERMISSION_MANAGE_ATTENDANCE,
@@ -22,8 +26,11 @@ from app.core.auth import (
 from app.core.rate_limit import is_rate_limited
 from app.core.security import hash_password, password_needs_rehash, verify_password
 from app.controllers.employee_controller import router
-from run import configured_worker_count
+from app.core.auth import current_user_optional
+from app.database.session import get_db
+from run import configured_worker_count, resolve_worker_count
 from app.services.backup_service import backup_path
+from app.services.rfid_reader_service import RFIDReader
 
 
 class SecurityContractTest(unittest.TestCase):
@@ -102,6 +109,44 @@ class SecurityContractTest(unittest.TestCase):
                 {'require_read_access', 'require_employee_manager', 'require_developer', 'require_manual_attendance'} & dependency_names,
                 route.path,
             )
+
+    def test_rfid_capture_is_post_only_and_returns_card_value(self):
+        app = FastAPI()
+        app.include_router(router)
+
+        class User:
+            rol = 'Desarrollador'
+
+        app.dependency_overrides[current_user_optional] = lambda: User()
+        app.dependency_overrides[get_db] = lambda: None
+
+        client = TestClient(app)
+        self.assertEqual(client.get('/api/rfid/read-card').status_code, 405)
+
+        with mock.patch('app.controllers.employee_controller.get_reader') as get_reader_mock:
+            reader = mock.Mock()
+            reader.read_card.return_value = '0001234567'
+            get_reader_mock.return_value = reader
+            response = client.post('/api/rfid/read-card')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['codigo_tarjeta'], '0001234567')
+
+    def test_reader_buffer_handles_crlf_and_fragmented_payloads(self):
+        reader = RFIDReader()
+        reader._capturing = True
+        reader._buffer.extend(b'ABC\r')
+        reader._handle_buffered_codes()
+        self.assertEqual(reader._captured_code, 'ABC')
+
+        reader._capturing = True
+        reader._buffer.extend(b'DEF\nGHI')
+        reader._handle_buffered_codes()
+        self.assertEqual(reader._captured_code, 'DEF')
+
+    def test_single_worker_is_forced_when_reader_is_enabled(self):
+        self.assertEqual(resolve_worker_count(['uvicorn', 'run:app', '--workers', '4'], {'WEB_CONCURRENCY': '2'}, serial_port='COM1'), 1)
+        self.assertEqual(resolve_worker_count(['uvicorn', 'run:app', '--workers', '4'], {'WEB_CONCURRENCY': '2'}, serial_port=''), 4)
+        self.assertEqual(resolve_worker_count(['uvicorn', 'run:app'], {'WEB_CONCURRENCY': '2'}, serial_port='COM1'), 1)
 
 
 if __name__ == '__main__':

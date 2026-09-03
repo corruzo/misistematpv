@@ -147,8 +147,12 @@
               </div>
               <div class="col-md-6">
                 <label class="form-label fw-medium" for="codigo_tarjeta">Código de tarjeta RFID</label>
-                <input id="codigo_tarjeta" name="codigo_tarjeta" type="text" class="form-control" placeholder="Código leído por el lector">
+                <div class="input-group">
+                  <input id="codigo_tarjeta" name="codigo_tarjeta" type="text" class="form-control" placeholder="Código leído por el lector">
+                  <button id="scanCardBtn" type="button" class="btn-ios secondary">Escanear desde el lector</button>
+                </div>
                 <div class="form-text">Escríbelo o escanéalo para leerlo automáticamente.</div>
+                <div id="scanCardFeedback" class="form-text" role="status" aria-live="polite"></div>
               </div>
               <div class="col-md-6">
                 <label class="form-label fw-medium" for="nombre_apellido">Nombre y apellido</label>
