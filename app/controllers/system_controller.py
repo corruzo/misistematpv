@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_developer
-from app.core.config import BACKUP_INTERVAL_SECONDS, DEFAULT_PAGE_SIZE, STATIC_DIR
+from app.core.config import BACKUP_INTERVAL_SECONDS, DEFAULT_PAGE_SIZE, STATIC_DIR, asset_fingerprint
 from app.database.session import get_db
 from app.services.backup_service import backup_path, create_backup, list_backups
 from app.services.notification_service import publish_technical
@@ -20,6 +20,7 @@ templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+templates_env.globals['asset_fingerprint'] = asset_fingerprint
 
 
 @router.get('/system/backups', response_class=HTMLResponse)

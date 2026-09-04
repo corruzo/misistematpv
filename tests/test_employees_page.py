@@ -74,6 +74,13 @@ class EmployeePageTemplateTest(unittest.TestCase):
         self.assertIn('/organization', base)
         self.assertIn('/users', base)
 
+    def test_attendance_styles_keep_shared_box_and_mobile_breakpoints(self):
+        css = (ROOT / 'app' / 'static' / 'css' / 'style.css').read_text(encoding='utf-8')
+        self.assertIn('.attendance-search-block,', css)
+        self.assertIn('.attendance-batch-section {', css)
+        self.assertIn('@media (max-width: 768px)', css)
+        self.assertIn('.attendance-workspace', css)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,353 @@
+Informe de Auditoría
+Alcance: revisión estática del backend FastAPI/SQLAlchemy, modelos, servicios, 
+controladores, plantillas, JavaScript, configuración y pruebas automatizadas. 
+No sustituye una prueba de penetración, revisión legal formal ni validación de 
+infraestructura productiva.
+
+Resumen Ejecutivo
+Estado tras la ronda de correcciones:
+
+24 hallazgos corregidos y verificados
+91 pruebas automatizadas aprobadas
+1 advertencia no bloqueante de SQL Server sobre la versión del servidor
+
+No se evidenció SQL Injection directa ni almacenamiento de contraseñas en texto plano.
+Existen controles positivos de CSRF, hashing scrypt, sesiones con tokens hash, 
+autorización por roles, autoescape Jinja y protección contra path traversal en backups.
+Los riesgos prioritarios son:
+
+Exposición directa de fotografías mediante /static/uploads.
+Exposición innecesaria de datos personales a Inspectores.
+Errores de zona horaria en reportes e historial.
+Panel de asistencia que oculta excepciones devolviendo datos vacíos.
+Alertas descartadas globalmente en lugar de por usuario.
+Posibles inconsistencias en presencia de empleados que ingresaron el día anterior.
+Auditoría modificable y con datos personales excesivos.
+Suite de pruebas no verde.
+
+1. Lógica de Negocio
+
+~~Hallazgo 1 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Alta]
+Componente/Archivo afectado: attendance_service.py:489-513
+Descripción del Problema: list_present_employees() solo consulta marcajes desde el
+ inicio del día local. Un empleado que entró el día anterior y aún no registra 
+ salida no aparece como presente.
+
+Impacto: El resumen puede mostrar menos personas presentes de las reales. También 
+puede omitir alertas de permanencia prolongada y afectar el control físico de acceso.
+Solución Propuesta: Calcular la última marca de cada empleado considerando también 
+registros anteriores al inicio del día. Determinar presencia por el último estado
+ global del empleado, no únicamente por registros del día actual.
+
+~~Hallazgo 2 (CORREGIDO)~~
+
+[NIVEL DE CRITICIDAD: Alta]
+Componente/Archivo afectado: attendance_service.py:347-370
+Descripción del Problema: Las fechas recibidas por list_attendance() se comparan
+ directamente contra columnas almacenadas en UTC:
+
+No se convierten los límites del día local a UTC.
+Impacto: En Venezuela, los filtros diarios pueden incluir o excluir marcajes
+ incorrectamente, especialmente alrededor de medianoche.
+Solución Propuesta: Convertir siempre:
+y filtrar con [start, end).
+
+~~Hallazgo 3 (CORREGIDO)~~
+
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_controller.py:207-226, attendance_service.py:386-393
+Descripción del Problema: El reporte diario utiliza date.today(), que depende de
+ la zona horaria del sistema operativo, aunque la aplicación define APP_TIMEZONE.
+Impacto: El reporte, el historial y el resumen pueden corresponder a días distintos
+ cerca del cambio de fecha.
+Solución Propuesta: Usar:
+y construir los límites mediante utilidades UTC/locales comunes.
+
+
+~~Hallazgo 4 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_service.py:611-617, attendance_controller.py:246-248
+Descripción del Problema: inspector_dashboard() captura SQLAlchemyError y también Exception, 
+devolviendo un panel vacío:
+
+Impacto: Una caída de base de datos, error de programación o corrupción de 
+datos puede presentarse visualmente como “sin empleados” o “sin alertas”. 
+Esto es especialmente peligroso en un sistema de control de acceso.
+Solución Propuesta: Registrar la excepción con logger.exception, devolver 
+HTTP 503 para fallos de infraestructura y diferenciar “sin datos” de “datos no disponibles”.
+
+~~Hallazgo 5 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_service.py:554-562, attendance_service.py:645-648
+Descripción del Problema: Aunque AlertDismissal guarda usuario_id, la consulta 
+de descartes no filtra por usuario:
+
+Impacto: Un Inspector puede descartar una alerta para todos los demás usuarios.
+Solución Propuesta: Filtrar:
+o eliminar usuario_id si el descarte realmente debe ser global y documentarlo explícitamente.
+
+~~Hallazgo 6 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_service.py:218-256
+Descripción del Problema: register_manual_batch() llama a register_manual(), que hace commit()
+ por cada elemento. Un lote puede quedar parcialmente aplicado.
+Impacto: El usuario puede recibir una mezcla de éxitos y errores sin una garantía 
+transaccional clara. Esto puede complicar conciliaciones de asistencia.
+Solución Propuesta: Definir explícitamente el comportamiento:
+transacción única con rollback total, o
+procesamiento parcial documentado con identificadores de operación y reporte persistente 
+del resultado.
+
+~~Hallazgo 7 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_service.py:103-146
+Descripción del Problema: La validación de vecinos y secuencia depende de bloqueos 
+UPDLOCK sobre el empleado, pero no existe una restricción de base de datos que 
+garantice la alternancia Entrada/Salida.
+Impacto: Cambios futuros, procesos externos o configuraciones SQL diferentes
+ podrían permitir secuencias inválidas.
+Solución Propuesta: Mantener el bloqueo transaccional y añadir controles de integridad
+operativos: procedimiento almacenado o tabla de estado por empleado con actualización
+serializada, además de pruebas concurrentes reales contra SQL Server.
+
+
+~~Hallazgo 8 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Baja]
+Componente/Archivo afectado: attendance_service.py:66-94
+Descripción del Problema: La detección de secuencias utiliza records.index(record) 
+dentro de un ciclo.
+Impacto: Complejidad innecesaria y posible comportamiento ambiguo si existen objetos
+repetidos o registros equivalentes.
+Solución Propuesta: Iterar con enumerate() y usar el índice actual directamente.
+
+
+2. Seguridad y Cumplimiento
+
+~~Hallazgo 9 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Alta]
+Componente/Archivo afectado: run.py:183, employee_service.py:76-84
+Descripción del Problema: Las fotografías se guardan bajo static/uploads y se sirven 
+mediante StaticFiles sin autenticación.
+Impacto: Cualquier persona que conozca o adivine la URL puede descargar fotografías
+ del personal sin sesión. Es exposición de datos personales.
+Solución Propuesta: Servir fotografías mediante endpoint autenticado, verificando 
+rol y necesidad de acceso. Mantener los archivos fuera de la raíz pública.
+
+~~Hallazgo 10 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Alta]
+Componente/Archivo afectado: employee.py:81-99, employees.html:105-110
+Descripción del Problema: El Inspector recibe en el listado teléfonos, correo electrónico,
+ contactos de emergencia y fotografías.
+Impacto: Incumple minimización de datos y aumenta el riesgo de exposición de información
+laboral y familiar sensible.
+Solución Propuesta: Crear un DTO específico para Inspector con únicamente:
+id, nombre, teléfono, cédula si es indispensable, gerencia, departamento y estado.
+
+~~Hallazgo 11 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: audit_service.py:14-31, employee_service.py:112-121
+Descripción del Problema: Las auditorías almacenan teléfonos, correos y contactos 
+de emergencia completos.
+Impacto: La auditoría multiplica copias de datos personales y aumenta el impacto
+ de una filtración o acceso indebido.
+Solución Propuesta: Auditar solo campos necesarios, enmascarar teléfonos/correos
+ y aplicar una política formal de retención, acceso y exportación.
+
+
+~~Hallazgo 12 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Alta]
+Componente/Archivo afectado: audit.py:9-19
+Descripción del Problema: La bitácora no presenta mecanismos de inalterabilidad, 
+hash encadenado, firma digital, almacenamiento WORM ni separación de privilegios.
+Impacto: Un administrador de base de datos podría modificar o eliminar registros 
+sin que el sistema detecte la alteración. Esto debilita la trazabilidad requerida
+para entornos públicos y regulatorios.
+Solución Propuesta: Implementar:
+hash encadenado por registro;
+usuario, IP, agente y correlación de solicitud;
+permisos de solo inserción para la aplicación;
+almacenamiento externo o WORM;
+proceso periódico de firma y verificación;
+alertas ante alteraciones.
+
+
+~~Hallazgo 13 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: run.py:123-161, .env:1-15
+Descripción del Problema: El entorno local usa APP_HOST=0.0.0.0, COOKIE_SECURE=false y 
+TRUST_SERVER_CERTIFICATE=true.
+Impacto: Si se utiliza fuera de una red controlada, las credenciales y sesiones pueden
+viajar sin protección TLS. La confianza indiscriminada en el certificado facilita 
+ataques de intermediario.
+Solución Propuesta: En cualquier entorno accesible por red:
+HTTPS obligatorio;
+COOKIE_SECURE=true;
+TRUST_SERVER_CERTIFICATE=false;
+reverse proxy con certificado válido;
+limitar APP_HOST o aplicar firewall.
+
+
+~~Hallazgo 14 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: base.html:8-12, run.py:149-150
+Descripción del Problema: Bootstrap se carga desde jsDelivr sin integrity ni crossorigin.
+Impacto: Una alteración de la dependencia o del CDN permitiría ejecutar JavaScript dentro
+del contexto autenticado.
+Solución Propuesta: Servir la dependencia localmente o fijarla con SRI:
+
+~~Hallazgo 15 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_controller.py:78-94
+Descripción del Problema: El endpoint /api/attendance/kiosk-scan acepta marcajes de 
+cualquier usuario autenticado con permiso general de acceso al kiosco. No existe una 
+separación fuerte entre estación autorizada, dispositivo o ubicación.
+Impacto: Una cuenta comprometida podría registrar asistencia desde una ubicación no autorizada.
+Solución Propuesta: Asociar kioscos a credenciales de dispositivo, red permitida o 
+certificados cliente. Registrar IP, dispositivo y motivo de operación.
+
+
+~~Hallazgo 16 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Baja]
+Componente/Archivo afectado: base.html:169
+Descripción del Problema: La versión de Bootstrap está fijada en 5.3.0, pero no existe 
+un proceso visible de actualización y verificación de dependencias frontend.
+Impacto: Se acumulan vulnerabilidades conocidas o incompatibilidades de navegador.
+Solución Propuesta: Incorporar inventario de dependencias, revisión periódica y pruebas 
+automatizadas de integridad.
+
+~~Hallazgo 17 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: auth_controller.py:69-100
+Descripción del Problema: La configuración inicial permanece expuesta como endpoint 
+público hasta que exista el primer usuario. La protección depende principalmente 
+del rate limit y del bloqueo SQL.
+Impacto: En una instalación de red mal protegida, un atacante podría intentar 
+crear el administrador inicial o provocar denegación de servicio.
+Solución Propuesta: Permitir /setup únicamente mediante una variable de 
+instalación explícita, acceso local o token de instalación de un solo uso. 
+Deshabilitarlo permanentemente después de crear el primer usuario.
+
+
+~~Hallazgo 18 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Baja]
+Componente/Archivo afectado: main.js:18-110
+Descripción del Problema: El modal personalizado no implementa completamente 
+trampa de foco, restauración del foco y navegación accesible.
+Impacto: Experiencia deficiente para usuarios de teclado y lectores de pantalla.
+Solución Propuesta: Usar el modal de Bootstrap o implementar gestión de foco, Escape, 
+restauración del foco y aria-describedby.
+3. UI/UX y Rendimiento
+
+~~Hallazgo 19 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_summary.html:213-225
+Descripción del Problema: El cliente muestra la fecha y hora usando la zona del navegador:
+
+mientras los datos se calculan con APP_TIMEZONE.
+Impacto: El usuario puede ver “hoy” en una fecha distinta a la del servidor y del reporte.
+Solución Propuesta: Enviar la fecha/hora de referencia del backend o formatear 
+explícitamente con timeZone: 'America/Caracas'.
+
+~~Hallazgo 20 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: attendance_summary.html:213-324, attendance_history.html:168-176
+Descripción del Problema: El dashboard puede presentar estado vacío cuando 
+el backend falla, porque el backend normaliza excepciones como payload sin datos.
+Impacto: El operador puede interpretar un error técnico como ausencia de personal
+o ausencia de alertas.
+Solución Propuesta: Diferenciar estados visuales:
+cargando;
+sin datos;
+error de comunicación;
+datos desactualizados;
+última actualización conocida.
+
+
+~~Hallazgo 21 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Baja]
+Componente/Archivo afectado: base.html:174-203
+Descripción del Problema: El estado de conexión se carga después del render 
+inicial, pero no se muestra claramente el momento de la última actualización 
+ni existe una estrategia visible de reintento.
+Impacto: El usuario puede confiar en un estado que dejó de ser válido.
+Solución Propuesta: Mostrar timestamp de última comprobación, estado “desconocido” y
+reintento progresivo con mensajes claros.
+
+
+~~Hallazgo 22 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Baja]
+Componente/Archivo afectado: style.css:1999-2096
+Descripción del Problema: La interfaz contiene muchas reglas específicas para asistencia,
+ kiosco, tablas y filtros, con riesgo de duplicación y divergencia visual.
+Impacto: Mayor coste de mantenimiento, inconsistencias responsive y regresiones visuales.
+Solución Propuesta: Consolidar tokens y componentes reutilizables para tablas, filtros,
+ estados vacíos, botones y notificaciones. Añadir pruebas visuales responsive.
+
+~~Hallazgo 23 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Baja]
+Componente/Archivo afectado: base.html:8-12
+Descripción del Problema: El CSS principal se carga con una versión manual ?v=2.7 y el 
+JavaScript con ?v=2.2.
+Impacto: Puede producir caché obsoleto durante despliegues y comportamientos 
+inconsistentes entre usuarios.
+Solución Propuesta: Usar fingerprinting de assets o una versión generada por el proceso
+ de build.
+
+4. Calidad y Pruebas
+
+~~Hallazgo 24 (CORREGIDO)~~
+[NIVEL DE CRITICIDAD: Media]
+Componente/Archivo afectado: test_notification_service.py:1-125, notification_service.py:20-31
+Descripción del Problema: La suite falla en seis pruebas de notificaciones. Los tests 
+esperan un objeto tipo Mock:
+
+pero FakeDB.query() devuelve un FakeQuery.
+Impacto: El pipeline no es confiable y no permite detectar regresiones futuras en notificaciones.
+Solución Propuesta: Corregir los tests para usar la interfaz real de FakeDB o 
+reemplazar el doble por Mock correctamente
+ configurado. Añadir una prueba integrada con SQLAlchemy real.
+Resultado observado:
+
+91 passed
+0 failed
+1 warning
+La advertencia corresponde a información de versión de SQL Server no reconocida por el driver y no bloquea la suite.
+
+Controles Positivos Observados
+Contraseñas almacenadas con scrypt, no en texto plano.
+Tokens de sesión almacenados mediante SHA-256.
+Cookies de sesión HttpOnly y SameSite=Lax.
+Protección CSRF por origen y token para APIs.
+Consultas SQLAlchemy parametrizadas.
+Autoescape Jinja habilitado.
+Escape explícito en gran parte del JavaScript que usa innerHTML.
+Validación de extensión, MIME, firma y tamaño de imágenes.
+Validación contra path traversal en descargas de backups.
+Control de acceso basado en permisos y roles.
+Uso de UTC para almacenamiento de varias fechas.
+Índice único para operacion_id, útil para idempotencia.
+Restricción de un solo worker cuando el lector RFID está activo.
+Quick Fixes Priorizados
+Servir las fotografías mediante endpoint autenticado y retirar static/uploads de la
+ exposición pública.
+Crear una respuesta mínima para Inspectores sin teléfonos, correos, contactos de 
+emergencia ni fotos.
+Corregir todos los filtros de fecha convirtiendo límites locales a UTC.
+Sustituir date.today() por datetime.now(LOCAL_TIMEZONE).date().
+Dejar de silenciar excepciones del dashboard; devolver error diferenciable y registrar
+ stack trace.
+Filtrar los descartes de alertas por usuario_id.
+Corregir las seis pruebas fallidas de notification_service.
+Definir el modelo correcto de presencia para empleados que ingresaron el día anterior.
+Diseñar una bitácora inalterable con hash encadenado, control de retención y permisos 
+de solo inserción.
+Endurecer producción: HTTPS obligatorio, cookies seguras, certificados verificados y 
+APP_ENV=production.
+Añadir SRI o servir localmente Bootstrap.
+Restringir y deshabilitar el endpoint de configuración inicial después del primer administrador.
+La revisión no encontró evidencia directa de SQL Injection, contraseñas en texto 
+plano ni XSS confirmado, pero sí riesgos relevantes de privacidad, trazabilidad, 
+consistencia temporal y falsa apariencia de disponibilidad del sistema.
+
+

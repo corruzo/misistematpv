@@ -65,6 +65,7 @@ IMPORTANTE:
 - `APP_HOST=0.0.0.0` hace que el servidor escuche en todas las interfaces de red.
 - `APP_PORT=8000` es el puerto web del sistema.
 - `CSRF_ALLOWED_ORIGINS` debe incluir la IP o alias que usarán los navegadores desde la red local.
+- Esta configuración HTTP es solo para una red LAN controlada y desarrollo. Para producción usa `APP_ENV=production`, `COOKIE_SECURE=true`, `TRUST_SERVER_CERTIFICATE=false`, `INITIAL_SETUP_ENABLED=false`, `SSL_CERTFILE` y `SSL_KEYFILE` con rutas existentes. El sistema rechazará arrancar si faltan certificados TLS.
 
 ## 4. Arrancar la aplicación
 

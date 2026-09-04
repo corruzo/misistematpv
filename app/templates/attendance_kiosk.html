@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Kiosco de marcaje - MarcajeTPV</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.7">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ asset_fingerprint('css/style.css') }}">
 </head>
 <body class="kiosk-page">
   <main class="kiosk-shell" aria-live="polite">
@@ -142,11 +142,11 @@
       waiting.classList.add('d-none');
       result.classList.remove('d-none');
       clock.classList.add('d-none');
-      document.getElementById('kioskPhoto').src = payload.foto_url ? `/static/${encodeURIComponent(payload.foto_url)}` : '/static/img/default-avatar.svg';
+      document.getElementById('kioskPhoto').src = payload.foto_url ? `/api/employees/${encodeURIComponent(payload.foto_url)}/photo` : '/static/img/default-avatar.svg';
       document.getElementById('kioskEventLabel').textContent = payload.tipo === 'ENTRADA' ? 'Entrada registrada' : 'Salida registrada';
       document.getElementById('kioskEmployeeName').textContent = payload.empleado_nombre || 'Empleado';
       document.getElementById('kioskArea').textContent = payload.gerencia || 'Sin gerencia';
-      document.getElementById('kioskTime').textContent = new Date(payload.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      document.getElementById('kioskTime').textContent = new Date(payload.fecha_hora).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', second: '2-digit' });
       if (resultTimer) window.clearTimeout(resultTimer);
       resultTimer = window.setTimeout(reset, 30000);
     };
@@ -221,7 +221,7 @@
       latestPollingTimer = window.setTimeout(pollLatestAttendance, 60000);
     };
     const updateClock = () => {
-      document.getElementById('kioskClock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      document.getElementById('kioskClock').textContent = new Date().toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     };
     form.addEventListener('submit', async (event) => {
       event.preventDefault();

@@ -8,7 +8,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.employee import Empleado
 from app.schemas.attendance import AttendanceOrigin, AttendanceType
 from app.schemas.attendance import AttendanceManualBatchRequest
-from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, attendance_records_are_too_close, correct_attendance, inspector_dashboard, normalize_inspector_dashboard_payload, register_manual, register_scan
+from app.services.attendance_service import DEBOUNCE_SECONDS, AttendanceError, attendance_records_are_too_close, correct_attendance, inspector_dashboard, normalize_inspector_dashboard_payload, register_manual, register_manual_batch, register_scan
 
 
 class QueryDouble:
@@ -58,6 +58,10 @@ class DatabaseDouble:
 
     def commit(self):
         pass
+
+    def rollback(self):
+        self.records.clear()
+        self.audit_records.clear()
 
     def refresh(self, _value):
         pass
@@ -196,6 +200,19 @@ class AttendanceServiceTest(unittest.TestCase):
     def test_manual_batch_rejects_duplicate_employee(self):
         with self.assertRaises(ValueError):
             AttendanceManualBatchRequest(marcajes=[{'empleado_id': 1}, {'empleado_id': 1}])
+
+    def test_manual_batch_rolls_back_when_a_mark_fails(self):
+        db = DatabaseDouble(self.make_employee())
+        marks = AttendanceManualBatchRequest(marcajes=[
+            {'empleado_id': 1},
+            {'empleado_id': 999},
+        ])
+
+        result = register_manual_batch(db, marks.marcajes)
+
+        self.assertEqual(result['items'], [])
+        self.assertEqual(len(result['errors']), 1)
+        self.assertEqual(db.records, [])
 
     def test_inactive_employee_and_unknown_card_are_rejected(self):
         inactive_db = DatabaseDouble(self.make_employee(EstadoEmpleado.Retirado))

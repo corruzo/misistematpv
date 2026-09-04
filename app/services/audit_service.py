@@ -1,5 +1,6 @@
+import hashlib
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 
 from sqlalchemy import func
@@ -20,8 +21,36 @@ def snapshot(values: dict | None) -> str | None:
     return json.dumps(values, ensure_ascii=True, default=_json_default) if values is not None else None
 
 
+def audit_digest(record: AuditRecord) -> str:
+    fecha = record.fecha if isinstance(record.fecha, datetime) else None
+    fecha_text = ''
+    if fecha is not None:
+        fecha_text = (fecha.astimezone(timezone.utc) if fecha.tzinfo else fecha.replace(tzinfo=timezone.utc)).isoformat()
+        if '.' in fecha_text:
+            head, tail = fecha_text.split('.', 1)
+            fraction, offset = tail.split('+', 1)
+            fecha_text = f'{head}.{fraction[:6].ljust(6, "0")}+{offset}'
+    payload = '|'.join([
+        str(record.id),
+        str(record.usuario_id or 0),
+        str(record.accion or ''),
+        str(record.entidad or ''),
+        str(record.entidad_id or 0),
+        str(record.datos_antes or ''),
+        str(record.datos_despues or ''),
+        fecha_text,
+        str(record.hash_anterior or '').rstrip(),
+    ])
+    return hashlib.sha256(payload.encode('utf-16le')).hexdigest().upper()
+
+
 def add_audit(db: Session, usuario_id: int | None, accion: str, entidad: str, entidad_id: int | None,
               antes: dict | None = None, despues: dict | None = None) -> AuditRecord:
+    previous_row = db.query(AuditRecord.hash_registro).order_by(AuditRecord.id.desc()).first()
+    try:
+        previous_hash = previous_row[0] if previous_row else None
+    except (TypeError, KeyError):
+        previous_hash = getattr(previous_row, 'hash_registro', None)
     record = AuditRecord(
         usuario_id=usuario_id,
         accion=accion,
@@ -29,9 +58,25 @@ def add_audit(db: Session, usuario_id: int | None, accion: str, entidad: str, en
         entidad_id=entidad_id,
         datos_antes=snapshot(antes),
         datos_despues=snapshot(despues),
+        fecha=datetime.now(timezone.utc),
+        hash_anterior=previous_hash,
     )
     db.add(record)
+    db.flush()
+    record.hash_registro = audit_digest(record)
     return record
+
+
+def verify_audit_chain(db: Session) -> bool:
+    records = db.query(AuditRecord).order_by(AuditRecord.id.asc()).all()
+    previous_hash = None
+    for record in records:
+        stored_previous = (record.hash_anterior or '').rstrip() or None
+        stored_hash = (record.hash_registro or '').rstrip().upper() or None
+        if stored_previous != previous_hash or stored_hash != audit_digest(record):
+            return False
+        previous_hash = stored_hash
+    return True
 
 
 def list_audit_events(db: Session, *, entidad: str | None = None, since: datetime | None = None, limit: int = 50) -> list[AuditRecord]:

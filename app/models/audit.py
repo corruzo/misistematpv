@@ -17,3 +17,5 @@ class AuditRecord(Base):
     datos_antes = Column(Text, nullable=True)
     datos_despues = Column(Text, nullable=True)
     fecha = Column(DateTime(timezone=True), nullable=False, server_default=func.sysutcdatetime(), index=True)
+    hash_anterior = Column(String(64), nullable=True)
+    hash_registro = Column(String(64), nullable=True, unique=True, index=True)

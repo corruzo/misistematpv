@@ -207,16 +207,14 @@ textarea {
 
 .eyebrow,
 .org-card-header .eyebrow,
-.org-stat-card span,
-.sidebar-section__label {
+.org-stat-card span {
   color: var(--text-muted);
 }
 
 .sidebar-status-panel,
 .sidebar-status-tag,
 .sidebar-section__toggle,
-.sidebar-section__toggle svg,
-.side-link {
+.sidebar-section__toggle svg {
   color: #aebfce;
 }
 
@@ -2277,6 +2275,10 @@ body.photo-viewer-open { overflow: hidden; }
 
 .presence-time { color: #176b5d; font-weight: 800; font-variant-numeric: tabular-nums; }
 .table-state { padding: 28px !important; color: var(--text-muted); text-align: center; }
+.data-state { margin-bottom: 12px; padding: 9px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: var(--font-size-caption); }
+.data-state--loading { color: var(--text-secondary); background: var(--bg-subtle); }
+.data-state--ok { color: #166534; background: #ecfdf3; border-color: #bbf7d0; }
+.data-state--error { color: var(--status-danger); background: var(--status-danger-bg); border-color: #f3c8c4; }
 
 .attendance-page .attendance-inspector-toolbar {
   margin-bottom: 8px;

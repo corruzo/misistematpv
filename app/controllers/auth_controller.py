@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.config import STATIC_DIR
+from app.core.config import INITIAL_SETUP_ENABLED, STATIC_DIR, asset_fingerprint
 from app.core.config import COOKIE_SECURE
 from app.database.session import get_db
 from app.services.auth_service import SESSION_COOKIE, SESSION_HOURS, acquire_initial_setup_lock, authenticate_user, create_session, delete_session
@@ -19,6 +19,7 @@ templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+templates_env.globals['asset_fingerprint'] = asset_fingerprint
 
 
 @router.get('/')
@@ -45,12 +46,14 @@ def login_page(request: Request, db: Session = Depends(get_db)):
         db.rollback()
     template = templates_env.get_template('login.html')
     error = 'Tu sesión expiró. Inicia sesión nuevamente.' if request.query_params.get('reason') == 'session_expired' else None
-    return HTMLResponse(template.render(error=error))
+    return HTMLResponse(template.render(error=error, asset_fingerprint=asset_fingerprint))
 
 
 @router.get('/setup', response_class=HTMLResponse)
 def setup_page(db: Session = Depends(get_db)):
     template = templates_env.get_template('setup.html')
+    if not INITIAL_SETUP_ENABLED:
+        raise HTTPException(status_code=404, detail='La configuración inicial está deshabilitada.')
     try:
         has_users = db.query(Usuario).count()
     except SQLAlchemyError:
@@ -76,6 +79,8 @@ def setup_admin(
     db: Session = Depends(get_db),
 ):
     template = templates_env.get_template('setup.html')
+    if not INITIAL_SETUP_ENABLED:
+        raise HTTPException(status_code=404, detail='La configuración inicial está deshabilitada.')
     client_host = request.client.host if request.client else 'unknown'
     if is_rate_limited('/setup', client_host, username):
         return HTMLResponse(template.render(error='Demasiados intentos. Espera un minuto e inténtalo de nuevo.'), status_code=429)

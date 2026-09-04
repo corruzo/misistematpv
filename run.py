@@ -24,7 +24,7 @@ from app.controllers.system_controller import router as system_router, backup_lo
 from app.controllers.notification_controller import router as notification_router
 from fastapi import Depends
 from app.core.auth import require_user
-from app.core.config import APP_ENV, APP_RELOAD, COOKIE_SECURE, SERIAL_PORT, TEMPORARY_DATA_RETENTION_DAYS, is_allowed_csrf_origin, STATIC_DIR
+from app.core.config import APP_ENV, APP_RELOAD, COOKIE_SECURE, SERIAL_PORT, SSL_CERTFILE, SSL_KEYFILE, TEMPORARY_DATA_RETENTION_DAYS, asset_fingerprint, is_allowed_csrf_origin, STATIC_DIR
 from app.core.exceptions import AppException
 from app.database.session import SessionLocal
 from app.services.auth_service import cleanup_expired_sessions
@@ -210,4 +210,6 @@ if __name__ == '__main__':
         reload=APP_RELOAD,
         workers=worker_count,
         access_log=False,
+        ssl_certfile=SSL_CERTFILE or None,
+        ssl_keyfile=SSL_KEYFILE or None,
     )

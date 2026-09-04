@@ -1,4 +1,5 @@
 from pathlib import Path
+import hashlib
 from dotenv import load_dotenv
 import os
 from urllib.parse import quote_plus, urlparse
@@ -23,6 +24,20 @@ except ZoneInfoNotFoundError:
         raise RuntimeError(f'Zona horaria inválida o tzdata ausente en APP_TIMEZONE: {APP_TIMEZONE}')
 COOKIE_SECURE = APP_ENV == 'production' or os.getenv('COOKIE_SECURE', 'false').lower() in ('1', 'true', 'yes')
 TRUST_SERVER_CERTIFICATE = os.getenv('TRUST_SERVER_CERTIFICATE', 'false' if APP_ENV == 'production' else 'true').lower() in ('1', 'true', 'yes')
+INITIAL_SETUP_ENABLED = os.getenv('INITIAL_SETUP_ENABLED', 'false' if APP_ENV == 'production' else 'true').lower() in ('1', 'true', 'yes')
+KIOSK_ALLOWED_IPS = frozenset(ip.strip() for ip in os.getenv('KIOSK_ALLOWED_IPS', '').split(',') if ip.strip())
+SSL_CERTFILE = os.getenv('SSL_CERTFILE', '').strip()
+SSL_KEYFILE = os.getenv('SSL_KEYFILE', '').strip()
+if APP_ENV == 'production' and not COOKIE_SECURE:
+    raise RuntimeError('COOKIE_SECURE debe estar habilitado en producción.')
+if APP_ENV == 'production' and TRUST_SERVER_CERTIFICATE:
+    raise RuntimeError('TRUST_SERVER_CERTIFICATE debe estar deshabilitado en producción.')
+if APP_ENV == 'production' and (not SSL_CERTFILE or not SSL_KEYFILE):
+    raise RuntimeError('SSL_CERTFILE y SSL_KEYFILE son obligatorios en producción.')
+if APP_ENV == 'production' and (not Path(SSL_CERTFILE).is_file() or not Path(SSL_KEYFILE).is_file()):
+    raise RuntimeError('Los certificados TLS configurados no existen.')
+if APP_ENV == 'production' and not KIOSK_ALLOWED_IPS:
+    raise RuntimeError('KIOSK_ALLOWED_IPS debe configurarse en producción.')
 CSRF_ALLOWED_ORIGINS = tuple(
     origin.strip().rstrip('/')
     for origin in os.getenv('CSRF_ALLOWED_ORIGINS', '' if APP_ENV == 'production' else 'http://127.0.0.1:8000,http://localhost:8000').split(',')
@@ -125,4 +140,10 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_IMAGE_EXT = {'.png', '.jpg', '.jpeg', '.gif'}
+
+
+def asset_fingerprint(relative_path: str) -> str:
+    asset_path = STATIC_DIR / relative_path
+    digest = hashlib.sha256(asset_path.read_bytes()).hexdigest()
+    return digest[:12]
 

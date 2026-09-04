@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -20,7 +20,7 @@ from app.services.employee_service import (
     soft_delete_employee,
     get_employee_metrics,
 )
-from app.core.config import DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR
+from app.core.config import DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, UPLOADS_DIR, asset_fingerprint
 from app.services.rfid_reader_service import RFIDReaderError, get_reader
 
 router = APIRouter()
@@ -30,6 +30,7 @@ templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+templates_env.globals['asset_fingerprint'] = asset_fingerprint
 
 
 @router.post('/api/rfid/read-card')
@@ -55,6 +56,17 @@ def api_get_employee_by_id_route(emp_id: int, db: Session = Depends(get_db), _us
     if not emp:
         raise HTTPException(status_code=404, detail='Empleado no encontrado')
     return EmpleadoOut.model_validate(emp)
+
+
+@router.get('/api/employees/{emp_id}/photo', include_in_schema=False)
+def api_get_employee_photo(emp_id: int, db: Session = Depends(get_db), _user=Depends(require_read_access)):
+    employee = get_employee_by_id(db, emp_id)
+    if not employee or not employee.foto_url:
+        raise HTTPException(status_code=404, detail='Foto no encontrada.')
+    photo_path = (STATIC_DIR / employee.foto_url).resolve()
+    if photo_path.parent != UPLOADS_DIR or not photo_path.is_file():
+        raise HTTPException(status_code=404, detail='Foto no encontrada.')
+    return FileResponse(photo_path)
 
 
 @router.get('/api/employees')

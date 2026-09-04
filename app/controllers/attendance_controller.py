@@ -4,10 +4,11 @@ from io import StringIO
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_employee_manager, require_manual_attendance, require_page_user, require_read_access, require_user
-from app.core.config import APP_ENV, DEFAULT_PAGE_SIZE, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, ATTENDANCE_HISTORY_DEFAULT_DAYS
+from app.core.auth import PERMISSION_ACCESS_KIOSK, require_employee_manager, require_manual_attendance, require_page_user, require_permission, require_read_access, require_user
+from app.core.config import APP_ENV, ATTENDANCE_HISTORY_DEFAULT_DAYS, DEFAULT_PAGE_SIZE, KIOSK_ALLOWED_IPS, MAX_OFFSET, MAX_PAGE_SIZE, STATIC_DIR, asset_fingerprint
 from app.database.session import get_db
 from app.schemas.attendance import AttendanceCorrectionRequest, AttendanceManualBatchRequest, AttendanceManualRequest, AttendanceOrigin, AttendanceScanRequest, ManualFrequentEmployeeRequest
 from app.schemas.employee import EmpleadoOut
@@ -25,6 +26,13 @@ templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+templates_env.globals['asset_fingerprint'] = asset_fingerprint
+
+
+def require_kiosk_station(request: Request) -> None:
+    client_host = request.client.host if request.client else None
+    if KIOSK_ALLOWED_IPS and client_host not in KIOSK_ALLOWED_IPS:
+        raise HTTPException(status_code=403, detail='La estación no está autorizada para operar el kiosco.')
 
 
 @router.get('/attendance', response_class=HTMLResponse)
@@ -60,6 +68,7 @@ if APP_ENV != 'production':
 
 @router.get('/attendance/kiosk', response_class=HTMLResponse)
 def attendance_kiosk_page(request: Request, user=Depends(require_user)):
+    require_kiosk_station(request)
     template = templates_env.get_template('attendance_kiosk.html')
     return HTMLResponse(template.render(
         user=user,
@@ -88,7 +97,8 @@ def garita_launcher_page(request: Request, user=Depends(require_page_user)):
 
 
 @router.post('/api/attendance/kiosk-scan')
-def kiosk_scan(payload: AttendanceScanRequest, db: Session = Depends(get_db), _user=Depends(require_user)):
+def kiosk_scan(request: Request, payload: AttendanceScanRequest, db: Session = Depends(get_db), _user=Depends(require_permission(PERMISSION_ACCESS_KIOSK))):
+    require_kiosk_station(request)
     try:
         return register_scan(db, payload.codigo_tarjeta, AttendanceOrigin.PUERTO_COM)
     except EmployeeAccessDeniedError as exc:
@@ -204,7 +214,7 @@ def attendance_summary_route(db: Session = Depends(get_db), _user=Depends(requir
 
 @router.get('/api/attendance/daily-report')
 def attendance_daily_report(db: Session = Depends(get_db), _user=Depends(require_read_access)):
-    report_date = date.today()
+    report_date = datetime.now(LOCAL_TIMEZONE).date()
     day_start = datetime.combine(report_date, datetime.min.time(), tzinfo=LOCAL_TIMEZONE)
     summary = attendance_summary(db)
     today_records = list_attendance(db, page=1, page_size=25, date_from=report_date, date_to=report_date)
@@ -230,7 +240,10 @@ def attendance_present_route(db: Session = Depends(get_db), _user=Depends(requir
 
 @router.get('/api/attendance/inspector-dashboard')
 def inspector_dashboard_route(db: Session = Depends(get_db), _user=Depends(require_read_access)):
-    return inspector_dashboard(db, _user.id)
+    try:
+        return inspector_dashboard(db, _user.id)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail='El dashboard no está disponible temporalmente.') from exc
 
 
 @router.post('/api/attendance/alerts/{alert_identifier}/dismiss')

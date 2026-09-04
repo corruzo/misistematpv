@@ -23,6 +23,7 @@
 </script>
 
 <div class="attendance-page inspector-page pt-2">
+  <div id="inspectorDataState" class="data-state data-state--loading" role="status" aria-live="polite">Cargando información operativa...</div>
 
   <section class="card inspector-panel inspector-panel--alerts alert-priority-zone mb-3 d-none">
     <div class="card-panel__header card-panel__header--warning d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -145,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const search = document.getElementById('presentSearch');
 
   const escapeHtml = (val) => String(val ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const formatTime = (val) => val ? new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+  const formatTime = (val) => val ? new Date(val).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
 
   const SVG_CHECK = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="20 6 9 17l-5-5"/></svg>`;
   const SVG_ALERT = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
@@ -175,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fragment = document.createDocumentFragment();
     items.forEach((item) => {
       const row = document.createElement('tr');
-      const photoSrc = item.foto_url ? `/static/${encodeURIComponent(item.foto_url)}` : '/static/img/default-avatar.svg';
+      const photoSrc = item.foto_url ? `/api/employees/${encodeURIComponent(item.foto_url)}/photo` : '/static/img/default-avatar.svg';
       
       row.innerHTML = `
         <td>
@@ -221,15 +222,23 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('summaryMarcajesMeta').textContent = 'Entradas + salidas';
 
       // Hora formateada correctamente sin superposiciones
-      document.getElementById('summaryDate').textContent = new Date().toLocaleDateString([], { day: '2-digit', month: 'short' });
-      document.getElementById('inspectorUpdated').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const now = new Date();
+      const timeOptions = { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' };
+      document.getElementById('summaryDate').textContent = now.toLocaleDateString('es-VE', { timeZone: 'America/Caracas', day: '2-digit', month: 'short' });
+      document.getElementById('inspectorUpdated').textContent = now.toLocaleTimeString('es-VE', timeOptions);
 
       renderAlerts(payload.alerts || []);
       renderRecent(payload.recent || []);
       renderExpected(payload.expected || []);
       render();
+      const state = document.getElementById('inspectorDataState');
+      state.className = 'data-state data-state--ok';
+      state.textContent = `Datos actualizados a las ${now.toLocaleTimeString('es-VE', timeOptions)}.`;
 
     } catch (error) {
+      const state = document.getElementById('inspectorDataState');
+      state.className = 'data-state data-state--error';
+      state.textContent = 'No se pudo actualizar la información. Se muestran datos anteriores si están disponibles.';
       if (window.AppUI?.toast) window.AppUI.toast(error.message, 'error');
     } finally {
       loading = false;

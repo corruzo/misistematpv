@@ -41,6 +41,10 @@ El lanzador crea `.venv`, instala `requirements.txt`, aplica las migraciones Ale
 
 6. Abre la dirección que muestra la consola. En la misma PC normalmente es `http://127.0.0.1:8000/`. Si es la primera instalación, entra en `/setup` para crear el primer usuario administrador; después usa `/login`.
 
+### Producción
+
+No uses la configuración `development` de la red LAN para producción. Define `APP_ENV=production`, `COOKIE_SECURE=true`, `TRUST_SERVER_CERTIFICATE=false`, `INITIAL_SETUP_ENABLED=false`, `KIOSK_ALLOWED_IPS` con las IP de las estaciones autorizadas y proporciona rutas existentes en `SSL_CERTFILE` y `SSL_KEYFILE`. La aplicación rechazará iniciar si falta TLS, una estación autorizada o si el certificado de SQL Server no se verifica.
+
 Si la base de datos ya existía y solo estás instalando el código en otra PC, no vuelvas a crearla: configura el mismo `DB_SERVER` y `DB_NAME` en `.env` y ejecuta `start_app.bat` para aplicar las migraciones pendientes.
 
 ### Actualizar una instalación existente
@@ -88,6 +92,8 @@ El archivo `start_app.bat` hace lo siguiente automáticamente:
 - Ejecuta la app con `python run.py`
 
 El arranque normal usa una sola instancia estable y no activa la recarga automática. Para desarrollo con recarga, define `APP_RELOAD=true` en `.env`; no se recomienda en el equipo de producción o kiosco.
+
+La dependencia frontend Bootstrap está inventariada en `frontend-dependencies.json` con versión e integridad SRI. Para actualizarla, fija una nueva versión, calcula los hashes SHA-384 de CSS y JS, actualiza el inventario y `app/templates/base.html`, y ejecuta `pytest` antes de desplegar.
 
 ## Variables de entorno
 

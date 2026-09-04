@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone, date
 import hashlib
 import uuid
@@ -14,11 +15,12 @@ from app.models.organization import Departamento
 from app.schemas.attendance import AttendanceHistoryPage, AttendanceOrigin, AttendanceRecordOut, AttendanceSummary, AttendanceType
 from app.services.audit_service import add_audit
 from app.services.notification_service import publish_attendance_corrected, publish_exception_mark
-from app.core.datetime_utils import LOCAL_TIMEZONE, as_utc, local_day_start_as_utc, to_local, utc_now
+from app.core.datetime_utils import LOCAL_TIMEZONE, as_utc, local_date_bounds_as_utc, local_day_start_as_utc, to_local, utc_now
 from app.core.config import ATTENDANCE_HISTORY_DEFAULT_DAYS, PRESENT_EMPLOYEES_LIMIT, PROLONGED_STAY_HOURS
 
 
 DEBOUNCE_SECONDS = 15
+logger = logging.getLogger(__name__)
 
 
 class AttendanceError(ValueError):
@@ -55,7 +57,7 @@ def build_attendance_alerts(today_records, overnight_records, employee_label, pr
     for employee_id, records in records_by_employee.items():
         records.sort(key=lambda record: (record.fecha_hora, record.id))
         previous = records[0]
-        for record in records[1:]:
+        for index, record in enumerate(records[1:], start=1):
             if record.fecha_hora < today_records[0].fecha_hora if today_records else False:
                 previous = record
                 continue
@@ -72,7 +74,7 @@ def build_attendance_alerts(today_records, overnight_records, employee_label, pr
                     'message': f'El empleado {employee_label(employee_id)} tiene dos marcajes en {interval:.1f} segundos. Entre {format_alert_time(previous.fecha_hora)} y {format_alert_time(record.fecha_hora)}.',
                 })
             if record.tipo == AttendanceType.SALIDA.value and not any(
-                item.tipo == AttendanceType.ENTRADA.value for item in records[:records.index(record)]
+                item.tipo == AttendanceType.ENTRADA.value for item in records[:index]
             ):
                 alerts.append({
                     'kind': 'sequence',
@@ -104,6 +106,7 @@ def _register_employee(
     marked_at: datetime | None = None,
     attendance_type: AttendanceType | None = None,
     operation_id: str | None = None,
+    commit: bool = True,
 ) -> AttendanceRecordOut:
     employee_query = db.query(Empleado).filter(Empleado.id == employee.id)
     with_hint = getattr(employee_query, 'with_hint', None)
@@ -142,9 +145,12 @@ def _register_employee(
         add_audit(db, usuario_id, 'marcaje', 'marcajes_asistencia', record.id, despues={
             'empleado_id': record.empleado_id, 'tipo': record.tipo, 'origen': record.origen,
         })
-        db.commit()
-    except IntegrityError:
+        if commit:
+            db.commit()
+    except IntegrityError as exc:
         db.rollback()
+        if '51001' in str(exc):
+            raise AttendanceError('La secuencia de asistencia debe alternar entrada y salida.') from exc
         raise AttendanceError('No se pudo registrar el marcaje.')
     db.refresh(record)
     return _to_output(record, employee)
@@ -209,13 +215,14 @@ def register_manual(
     marked_at: datetime | None = None,
     attendance_type: AttendanceType | None = None,
     operation_id: str | None = None,
+    commit: bool = True,
 ) -> AttendanceRecordOut:
     employee = db.query(Empleado).filter(Empleado.id == empleado_id).first()
     if not employee:
         raise AttendanceError('Empleado no encontrado.')
     if marked_at is not None and marked_at.tzinfo is None:
         marked_at = marked_at.replace(tzinfo=LOCAL_TIMEZONE)
-    return _register_employee(db, employee, AttendanceOrigin.MANUAL_ADMIN, usuario_id, marked_at, attendance_type, operation_id)
+    return _register_employee(db, employee, AttendanceOrigin.MANUAL_ADMIN, usuario_id, marked_at, attendance_type, operation_id, commit=commit)
 
 
 def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
@@ -224,12 +231,12 @@ def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
     for mark in marks:
         try:
             operation_id = mark.operacion_id or str(uuid.uuid4())
-            result = register_manual(db, mark.empleado_id, usuario_id, mark.fecha_hora, mark.tipo, operation_id)
+            result = register_manual(db, mark.empleado_id, usuario_id, mark.fecha_hora, mark.tipo, operation_id, commit=False)
             results.append(result)
             if not result.codigo_tarjeta:
                 publish_exception_mark(db, result.empleado_nombre, result.empleado_id)
-                db.commit()
         except EmployeeAccessDeniedError as exc:
+            db.rollback()
             errors.append({
                 'empleado_id': exc.employee_id,
                 'empleado_nombre': exc.employee_name,
@@ -237,7 +244,10 @@ def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
                 'code': 'employee_access_denied',
                 'detail': str(exc),
             })
+            results.clear()
+            break
         except AttendanceError as exc:
+            db.rollback()
             employee = db.query(Empleado).filter(Empleado.id == mark.empleado_id).first()
             errors.append({
                 'empleado_id': mark.empleado_id,
@@ -246,9 +256,15 @@ def register_manual_batch(db: Session, marks, usuario_id: int | None = None):
                 'code': 'attendance_error',
                 'detail': str(exc),
             })
+            results.clear()
+            break
         except SQLAlchemyError:
             db.rollback()
             errors.append({'empleado_id': mark.empleado_id, 'detail': 'No se pudo consultar la base de datos.'})
+            results.clear()
+            break
+    if results and not errors:
+        db.commit()
     return {'items': results, 'errors': errors}
 
 
@@ -381,14 +397,16 @@ def list_attendance(db: Session, page: int = 1, page_size: int = 25, date_from=N
         date_from = reference_date - timedelta(days=ATTENDANCE_HISTORY_DEFAULT_DAYS - 1)
     if date_to is None:
         date_to = reference_date
+    start_utc, _ = local_date_bounds_as_utc(date_from)
+    _, end_utc = local_date_bounds_as_utc(date_to)
     query = db.query(AttendanceRecord).options(
         joinedload(AttendanceRecord.empleado).joinedload(Empleado.departamento_rel),
         joinedload(AttendanceRecord.empleado).joinedload(Empleado.cargo_rel),
     )
     if date_from:
-        query = query.filter(AttendanceRecord.fecha_hora >= date_from)
+        query = query.filter(AttendanceRecord.fecha_hora >= start_utc)
     if date_to:
-        query = query.filter(AttendanceRecord.fecha_hora < date_to + timedelta(days=1))
+        query = query.filter(AttendanceRecord.fecha_hora < end_utc)
     if tipo:
         query = query.filter(AttendanceRecord.tipo == tipo)
     if tipo_nomina:
@@ -452,7 +470,7 @@ def attendance_summary(db: Session):
     latest_by_employee = db.query(
         AttendanceRecord.empleado_id,
         func.max(AttendanceRecord.fecha_hora).label('last_time'),
-    ).filter(AttendanceRecord.fecha_hora >= start).group_by(AttendanceRecord.empleado_id).subquery()
+    ).group_by(AttendanceRecord.empleado_id).subquery()
     present_rows = db.query(AttendanceRecord, Empleado).join(
         latest_by_employee,
         and_(
@@ -498,11 +516,10 @@ def build_daily_report_payload(summary: AttendanceSummary, recent_records: list[
 
 
 def list_present_employees(db: Session):
-    start = local_day_start_as_utc()
     latest_by_employee = db.query(
         AttendanceRecord.empleado_id,
         func.max(AttendanceRecord.fecha_hora).label('last_time'),
-    ).filter(AttendanceRecord.fecha_hora >= start).group_by(AttendanceRecord.empleado_id).subquery()
+    ).group_by(AttendanceRecord.empleado_id).subquery()
     present_records = db.query(AttendanceRecord).join(
         latest_by_employee,
         and_(
@@ -528,7 +545,7 @@ def list_present_employees(db: Session):
             'departamento': employee.departamento or 'Sin departamento',
             'cargo': employee.cargo or 'Sin cargo',
             'entrada': to_local(last_by_employee[employee.id].fecha_hora),
-            'foto_url': employee.foto_url,
+            'foto_url': str(employee.id) if employee.foto_url else None,
         }
         for employee in employees
     ]
@@ -540,6 +557,7 @@ def alert_id(kind: str, message: str) -> str:
 
 def dismiss_alert(db: Session, user_id: int, alert_identifier: str) -> bool:
     existing = db.query(AlertDismissal).filter(
+        AlertDismissal.usuario_id == user_id,
         AlertDismissal.alerta_id == alert_identifier,
     ).first()
     if existing:
@@ -672,7 +690,7 @@ def inspector_dashboard(db: Session, user_id: int | None = None):
         visible_alerts = []
         dismissed_ids = set()
         if user_id is not None:
-            dismissed_ids = {item.alerta_id for item in db.query(AlertDismissal.alerta_id).all()}
+            dismissed_ids = {item.alerta_id for item in db.query(AlertDismissal.alerta_id).filter(AlertDismissal.usuario_id == user_id).all()}
         for alert in alerts:
             alert['id'] = alert_id(alert['kind'], alert['message'])
             if alert['id'] not in dismissed_ids:
@@ -685,7 +703,6 @@ def inspector_dashboard(db: Session, user_id: int | None = None):
             visible_alerts[:10],
         )
         return payload
-    except SQLAlchemyError:
-        return normalize_inspector_dashboard_payload()
     except Exception:
-        return normalize_inspector_dashboard_payload()
+        logger.exception('No se pudo construir el dashboard del inspector.')
+        raise

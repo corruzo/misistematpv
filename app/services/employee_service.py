@@ -26,6 +26,12 @@ IMAGE_SIGNATURES = {
 }
 
 
+def _audit_contact(value: str | None) -> str | None:
+    if not value:
+        return None
+    return f'***{value[-4:]}' if len(value) > 4 else '***'
+
+
 def resolve_employee_org_ids(db: Session, departamento_id: Optional[int] = None, cargo_id: Optional[int] = None,
                             departamento_name: Optional[str] = None, cargo_name: Optional[str] = None,
                             gerencia_id: Optional[int] = None):
@@ -121,9 +127,7 @@ def create_employee(db: Session, data, foto: Optional[UploadFile] = None, usuari
     add_audit(db, usuario_id, 'alta', 'empleados', emp.id, despues={
         'cedula': emp.cedula, 'nombre_apellido': emp.nombre_apellido,
         'departamento_id': emp.departamento_id, 'cargo_id': emp.cargo_id, 'estado': emp.estado,
-        'telefono': emp.telefono, 'email': emp.email,
-        'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
-        'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
+        'telefono': _audit_contact(emp.telefono), 'email': _audit_contact(emp.email),
     })
     publish_employee_registered(db, emp, usuario_id)
     db.commit()
@@ -135,9 +139,7 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     antes = {
         'nombre_apellido': emp.nombre_apellido, 'departamento_id': emp.departamento_id,
         'cargo_id': emp.cargo_id, 'estado': emp.estado, 'tipo_nomina': emp.tipo_nomina,
-        'foto_url': emp.foto_url, 'telefono': emp.telefono, 'email': emp.email,
-        'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
-        'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
+        'foto_url': bool(emp.foto_url), 'telefono': _audit_contact(emp.telefono), 'email': _audit_contact(emp.email),
     }
     if foto and foto.filename:
         foto_url = save_image(foto)
@@ -186,9 +188,7 @@ def update_employee(db: Session, emp: Empleado, updates, foto: Optional[UploadFi
     add_audit(db, usuario_id, 'actualizacion', 'empleados', emp.id, antes, {
         'nombre_apellido': emp.nombre_apellido, 'departamento_id': emp.departamento_id,
         'cargo_id': emp.cargo_id, 'estado': emp.estado, 'tipo_nomina': emp.tipo_nomina,
-        'foto_url': emp.foto_url, 'telefono': emp.telefono, 'email': emp.email,
-        'contacto_emergencia_parentesco': emp.contacto_emergencia_parentesco,
-        'contacto_emergencia_telefono': emp.contacto_emergencia_telefono,
+        'foto_url': bool(emp.foto_url), 'telefono': _audit_contact(emp.telefono), 'email': _audit_contact(emp.email),
     })
     current_status = emp.estado.value if isinstance(emp.estado, EstadoEnum) else str(emp.estado)
     if current_status != previous_status:

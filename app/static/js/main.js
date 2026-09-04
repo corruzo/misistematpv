@@ -14,11 +14,18 @@
     constructor(element) {
       this.element = element;
       this.backdrop = null;
+      this.previousFocus = null;
       modalInstances.set(element, this);
     }
 
     show() {
       if (!this.element) return;
+      this.previousFocus = document.activeElement;
+      const description = this.element.querySelector('.modal-body, [data-modal-description]');
+      if (description) {
+        description.id ||= `${this.element.id || 'modal'}Description`;
+        this.element.setAttribute('aria-describedby', description.id);
+      }
       this.element.classList.add('is-open');
       this.element.removeAttribute('aria-hidden');
       document.body.classList.add('modal-open');
@@ -27,7 +34,8 @@
       this.backdrop.addEventListener('click', () => this.hide());
       document.body.appendChild(this.backdrop);
       requestAnimationFrame(() => this.backdrop?.classList.add('is-visible'));
-      this.element.querySelector('[autofocus], .btn-close')?.focus();
+      this.getFocusableElements()[0]?.focus();
+      this.element.addEventListener('keydown', this.handleKeydown);
     }
 
     hide() {
@@ -37,6 +45,29 @@
       this.backdrop?.remove();
       this.backdrop = null;
       document.body.classList.remove('modal-open');
+      this.element.removeEventListener('keydown', this.handleKeydown);
+      this.previousFocus?.focus?.();
+      this.previousFocus = null;
+    }
+
+    handleKeydown = (event) => {
+      if (event.key === 'Escape') this.hide();
+      if (event.key !== 'Tab') return;
+      const focusable = this.getFocusableElements();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    getFocusableElements() {
+      return [...this.element.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
     }
 
     static getInstance(element) {
@@ -79,16 +110,27 @@
     },
     confirm(message) {
       return new Promise((resolve) => {
+        const previousFocus = document.activeElement;
         const dialog = document.createElement('div');
         dialog.className = 'app-confirm';
         dialog.setAttribute('role', 'dialog');
         dialog.setAttribute('aria-modal', 'true');
-        dialog.innerHTML = `<div class="app-confirm__panel"><div class="app-confirm__mark">!</div><h2>Confirma esta acción</h2><p></p><div class="app-confirm__actions"><button type="button" class="btn-ios ghost" data-confirm-cancel>Cancelar</button><button type="button" class="btn-ios primary" data-confirm-ok>Continuar</button></div></div>`;
+        dialog.innerHTML = `<div class="app-confirm__panel"><div class="app-confirm__mark">!</div><h2 id="appConfirmTitle">Confirma esta acción</h2><p id="appConfirmDescription"></p><div class="app-confirm__actions"><button type="button" class="btn-ios ghost" data-confirm-cancel>Cancelar</button><button type="button" class="btn-ios primary" data-confirm-ok>Continuar</button></div></div>`;
+        dialog.setAttribute('aria-labelledby', 'appConfirmTitle');
+        dialog.setAttribute('aria-describedby', 'appConfirmDescription');
         dialog.querySelector('p').textContent = message;
-        const finish = (value) => { dialog.remove(); resolve(value); };
+        const finish = (value) => { dialog.remove(); previousFocus?.focus?.(); resolve(value); };
         dialog.querySelector('[data-confirm-cancel]').addEventListener('click', () => finish(false));
         dialog.querySelector('[data-confirm-ok]').addEventListener('click', () => finish(true));
-        dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') finish(false); });
+        dialog.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') finish(false);
+          if (event.key !== 'Tab') return;
+          const focusable = [...dialog.querySelectorAll('button:not([disabled])')];
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        });
         document.body.appendChild(dialog);
         dialog.querySelector('[data-confirm-cancel]').focus();
       });
@@ -360,6 +402,7 @@
       const defaultAvatar = '/static/img/default-avatar.svg';
       const photoPath = String(value || '').trim();
       if (!photoPath) return defaultAvatar;
+      if (/^\d+$/.test(photoPath)) return `/api/employees/${photoPath}/photo`;
       if (/^(https?:)?\/\//.test(photoPath) || photoPath.startsWith('/static/')) return photoPath;
       const normalizedPath = photoPath.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
       return `/static/${normalizedPath}`;
@@ -665,10 +708,8 @@
 
         row.innerHTML = this.isInspector ? `
           <td><span class="fw-medium">${this.escapeHtml(employee.nombre_apellido)}</span></td>
-          <td><button type="button" class="employee-photo-trigger" data-photo-src="${this.escapeHtml(this.getPhotoUrl(employee.foto_url))}" data-photo-name="${this.escapeHtml(employee.nombre_apellido)}" aria-label="Ampliar foto de ${this.escapeHtml(employee.nombre_apellido)}"><img class="employee-avatar" src="${this.getPhotoUrl(employee.foto_url)}" alt=""></button></td>
+          <td><span class="employee-avatar-placeholder" aria-hidden="true">${this.escapeHtml((employee.nombre_apellido || '?').slice(0, 1).toUpperCase())}</span></td>
           <td><div>${this.escapeHtml(employee.gerencia || 'Sin gerencia')}</div><small class="text-muted">${this.escapeHtml(employee.departamento || 'Sin departamento')}</small></td>
-          <td><div>${this.escapeHtml(employee.telefono || 'Sin teléfono')}</div><small class="text-muted">${this.escapeHtml(employee.email || 'Sin correo')}</small></td>
-          <td><div>${this.escapeHtml(employee.contacto_emergencia_telefono || 'Sin teléfono')}</div><small class="text-muted">${this.escapeHtml(employee.contacto_emergencia_parentesco || 'Sin parentesco')}</small></td>
           <td><span class="badge-pill ${statusClass}">${this.escapeHtml(employee.estado)}</span></td>
         ` : `
           <td>

@@ -88,11 +88,6 @@ class EmpleadoOperativoOut(BaseModel):
     gerencia: Optional[str] = None
     departamento: Optional[str] = None
     estado: EstadoEnum
-    foto_url: Optional[str] = None
-    telefono: Optional[str] = None
-    email: Optional[str] = None
-    contacto_emergencia_parentesco: Optional[str] = None
-    contacto_emergencia_telefono: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

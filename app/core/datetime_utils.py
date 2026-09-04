@@ -1,4 +1,4 @@
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from app.core.config import LOCAL_TIMEZONE
 
@@ -20,5 +20,10 @@ def to_local(value: datetime | None) -> datetime | None:
 
 
 def local_day_start_as_utc() -> datetime:
-    local_today = utc_now().astimezone(LOCAL_TIMEZONE).date()
-    return datetime.combine(local_today, time.min, tzinfo=LOCAL_TIMEZONE).astimezone(timezone.utc)
+    return local_date_bounds_as_utc(utc_now().astimezone(LOCAL_TIMEZONE).date())[0]
+
+
+def local_date_bounds_as_utc(day: date) -> tuple[datetime, datetime]:
+    start = datetime.combine(day, time.min, tzinfo=LOCAL_TIMEZONE)
+    end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=LOCAL_TIMEZONE)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)

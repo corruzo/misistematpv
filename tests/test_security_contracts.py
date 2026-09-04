@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import secrets
 import unittest
 from unittest import mock
@@ -31,6 +32,7 @@ from app.database.session import get_db
 from run import configured_worker_count, resolve_worker_count
 from app.services.backup_service import backup_path
 from app.services.rfid_reader_service import RFIDReader
+from app.controllers.attendance_controller import require_kiosk_station
 
 
 class SecurityContractTest(unittest.TestCase):
@@ -147,6 +149,21 @@ class SecurityContractTest(unittest.TestCase):
         self.assertEqual(resolve_worker_count(['uvicorn', 'run:app', '--workers', '4'], {'WEB_CONCURRENCY': '2'}, serial_port='COM1'), 1)
         self.assertEqual(resolve_worker_count(['uvicorn', 'run:app', '--workers', '4'], {'WEB_CONCURRENCY': '2'}, serial_port=''), 4)
         self.assertEqual(resolve_worker_count(['uvicorn', 'run:app'], {'WEB_CONCURRENCY': '2'}, serial_port='COM1'), 1)
+
+    def test_kiosk_station_guard_rejects_unregistered_client(self):
+        request = type('Request', (), {'client': type('Client', (), {'host': '192.0.2.99'})()})()
+        with mock.patch('app.controllers.attendance_controller.KIOSK_ALLOWED_IPS', frozenset({'192.0.2.10'})):
+            with self.assertRaises(Exception):
+                require_kiosk_station(request)
+
+    def test_bootstrap_inventory_matches_template_sri(self):
+        root = __import__('pathlib').Path(__file__).resolve().parents[1]
+        inventory = json.loads((root / 'frontend-dependencies.json').read_text(encoding='utf-8'))['bootstrap']
+        html = (root / 'app' / 'templates' / 'base.html').read_text(encoding='utf-8')
+        for asset in (inventory['css'], inventory['js']):
+            self.assertIn(f"href=\"{asset['url']}\"" if asset is inventory['css'] else f"src=\"{asset['url']}\"", html)
+            self.assertIn(f"integrity=\"{asset['integrity']}\"", html)
+            self.assertIn('crossorigin="anonymous"', html)
 
 
 if __name__ == '__main__':

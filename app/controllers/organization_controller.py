@@ -26,6 +26,8 @@ templates_env = Environment(
     loader=FileSystemLoader(str(STATIC_DIR.parent / 'templates')),
     autoescape=select_autoescape(['html', 'xml']),
 )
+from app.core.config import asset_fingerprint
+templates_env.globals['asset_fingerprint'] = asset_fingerprint
 
 
 def organization_error(exc: Exception) -> HTTPException:
